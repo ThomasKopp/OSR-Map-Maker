@@ -6,7 +6,7 @@ Der aktuelle OSR Map Maker ist eine Python-Desktop-App mit Tkinter-Oberflaeche u
 
 - Leere Startkarte mit einstellbarer Groesse.
 - Zeichenwerkzeuge fuer Raeume, Korridore, diagonale Korridore, Rundraeume und Hoehlen.
-- Zweistufiges linkes Symbolpanel mit uebergeordneten Symbolgruppen und Untersymbolen.
+- Schwebende Basiswerkzeugleiste auf der Karte und Symbolbrowser im rechten Panel mit uebergeordneten Symbolgruppen und Untersymbolen.
 - Auswahl, Verschieben, Loeschen und Bearbeitung im rechten Panel.
 - Maus-Pan, Mausrad-Zoom und Pfeil-hoch/runter-Zoom.
 - Speichern/Laden als JSON.
@@ -76,7 +76,7 @@ Dieser Plan beschreibt sinnvolle Verbesserungen und Funktionserweiterungen fuer 
 
 - Symbole skalieren und rotieren.
 - Symbolfavoriten.
-- Symbolsuche im linken Panel.
+- Symbolsuche im rechten `Symbols`-Tab.
 - Eigene Symbolgruppen anlegen.
 - Eigene Symbole als SVG oder PNG importieren.
 - Symbolvorschau mit grossem Preview beim Hover.

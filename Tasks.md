@@ -221,18 +221,18 @@
 
 ## Symbolsystem-Verbesserungen
 
-- [ ] Symboltags einfuehren, z. B. `door`, `trap`, `magic`, `furniture`, `vtt`.
-- [ ] Symbolsuche nach Tags und Namen erweitern.
-- [ ] Symbolsets als importierbare/exportierbare Pakete speichern.
-- [ ] Mehrere Symbolvarianten pro Symbol erlauben.
-- [ ] Zufallsvariante beim Platzieren optional aktivieren.
-- [ ] Symbolfarbe pro platziertem Symbol ueberschreiben.
-- [ ] Symbol-Deckkraft speichern.
-- [ ] Symbol-Schatten oder Outline fuer bessere Lesbarkeit im VTT-Stil.
-- [ ] Symbolgroessen-Presets anbieten: klein, normal, gross, Raumfuellend.
-- [ ] Symbol-Legende nach Gruppen sortieren.
-- [ ] Benutzerdefinierte Symbolnamen in der Legende editierbar machen.
-- [ ] Fehlende Custom-Symbol-Dateien im Projektbericht anzeigen.
+- [x] Symboltags einfuehren, z. B. `door`, `trap`, `magic`, `furniture`, `vtt`.
+- [x] Symbolsuche nach Tags und Namen erweitern.
+- [x] Symbolsets als importierbare/exportierbare Pakete speichern.
+- [x] Mehrere Symbolvarianten pro Symbol erlauben.
+- [x] Zufallsvariante beim Platzieren optional aktivieren.
+- [x] Symbolfarbe pro platziertem Symbol ueberschreiben.
+- [x] Symbol-Deckkraft speichern.
+- [x] Symbol-Schatten oder Outline fuer bessere Lesbarkeit im VTT-Stil.
+- [x] Symbolgroessen-Presets anbieten: klein, normal, gross, Raumfuellend.
+- [x] Symbol-Legende nach Gruppen sortieren.
+- [x] Benutzerdefinierte Symbolnamen in der Legende editierbar machen.
+- [x] Fehlende Custom-Symbol-Dateien im Projektbericht anzeigen.
 
 ## Priorisierte naechste Umsetzungsvorschlaege
 

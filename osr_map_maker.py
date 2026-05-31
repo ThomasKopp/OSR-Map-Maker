@@ -515,6 +515,7 @@ BASIC_TOOLS = [
     ("note", "N", "Note"),
     ("measure", "⌖", "Measure"),
 ]
+BASIC_TOOL_IDS = {tool for tool, _icon, _label in BASIC_TOOLS}
 
 SYMBOL_TOOLS = set(SYMBOL_LABELS)
 
@@ -1448,6 +1449,9 @@ class OSRMapMaker(tk.Tk):
         self.symbol_panel: ttk.Frame | None = None
         self.symbol_group_frame: ttk.Frame | None = None
         self.recent_tools_frame: ttk.Frame | None = None
+        self.symbol_scroll_canvas: tk.Canvas | None = None
+        self.symbol_scroll_window: int | None = None
+        self.symbol_panel_container: ttk.Frame | None = None
         self.clipboard_objects: list[dict[str, Any]] = []
         self.selected_polygon_point: int | None = None
         self.preview_photo: Any = None
@@ -1552,12 +1556,56 @@ class OSRMapMaker(tk.Tk):
         self.project["markers"] = json_clone(record.get("markers", []))
         self.project["views"] = json_clone(record.get("views", []))
 
+    def _build_menu(self) -> None:
+        menu = tk.Menu(self)
+
+        file_menu = tk.Menu(menu, tearoff=False)
+        file_menu.add_command(label="New", command=self.new_project)
+        file_menu.add_command(label="Save", command=self.save_project)
+        file_menu.add_command(label="Load", command=self.load_project)
+        file_menu.add_separator()
+        file_menu.add_command(label="Export", command=self.export_image)
+        file_menu.add_command(label="Player Export", command=lambda: self.quick_export_audience("Player"))
+        file_menu.add_command(label="GM Export", command=lambda: self.quick_export_audience("GM"))
+        menu.add_cascade(label="File", menu=file_menu)
+
+        edit_menu = tk.Menu(menu, tearoff=False)
+        edit_menu.add_command(label="Undo", command=self.undo)
+        edit_menu.add_command(label="Redo", command=self.redo)
+        edit_menu.add_separator()
+        edit_menu.add_command(label="Copy", command=self.copy_selected)
+        edit_menu.add_command(label="Paste", command=self.paste_clipboard)
+        edit_menu.add_command(label="Duplicate", command=self.duplicate_selected)
+        edit_menu.add_command(label="Delete", command=self.delete_selected)
+        edit_menu.add_separator()
+        edit_menu.add_command(label="Group", command=self.group_selected)
+        edit_menu.add_command(label="Ungroup", command=self.ungroup_selected)
+        edit_menu.add_command(label="Lock / Unlock", command=self.toggle_selected_lock)
+        menu.add_cascade(label="Edit", menu=edit_menu)
+
+        view_menu = tk.Menu(menu, tearoff=False)
+        view_menu.add_command(label="Zoom In", command=lambda: self.zoom_by(1.1))
+        view_menu.add_command(label="Zoom Out", command=lambda: self.zoom_by(1 / 1.1))
+        view_menu.add_command(label="Reset Zoom", command=lambda: self.zoom.set(0.9) or self.redraw())
+        view_menu.add_separator()
+        view_menu.add_command(label="Shortcuts", command=self.open_shortcuts_dialog)
+        menu.add_cascade(label="View", menu=view_menu)
+
+        tools_menu = tk.Menu(menu, tearoff=False)
+        for tool, _icon, label in BASIC_TOOLS:
+            tools_menu.add_command(label=label, command=lambda value=tool: self.select_tool(value))
+        menu.add_cascade(label="Tools", menu=tools_menu)
+
+        self.configure(menu=menu)
+
     def _build_ui(self) -> None:
-        self.columnconfigure(1, weight=1)
+        self._build_menu()
+        self.columnconfigure(0, weight=1)
+        self.columnconfigure(1, weight=0)
         self.rowconfigure(1, weight=1)
 
         top = ttk.Frame(self, padding=(8, 6))
-        top.grid(row=0, column=0, columnspan=3, sticky="ew")
+        top.grid(row=0, column=0, columnspan=2, sticky="ew")
         ttk.Label(top, text="OSR Map Maker", font=("Segoe UI", 15, "bold")).pack(side="left", padx=(0, 12))
         for label, command in [
             ("New", self.new_project),
@@ -1575,18 +1623,15 @@ class OSRMapMaker(tk.Tk):
         ttk.Button(top, text="Player Export", command=lambda: self.quick_export_audience("Player")).pack(side="left", padx=2)
         ttk.Button(top, text="GM Export", command=lambda: self.quick_export_audience("GM")).pack(side="left", padx=2)
 
-        toolbar_outer = ttk.Frame(self, padding=8, width=236)
-        toolbar_outer.grid(row=1, column=0, sticky="ns")
-        toolbar_outer.grid_propagate(False)
-        toolbar_outer.columnconfigure(0, weight=1)
-        self._build_toolbar(toolbar_outer)
-
         canvas_frame = ttk.Frame(self)
-        canvas_frame.grid(row=1, column=1, sticky="nsew")
+        canvas_frame.grid(row=1, column=0, sticky="nsew")
         canvas_frame.columnconfigure(0, weight=1)
         canvas_frame.rowconfigure(0, weight=1)
         self.canvas = tk.Canvas(canvas_frame, bg="#c6dce4", highlightthickness=0)
         self.canvas.grid(row=0, column=0, sticky="nsew")
+        toolbox = ttk.Frame(canvas_frame, padding=4, relief="raised", borderwidth=1)
+        toolbox.place(x=8, y=8, anchor="nw")
+        self._build_toolbar(toolbox)
         self.minimap = tk.Canvas(canvas_frame, width=180, height=130, bg="#eef6f8", highlightthickness=1, highlightbackground="#7fa7b5")
         self.minimap.place(relx=1.0, rely=1.0, x=-18, y=-18, anchor="se")
         self.minimap.bind("<ButtonPress-1>", self.on_minimap_press)
@@ -1597,11 +1642,40 @@ class OSRMapMaker(tk.Tk):
         self.canvas.configure(xscrollcommand=x_scroll.set, yscrollcommand=y_scroll.set)
 
         inspector = ttk.Frame(self, padding=12)
-        inspector.grid(row=1, column=2, sticky="nsew")
+        inspector.grid(row=1, column=1, sticky="nsew")
         inspector.columnconfigure(0, weight=1)
         inspector.rowconfigure(0, weight=1)
         notebook = ttk.Notebook(inspector)
         notebook.grid(row=0, column=0, sticky="nsew")
+
+        symbols_tab = ttk.Frame(notebook, padding=8)
+        symbols_tab.columnconfigure(0, weight=1)
+        symbols_tab.rowconfigure(2, weight=1)
+        notebook.add(symbols_tab, text="Symbols")
+        ttk.Label(symbols_tab, text="Symbols", font=("Segoe UI", 11, "bold")).grid(row=0, column=0, sticky="w")
+        groups = ttk.LabelFrame(symbols_tab, text="Groups", padding=4)
+        groups.grid(row=1, column=0, sticky="ew", pady=(4, 6))
+        self.symbol_group_frame = groups
+        self.populate_group_buttons()
+        symbol_scroll_frame = ttk.Frame(symbols_tab)
+        symbol_scroll_frame.grid(row=2, column=0, sticky="nsew")
+        symbol_scroll_frame.columnconfigure(0, weight=1)
+        symbol_scroll_frame.rowconfigure(0, weight=1)
+        self.symbol_scroll_canvas = tk.Canvas(symbol_scroll_frame, highlightthickness=0, background="#f5f7f8")
+        self.symbol_scroll_canvas.grid(row=0, column=0, sticky="nsew")
+        symbol_scrollbar = ttk.Scrollbar(symbol_scroll_frame, orient="vertical", command=self.symbol_scroll_canvas.yview)
+        symbol_scrollbar.grid(row=0, column=1, sticky="ns")
+        self.symbol_scroll_canvas.configure(yscrollcommand=symbol_scrollbar.set)
+        self.symbol_panel_container = ttk.Frame(self.symbol_scroll_canvas)
+        self.symbol_scroll_window = self.symbol_scroll_canvas.create_window((0, 0), window=self.symbol_panel_container, anchor="nw")
+        self.symbol_panel_container.columnconfigure(0, weight=1)
+        self.symbol_panel_container.bind("<Configure>", lambda _event: self.refresh_symbol_scroll_region())
+        self.symbol_scroll_canvas.bind("<Configure>", self.resize_symbol_scroll_window)
+        self.symbol_panel = ttk.LabelFrame(self.symbol_panel_container, text=self.active_symbol_group.get(), padding=4)
+        self.symbol_panel.grid(row=0, column=0, sticky="nsew")
+        self.symbol_panel.columnconfigure(0, weight=1)
+        self.symbol_panel.columnconfigure(1, weight=1)
+        self.populate_symbol_panel()
 
         map_tab = ttk.Frame(notebook, padding=8)
         map_tab.columnconfigure(0, weight=1)
@@ -1803,9 +1877,20 @@ class OSRMapMaker(tk.Tk):
         self.rebuild_navigator_panel()
 
         status = ttk.Frame(self, padding=(8, 4))
-        status.grid(row=2, column=0, columnspan=3, sticky="ew")
+        status.grid(row=2, column=0, columnspan=2, sticky="ew")
         ttk.Label(status, textvariable=self.status).pack(side="left")
         ttk.Label(status, textvariable=self.error_status, foreground="#a12b2b").pack(side="right")
+
+    def resize_symbol_scroll_window(self, event: tk.Event) -> None:
+        if self.symbol_scroll_canvas is None or self.symbol_scroll_window is None:
+            return
+        self.symbol_scroll_canvas.itemconfigure(self.symbol_scroll_window, width=event.width)
+        self.refresh_symbol_scroll_region()
+
+    def refresh_symbol_scroll_region(self) -> None:
+        if self.symbol_scroll_canvas is None:
+            return
+        self.symbol_scroll_canvas.configure(scrollregion=self.symbol_scroll_canvas.bbox("all"))
 
     def _entry(self, parent: ttk.Frame, label: str, variable: tk.Variable, row: int) -> None:
         frame = ttk.Frame(parent)
@@ -1893,8 +1978,7 @@ class OSRMapMaker(tk.Tk):
         self.measure_points = []
         self.measure_preview = None
         self.sync_vars()
-        self.populate_group_buttons()
-        self.populate_symbol_panel()
+        self.refresh_symbol_browser()
         self.rebuild_maps_panel()
         self.rebuild_navigator_panel()
         if commit and before:
@@ -1973,33 +2057,21 @@ class OSRMapMaker(tk.Tk):
         self.redraw()
 
     def _build_toolbar(self, toolbar: ttk.Frame) -> None:
-        basic = ttk.LabelFrame(toolbar, text="Tools", padding=4)
+        toolbar.columnconfigure(0, weight=1)
+        basic = ttk.LabelFrame(toolbar, text="Tools", padding=3)
         basic.grid(row=0, column=0, sticky="ew", pady=(0, 6))
         basic.columnconfigure(0, weight=1)
         basic.columnconfigure(1, weight=1)
         for index, (tool, icon, label) in enumerate(BASIC_TOOLS):
             self._add_tool_button(basic, tool, icon, label, index // 2, index % 2)
 
-        recent = ttk.LabelFrame(toolbar, text="Recent", padding=4)
+        recent = ttk.LabelFrame(toolbar, text="Recent", padding=3)
         recent.grid(row=1, column=0, sticky="ew", pady=(0, 6))
         recent.columnconfigure(0, weight=1)
         recent.columnconfigure(1, weight=1)
         self.recent_tools_frame = recent
         self.refresh_recent_tools()
 
-        parents = ttk.LabelFrame(toolbar, text="Symbol Groups", padding=4)
-        parents.grid(row=2, column=0, sticky="ew", pady=(0, 6))
-        parents.columnconfigure(0, weight=1)
-        parents.columnconfigure(1, weight=1)
-        self.symbol_group_frame = parents
-        self.populate_group_buttons()
-
-        self.symbol_panel = ttk.LabelFrame(toolbar, text=self.active_symbol_group.get(), padding=4)
-        self.symbol_panel.grid(row=3, column=0, sticky="nsew")
-        self.symbol_panel.columnconfigure(0, weight=1)
-        self.symbol_panel.columnconfigure(1, weight=1)
-        toolbar.rowconfigure(3, weight=1)
-        self.populate_symbol_panel()
         self.refresh_toolbar()
 
     def refresh_recent_tools(self) -> None:
@@ -2007,7 +2079,7 @@ class OSRMapMaker(tk.Tk):
             return
         for child in self.recent_tools_frame.winfo_children():
             child.destroy()
-        recent = [tool for tool in self.settings.get("recentTools", []) if tool in {item[0] for item in BASIC_TOOLS} or self.is_symbol_tool(tool)]
+        recent = [tool for tool in self.settings.get("recentTools", []) if tool in BASIC_TOOL_IDS or self.is_symbol_tool(tool)]
         if not recent:
             ttk.Label(self.recent_tools_frame, text="No recent tools").grid(row=0, column=0, columnspan=2, sticky="w")
             return
@@ -2054,23 +2126,27 @@ class OSRMapMaker(tk.Tk):
     def populate_group_buttons(self) -> None:
         if self.symbol_group_frame is None:
             return
+        self.ensure_active_symbol_group()
         for child in self.symbol_group_frame.winfo_children():
             child.destroy()
         self.group_buttons.clear()
+        columns = 4
+        for column in range(columns):
+            self.symbol_group_frame.columnconfigure(column, weight=1)
         for index, (group_name, _entries) in enumerate(self.all_symbol_groups()):
             button = tk.Button(
                 self.symbol_group_frame,
                 text=SYMBOL_GROUP_ICONS.get(group_name, "◇"),
-                width=4,
-                height=2,
-                font=("Segoe UI Symbol", 16, "bold"),
+                width=3,
+                height=1,
+                font=("Segoe UI Symbol", 14, "bold"),
                 command=lambda value=group_name: self.select_symbol_group(value),
                 relief="raised",
                 borderwidth=1,
                 background="#f9fcfd",
                 activebackground="#e8f4f8",
             )
-            button.grid(row=index // 2, column=index % 2, sticky="nsew", padx=2, pady=2)
+            button.grid(row=index // columns, column=index % columns, sticky="nsew", padx=2, pady=2)
             ToolTip(button, f"{group_name}\nSymbolgruppe oeffnen")
             self.group_buttons[group_name] = button
 
@@ -2082,21 +2158,25 @@ class OSRMapMaker(tk.Tk):
     def populate_symbol_panel(self) -> None:
         if self.symbol_panel is None:
             return
-        for symbol_tool in self.symbol_tools():
+        self.ensure_active_symbol_group()
+        for symbol_tool in [tool for tool in self.tool_buttons if tool not in BASIC_TOOL_IDS]:
             self.tool_buttons.pop(symbol_tool, None)
         for child in self.symbol_panel.winfo_children():
             child.destroy()
         group_name = self.active_symbol_group.get()
         self.symbol_panel.configure(text=group_name)
+        symbol_columns = 4
+        for column in range(symbol_columns):
+            self.symbol_panel.columnconfigure(column, weight=1)
         search_row = ttk.Frame(self.symbol_panel)
-        search_row.grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 4))
+        search_row.grid(row=0, column=0, columnspan=symbol_columns, sticky="ew", pady=(0, 4))
         search_row.columnconfigure(0, weight=1)
         search_entry = ttk.Entry(search_row, textvariable=self.symbol_search_var, width=10)
         search_entry.grid(row=0, column=0, sticky="ew")
         search_entry.bind("<KeyRelease>", lambda _e: self.populate_symbol_panel())
         ttk.Checkbutton(search_row, text="Fav", variable=self.symbol_favorites_only_var, command=self.populate_symbol_panel).grid(row=0, column=1, padx=(4, 0))
         actions = ttk.Frame(self.symbol_panel)
-        actions.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(0, 4))
+        actions.grid(row=1, column=0, columnspan=symbol_columns, sticky="ew", pady=(0, 4))
         ttk.Button(actions, text="★", width=3, command=self.toggle_current_favorite).pack(side="left", padx=(0, 2))
         ttk.Button(actions, text="+ Group", command=self.add_custom_symbol_group).pack(side="left", padx=2)
         ttk.Button(actions, text="PNG", command=lambda: self.import_custom_symbol("png")).pack(side="left", padx=2)
@@ -2105,7 +2185,7 @@ class OSRMapMaker(tk.Tk):
         ttk.Button(actions, text="Set+", command=self.import_symbol_set).pack(side="left", padx=2)
         ttk.Button(actions, text="Set", command=self.export_symbol_set).pack(side="left", padx=2)
         options = ttk.Frame(self.symbol_panel)
-        options.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(0, 4))
+        options.grid(row=2, column=0, columnspan=symbol_columns, sticky="ew", pady=(0, 4))
         options.columnconfigure(1, weight=1)
         ttk.Checkbutton(options, text="Rand", variable=self.symbol_random_variant_var, command=self.apply_symbol_options).grid(row=0, column=0, sticky="w")
         preset = ttk.Combobox(options, textvariable=self.symbol_size_preset_var, values=tuple(SYMBOL_SIZE_PRESETS), state="readonly", width=12)
@@ -2127,7 +2207,10 @@ class OSRMapMaker(tk.Tk):
         if query:
             entries = [entry for entry in entries if query in symbol_search_blob(self.project, entry[0], entry[2])]
         for index, (tool, icon, label) in enumerate(entries):
-            self._add_tool_button(self.symbol_panel, tool, icon, label, 3 + index // 2, index % 2)
+            self._add_tool_button(self.symbol_panel, tool, icon, label, 3 + index // symbol_columns, index % symbol_columns)
+        if self.symbol_scroll_canvas is not None:
+            self.symbol_scroll_canvas.yview_moveto(0)
+            self.symbol_scroll_canvas.after_idle(self.refresh_symbol_scroll_region)
 
     def all_symbol_groups(self) -> list[tuple[str, list[tuple[str, str, str]]]]:
         groups = [(name, list(entries)) for name, entries in SYMBOL_GROUPS]
@@ -2146,6 +2229,30 @@ class OSRMapMaker(tk.Tk):
 
     def is_symbol_tool(self, value: str) -> bool:
         return value in self.symbol_tools()
+
+    def ensure_active_symbol_group(self) -> None:
+        if "active_symbol_group" not in self.__dict__:
+            return
+        group_names = [name for name, _entries in self.all_symbol_groups()]
+        if group_names and self.active_symbol_group.get() not in group_names:
+            self.active_symbol_group.set(group_names[0])
+
+    def ensure_available_tool(self) -> None:
+        if "tool" not in self.__dict__:
+            return
+        if self.tool.get() in BASIC_TOOL_IDS or self.is_symbol_tool(self.tool.get()):
+            return
+        self.tool.set("select")
+        if "current_layer_var" in self.__dict__:
+            self.current_layer_var.set(self.layer_name(default_layer_for_tool("select", False)))
+
+    def refresh_symbol_browser(self) -> None:
+        if "active_symbol_group" not in self.__dict__:
+            return
+        self.ensure_active_symbol_group()
+        self.populate_group_buttons()
+        self.populate_symbol_panel()
+        self.refresh_toolbar()
 
     def toggle_current_favorite(self) -> None:
         tool = self.tool.get()
@@ -2171,8 +2278,7 @@ class OSRMapMaker(tk.Tk):
             groups.append({"name": name, "entries": []})
         self.active_symbol_group.set(name)
         self.commit_history(before, "Add symbol group")
-        self.populate_group_buttons()
-        self.populate_symbol_panel()
+        self.refresh_symbol_browser()
 
     def import_custom_symbol(self, source_type: str) -> None:
         filetypes = [("PNG images", "*.png")] if source_type == "png" else [("SVG images", "*.svg")]
@@ -2194,8 +2300,7 @@ class OSRMapMaker(tk.Tk):
         target.setdefault("entries", []).append({"kind": kind, "icon": "◇", "label": label})
         self.active_symbol_group.set(group_name)
         self.commit_history(before, f"Import {source_type.upper()} symbol")
-        self.populate_group_buttons()
-        self.populate_symbol_panel()
+        self.refresh_symbol_browser()
 
     def import_custom_symbol_variant(self) -> None:
         tool = self.tool.get()
@@ -2240,8 +2345,7 @@ class OSRMapMaker(tk.Tk):
             self.show_error("Import failed", str(exc), parent=self)
             return
         self.commit_history(before, "Import symbol set")
-        self.populate_group_buttons()
-        self.populate_symbol_panel()
+        self.refresh_symbol_browser()
         self.show_status(f"Imported {count} custom symbol(s).")
 
     def export_symbol_set(self) -> None:
@@ -2268,7 +2372,7 @@ class OSRMapMaker(tk.Tk):
         self.update_status()
 
     def remember_recent_tool(self, value: str) -> None:
-        if value not in {tool for tool, _icon, _label in BASIC_TOOLS} and not self.is_symbol_tool(value):
+        if value not in BASIC_TOOL_IDS and not self.is_symbol_tool(value):
             return
         recent = [tool for tool in self.settings.get("recentTools", []) if tool != value]
         self.settings["recentTools"] = [value, *recent][:RECENT_TOOL_LIMIT]
@@ -2292,11 +2396,21 @@ class OSRMapMaker(tk.Tk):
 
     def refresh_toolbar(self) -> None:
         active = self.tool.get()
+        stale_tools = []
         for tool, button in self.tool_buttons.items():
+            try:
+                exists = button.winfo_exists()
+            except tk.TclError:
+                exists = False
+            if not exists:
+                stale_tools.append(tool)
+                continue
             if tool == active:
                 button.configure(relief="sunken", background=BLUE, foreground=WHITE)
             else:
                 button.configure(relief="raised", background="#f9fcfd", foreground="#17384a")
+        for tool in stale_tools:
+            self.tool_buttons.pop(tool, None)
         active_group = self.active_symbol_group.get()
         for group, button in self.group_buttons.items():
             if group == active_group:
@@ -2534,8 +2648,7 @@ class OSRMapMaker(tk.Tk):
         self.project = create_project()
         self.set_selection(set())
         self.sync_vars()
-        self.populate_group_buttons()
-        self.populate_symbol_panel()
+        self.refresh_symbol_browser()
         self.commit_history(before, "New project")
         self.redraw()
 
@@ -2572,8 +2685,7 @@ class OSRMapMaker(tk.Tk):
         self.current_file = Path(path)
         self.set_selection(set())
         self.sync_vars()
-        self.populate_group_buttons()
-        self.populate_symbol_panel()
+        self.refresh_symbol_browser()
         self.commit_history(before, "Load project")
         self.redraw()
         self.show_status(f"Loaded {Path(path).name}")
@@ -2599,6 +2711,7 @@ class OSRMapMaker(tk.Tk):
         self.project = json.loads(json.dumps(command.before))
         self.set_selection(set())
         self.sync_vars()
+        self.refresh_symbol_browser()
         self.redraw()
         self.show_status(f"Undid {command.description}")
 
@@ -2610,6 +2723,7 @@ class OSRMapMaker(tk.Tk):
         self.project = json.loads(json.dumps(command.after))
         self.set_selection(set())
         self.sync_vars()
+        self.refresh_symbol_browser()
         self.redraw()
         self.show_status(f"Redid {command.description}")
 
@@ -2674,6 +2788,7 @@ class OSRMapMaker(tk.Tk):
         self.number_start_var.set(self.settings.get("numberStart", 1))
         self.number_area_var.set(self.settings.get("numberArea", ""))
         self.shortcuts = {**DEFAULT_SHORTCUTS, **self.settings.get("shortcuts", {})}
+        self.ensure_available_tool()
         self.rebuild_layers_panel()
         self.rebuild_maps_panel()
         self.rebuild_navigator_panel()

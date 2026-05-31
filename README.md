@@ -21,8 +21,8 @@ SVG-Importe werden angezeigt, wenn `cairosvg` installiert ist; ohne diese option
 ## Bedienung
 
 - Neue Projekte starten mit einer Karte und einer verschiebbaren Legende als eigenem Objekt.
-- Die gesamte linke Seite ist ein zweistufiges Werkzeugpanel.
-- Oben stehen Basiswerkzeuge und uebergeordnete Symbolgruppen; beim Klick auf eine Gruppe oeffnet sich darunter der Bereich mit den passenden Untersymbolen.
+- Die Basiswerkzeuge liegen als schwebende Werkzeugleiste direkt auf der Karte.
+- Symbole liegen im rechten `Symbols`-Tab: oben stehen die Symbolgruppen, darunter oeffnet sich der Bereich mit den passenden Untersymbolen.
 - Der Werkzeugname erscheint beim Hover.
 - Raeume, Korridore, Rundraeume und Hoehlen per Ziehen erstellen.
 - Einfache grafische Formen wie Rechtecke, Kreise und Linien per Ziehen erstellen; Polygone entstehen Punkt fuer Punkt und werden geschlossen, indem wieder auf den ersten Punkt geklickt wird.
@@ -42,7 +42,7 @@ SVG-Importe werden angezeigt, wenn `cairosvg` installiert ist; ohne diese option
 - Der `Nav`-Tab speichert Ansichten, Sprungmarken und benannte Zonen; Zonen koennen aus der Auswahl oder dem aktuellen Sichtfenster erzeugt werden.
 - Stilvorlagen fuer Blueprint, Schwarz/weiss-Druck, Pergament und dunkles VTT stehen im Karten-Tab; eigene Farben fuer Hintergrund, Boden, Linien, Text, Auswahl und Legende werden gespeichert.
 - Optional koennen Koordinaten am Kartenrand, benannte Zonen und ein Lineal-Overlay eingeblendet werden.
-- Links im Symbolpanel gibt es Suche nach Namen und Tags, Favoritenfilter, Favoriten-Toggle, eigene Gruppen, PNG-/SVG-Importe, Varianten und Symbolset-Import/Export. Beim Hover erscheint eine groessere Symbolvorschau.
+- Im `Symbols`-Tab gibt es Suche nach Namen und Tags, Favoritenfilter, Favoriten-Toggle, eigene Gruppen, PNG-/SVG-Importe, Varianten und Symbolset-Import/Export. Beim Hover erscheint eine groessere Symbolvorschau.
 - Die eingebauten Symbolgruppen decken Tueren/Barrieren, Fallen/Gefahren, Magie/Mysterien, Natur, Dungeon-Objekte, Gameplay-Marker sowie Stadt-/Overland-Symbole ab.
 - Symbole lassen sich per Handle skalieren und rotieren; Groessen-Presets, Zufallsvarianten, eigene Farbe, Deckkraft, Schatten und Outline koennen pro Symbol gesetzt werden.
 - Textobjekte koennen Schriftart, Groesse, Farbe, Ausrichtung und Textboxbreite speichern. `Note` erzeugt nicht exportierbare Notiztexte.

@@ -495,6 +495,44 @@ class TkCoverageTests(unittest.TestCase):
         finally:
             root.destroy()
 
+    def test_project_restore_refreshes_custom_symbol_ui_state(self) -> None:
+        try:
+            maker = app.OSRMapMaker()
+        except app.tk.TclError:
+            self.skipTest("Tk display is not available")
+        try:
+            maker.withdraw()
+            before = maker.project_snapshot()
+            maker.project.setdefault("customSymbols", {})["custom_skull"] = {
+                "label": "Skull",
+                "sourceType": "png",
+                "path": "missing.png",
+                "tags": [],
+                "variants": [],
+            }
+            maker.project.setdefault("customSymbolGroups", []).append(
+                {"name": "Bones", "entries": [{"kind": "custom_skull", "label": "Skull"}]}
+            )
+            maker.active_symbol_group.set("Bones")
+            maker.tool.set("custom_skull")
+            maker.refresh_symbol_browser()
+            after = maker.project_snapshot()
+            maker.history = [app.HistoryCommand("Import custom symbol", before, after)]
+            maker.future = []
+
+            maker.undo()
+
+            self.assertEqual(maker.active_symbol_group.get(), app.SYMBOL_GROUPS[0][0])
+            self.assertEqual(maker.tool.get(), "select")
+            self.assertNotIn("custom_skull", maker.tool_buttons)
+
+            maker.redo()
+            self.assertIn("Bones", maker.group_buttons)
+            maker.select_symbol_group("Bones")
+            self.assertIn("custom_skull", maker.tool_buttons)
+        finally:
+            maker.destroy()
+
 
 if __name__ == "__main__":
     unittest.main()
