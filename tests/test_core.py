@@ -14,11 +14,40 @@ class ProjectModelTests(unittest.TestCase):
         validated = app.validate_project(project)
         self.assertEqual(validated["schemaVersion"], app.CURRENT_SCHEMA_VERSION)
         self.assertIn("layers", validated)
+        self.assertIn("exportProfiles", validated)
+        self.assertIn("exportFrames", validated)
+        self.assertIn("colorPalettes", validated)
         self.assertIn("shortcuts", validated["settings"])
         self.assertEqual(validated["settings"]["cellScale"], 10.0)
         self.assertTrue(validated["objects"][0]["playerVisible"])
         self.assertEqual(validated["objects"][0]["roomStatus"], "undiscovered")
         self.assertIn("encounterTable", validated["campaign"])
+
+    def test_validate_project_collects_warnings_and_keeps_valid_objects(self) -> None:
+        project = {
+            "objects": [
+                {"type": "room", "x": 1, "y": 1, "width": 2, "height": 2},
+                {"type": "unknown", "x": 0, "y": 0},
+            ]
+        }
+        validated = app.validate_project(project)
+
+        self.assertTrue(any("unknown" in warning for warning in validated["validationWarnings"]))
+        self.assertTrue(any(obj["type"] == "room" for obj in validated["objects"]))
+
+    def test_export_profiles_frames_palettes_and_layer_opacity_validate(self) -> None:
+        project = app.create_project()
+        project["layers"][1]["opacity"] = 0.35
+        project["exportProfiles"] = [{"name": "My Player", "format": "jpg", "scope": "frame", "audience": "Player"}]
+        project["exportFrames"] = [{"name": "Boss Room", "x": 2, "y": 3, "width": 8, "height": 6}]
+        project["colorPalettes"] = [{"name": "Night", "colors": {"backgroundColor": "#101010", "gridColor": "#eeeeee"}}]
+
+        validated = app.validate_project(project)
+
+        self.assertAlmostEqual(validated["layers"][1]["opacity"], 0.35)
+        self.assertEqual(next(item for item in validated["exportProfiles"] if item["name"] == "My Player")["format"], "jpeg")
+        self.assertEqual(validated["exportFrames"][0]["name"], "Boss Room")
+        self.assertEqual(validated["colorPalettes"][0]["colors"]["backgroundColor"], "#101010")
 
     def test_validate_project_migrates_legacy_symbols(self) -> None:
         project = {
@@ -290,6 +319,35 @@ class ProjectModelTests(unittest.TestCase):
         self.assertTrue(any(part.startswith("<line") for part in parts))
         self.assertTrue(any('stroke="#123456"' in part and 'stroke-width="9"' in part for part in parts))
 
+    def test_export_frame_crops_project_to_named_bounds(self) -> None:
+        project = app.create_project()
+        inside = app.validate_object(app.rect("room", 2, 2, 3, 3), 2)
+        outside = app.validate_object(app.rect("room", 20, 20, 3, 3), 3)
+        project["objects"].extend([inside, outside])
+        frame = {"id": "frame_1", "name": "Inset", "x": 1, "y": 1, "width": 6, "height": 6}
+
+        framed = app.export_project_for_frame(project, frame)
+
+        self.assertEqual(framed["settings"]["width"], 6)
+        self.assertEqual(framed["settings"]["height"], 6)
+        self.assertIn(inside["id"], {obj["id"] for obj in framed["objects"]})
+        self.assertNotIn(outside["id"], {obj["id"] for obj in framed["objects"]})
+
+    def test_vtt_scene_exports_walls_doors_and_lights(self) -> None:
+        project = app.create_project()
+        project["objects"].append(app.validate_object(app.rect("room", 1, 1, 4, 4), 2))
+        project["objects"].append(app.validate_object(app.symbol("door", 3, 1, 1), 3))
+        project["objects"].append(app.validate_object(app.symbol("light_source", 3, 3, 1), 4))
+
+        foundry = app.foundry_scene_data(project)
+        roll20 = app.roll20_page_data(project)
+
+        self.assertGreaterEqual(len(foundry["walls"]), 5)
+        self.assertEqual(len(foundry["lights"]), 1)
+        self.assertTrue(any(item.get("door") for item in foundry["walls"]))
+        self.assertEqual(len(roll20["doors"]), 1)
+        self.assertEqual(len(roll20["lights"]), 1)
+
     def test_svg_shape_styles(self) -> None:
         project = app.create_project()
         styled = app.validate_object(
@@ -470,6 +528,7 @@ class ExportSmokeTests(unittest.TestCase):
             self.assertIn("Test Dungeon", svg)
             self.assertIn("LEGEND", svg)
             self.assertIn('transform="translate(', svg)
+            self.assertIn("data-object-id", svg)
             self.assertGreater(path.stat().st_size, 0)
 
     def test_pillow_symbol_coverage(self) -> None:

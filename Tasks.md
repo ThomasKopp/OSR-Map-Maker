@@ -52,25 +52,23 @@
 
 ### Export und VTT
 
-- [ ] Exportprofile speichern, z. B. "Print A4", "Foundry Player", "Roll20 GM", "Fantasygrounds".
-- [ ] Batch-Export fuer GM-Version, Player-Version und Gridless-Version in einem Schritt.
-- [ ] Exportbereich per benanntem Rahmen speichern.
-- [ ] Transparenz/Deckkraft fuer einzelne Ebenen im Export beachten.
-- [ ] Foundry-VTT-Szenendaten als JSON exportieren, inklusive Grid, Walls, Doors und Lights.
-- [ ] Roll20-kompatible Page-Daten vorbereiten, soweit moeglich.
-- [ ] Separater Export fuer Legende und Raumreport.
-- [ ] SVG-Export um editierbare Gruppen-IDs je Objekt erweitern.
+- [x] Exportprofile speichern, z. B. "Print A4", "Foundry Player", "Roll20 GM", "Fantasygrounds".
+- [x] Batch-Export fuer GM-Version, Player-Version und Gridless-Version in einem Schritt.
+- [x] Exportbereich per benanntem Rahmen speichern.
+- [x] Transparenz/Deckkraft fuer einzelne Ebenen im Export beachten.
+- [x] Foundry-VTT-Szenendaten als JSON exportieren, inklusive Grid, Walls, Doors und Lights.
+- [x] Roll20-kompatible Page-Daten vorbereiten, soweit moeglich.
+- [x] Separater Export fuer Legende und Raumreport.
+- [x] SVG-Export um editierbare Gruppen-IDs je Objekt erweitern.
 
 ### Usability und Sicherheit
 
-- [ ] Autosave mit Wiederherstellungsdialog beim Start.
-- [ ] Projektvalidierung mit konkreten Warnungen statt nur Abbruch.
-- [ ] "Unsaved changes"-Warnung beim Schliessen, Laden und Neu-Anlegen.
-- [ ] Undo-Historie im UI sichtbar machen.
-- [ ] Tastaturkuerzel live neu binden, ohne Neustart.
-- [ ] Farbpaletten pro Projekt speichern.
-- [ ] Helles/dunkles UI-Theme fuer die App selbst anbieten.
-- [ ] Tooltips fuer neue Form- und Symboloptionen erweitern.
+- [x] Autosave mit Wiederherstellungsdialog beim Start.
+- [x] Projektvalidierung mit konkreten Warnungen statt nur Abbruch.
+- [x] "Unsaved changes"-Warnung beim Schliessen, Laden und Neu-Anlegen.
+- [x] Tastaturkuerzel live neu binden, ohne Neustart.
+- [x] Farbpaletten pro Projekt speichern.
+- [x] Tooltips fuer neue Form- und Symboloptionen erweitern.
 
 ## Neue Map-Symbole
 
@@ -236,8 +234,8 @@
 
 ## Priorisierte naechste Umsetzungsvorschlaege
 
-- [ ] Zuerst freie Polygonpunkt-Bearbeitung nach dem Zeichnen umsetzen.
-- [ ] Danach Exportprofile und Batch-Export fuer GM/Player/Gridless ergaenzen.
-- [ ] Danach neue Symbolgruppe "Gameplay Marker" mit Licht, Sichtblocker, Patrouille, Startpunkt und Gefahr-Marker einbauen.
-- [ ] Danach neue Symbolgruppe "Dungeon Objects" mit Hebel, Sarkophag, Kaefig, Buecherregal und Alchemietisch einbauen.
-- [ ] Danach Foundry-VTT-Szenenexport mit Walls, Doors und Lights evaluieren.
+- [x] Zuerst freie Polygonpunkt-Bearbeitung nach dem Zeichnen umsetzen.
+- [x] Danach Exportprofile und Batch-Export fuer GM/Player/Gridless ergaenzen.
+- [x] Danach neue Symbolgruppe "Gameplay Marker" mit Licht, Sichtblocker, Patrouille, Startpunkt und Gefahr-Marker einbauen.
+- [x] Danach neue Symbolgruppe "Dungeon Objects" mit Hebel, Sarkophag, Kaefig, Buecherregal und Alchemietisch einbauen.
+- [x] Danach Foundry-VTT-Szenenexport mit Walls, Doors und Lights evaluieren.

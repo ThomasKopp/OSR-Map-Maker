@@ -25,7 +25,7 @@ except ImportError:  # pragma: no cover - handled at runtime for users.
 BLUE = "#4398bd"
 WHITE = "#ffffff"
 SELECT = "#f6c85f"
-CURRENT_SCHEMA_VERSION = 7
+CURRENT_SCHEMA_VERSION = 8
 RECTLIKE_TYPES = {"room", "corridor", "round", "cave"}
 FLOOR_TYPES = RECTLIKE_TYPES | {"diagonal_corridor"}
 RESIZABLE_TYPES = RECTLIKE_TYPES | {"legend"}
@@ -52,6 +52,8 @@ SYMBOL_SIZE_PRESETS = {
     "Room filling": 2.5,
 }
 DEFAULT_SYMBOL_SIZE_PRESET = "Normal"
+AUTOSAVE_INTERVAL_MS = 60000
+APP_STATE_DIR_NAME = "OSR Map Maker"
 LINKABLE_SYMBOL_KINDS = {"stairs", "spiral_stairs", "natural_stairs", "ladder", "slide", "teleporter", "portal", "one_way_portal", "teleport_destination", "party_start", "escape_route"}
 ROOM_STATUSES = ("undiscovered", "discovered", "looted", "secured", "dangerous")
 ROOM_STATUS_LABELS = {
@@ -91,6 +93,68 @@ DEFAULT_SHORTCUTS = {
     "send_back": "<Control-bracketleft>",
     "toggle_lock": "<Control-l>",
 }
+DEFAULT_EXPORT_PROFILES = [
+    {
+        "name": "Print A4",
+        "format": "pdf",
+        "scale": 2,
+        "jpeg_quality": 92,
+        "webp_quality": 92,
+        "transparent": False,
+        "include_legend": True,
+        "export_grid": True,
+        "audience": "GM",
+        "scope": "page",
+        "print_margin_cells": 1,
+        "title_area": True,
+        "frame_id": "",
+    },
+    {
+        "name": "Foundry Player",
+        "format": "png",
+        "scale": 1,
+        "jpeg_quality": 92,
+        "webp_quality": 92,
+        "transparent": True,
+        "include_legend": False,
+        "export_grid": False,
+        "audience": "Player",
+        "scope": "map",
+        "print_margin_cells": 0,
+        "title_area": False,
+        "frame_id": "",
+    },
+    {
+        "name": "Roll20 GM",
+        "format": "png",
+        "scale": 1,
+        "jpeg_quality": 92,
+        "webp_quality": 92,
+        "transparent": False,
+        "include_legend": False,
+        "export_grid": False,
+        "audience": "GM",
+        "scope": "map",
+        "print_margin_cells": 0,
+        "title_area": False,
+        "frame_id": "",
+    },
+    {
+        "name": "Fantasy Grounds",
+        "format": "jpeg",
+        "scale": 1,
+        "jpeg_quality": 88,
+        "webp_quality": 92,
+        "transparent": False,
+        "include_legend": False,
+        "export_grid": False,
+        "audience": "Player",
+        "scope": "map",
+        "print_margin_cells": 0,
+        "title_area": False,
+        "frame_id": "",
+    },
+]
 TOOL_ACTIONS = {
     "select": "select_tool",
     "room": "room_tool",
@@ -540,6 +604,24 @@ def json_clone(value: Any) -> Any:
     return json.loads(json.dumps(value))
 
 
+def autosave_path() -> Path:
+    try:
+        base = Path.home() / f".{APP_STATE_DIR_NAME.replace(' ', '_').lower()}"
+    except RuntimeError:
+        base = Path.cwd() / f".{APP_STATE_DIR_NAME.replace(' ', '_').lower()}"
+    return base / "autosave.osrmap.json"
+
+
+def canonical_project_state(project: dict[str, Any]) -> str:
+    snapshot = json_clone(project)
+    snapshot.get("meta", {}).pop("updatedAt", None)
+    snapshot.pop("validationWarnings", None)
+    for record in snapshot.get("maps", []) if isinstance(snapshot.get("maps"), list) else []:
+        if isinstance(record, dict):
+            record.get("settings", {}).pop("activeExportProfile", None)
+    return json.dumps(snapshot, sort_keys=True)
+
+
 def default_settings() -> dict[str, Any]:
     return {
         "width": 70,
@@ -577,6 +659,7 @@ def default_settings() -> dict[str, Any]:
         "exportGrid": True,
         "vttPreset": "Generic",
         "exportAudience": "GM",
+        "activeExportProfile": "Print A4",
         "shortcuts": dict(DEFAULT_SHORTCUTS),
     }
 
@@ -590,6 +673,7 @@ def create_map_record(
     zones: list[dict[str, Any]] | None = None,
     markers: list[dict[str, Any]] | None = None,
     views: list[dict[str, Any]] | None = None,
+    export_frames: list[dict[str, Any]] | None = None,
     map_id_value: str | None = None,
 ) -> dict[str, Any]:
     return {
@@ -602,6 +686,7 @@ def create_map_record(
         "zones": json_clone(zones or []),
         "markers": json_clone(markers or []),
         "views": json_clone(views or []),
+        "exportFrames": json_clone(export_frames or []),
     }
 
 
@@ -630,6 +715,10 @@ def create_project() -> dict[str, Any]:
         "zones": [],
         "markers": [],
         "views": [],
+        "exportFrames": [],
+        "exportProfiles": json_clone(DEFAULT_EXPORT_PROFILES),
+        "colorPalettes": [],
+        "validationWarnings": [],
         "maps": [map_record],
         "activeMapId": map_record["id"],
     }
@@ -737,7 +826,7 @@ def legend_obj(settings: dict[str, Any]) -> dict[str, Any]:
 
 
 def default_layers() -> list[dict[str, Any]]:
-    return [{"id": layer_id, "name": name, "visible": True, "locked": layer_id == "background"} for layer_id, name in LAYER_DEFS]
+    return [{"id": layer_id, "name": name, "visible": True, "locked": layer_id == "background", "opacity": 1.0} for layer_id, name in LAYER_DEFS]
 
 
 def campaign_room_fields() -> dict[str, Any]:
@@ -803,6 +892,7 @@ def validate_settings(value: Any) -> dict[str, Any]:
     settings["exportGrid"] = bool(settings.get("exportGrid", True))
     settings["vttPreset"] = str(settings.get("vttPreset") or "Generic")
     settings["exportAudience"] = str(settings.get("exportAudience") or "GM")
+    settings["activeExportProfile"] = str(settings.get("activeExportProfile") or "Print A4")
     shortcuts = settings.get("shortcuts") if isinstance(settings.get("shortcuts"), dict) else {}
     settings["shortcuts"] = {**DEFAULT_SHORTCUTS, **{str(key): str(value) for key, value in shortcuts.items() if value}}
     return settings
@@ -811,6 +901,7 @@ def validate_settings(value: Any) -> dict[str, Any]:
 def validate_project(value: Any) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise ValueError("Dieses Projektformat wird nicht unterstuetzt.")
+    validation_warnings: list[str] = []
     if not isinstance(value.get("objects"), list) and isinstance(value.get("maps"), list) and value["maps"]:
         first_map = next((item for item in value["maps"] if isinstance(item, dict) and isinstance(item.get("objects"), list)), {})
         value["objects"] = json_clone(first_map.get("objects", []))
@@ -835,12 +926,16 @@ def validate_project(value: Any) -> dict[str, Any]:
     value["objectTemplates"] = validate_object_templates(value.get("objectTemplates", []))
     value["customSymbols"] = validate_custom_symbols(value.get("customSymbols", {}))
     value["customSymbolGroups"] = validate_custom_symbol_groups(value.get("customSymbolGroups", []), value["customSymbols"])
-    value["objects"] = [validate_object(obj, index) for index, obj in enumerate(value["objects"], start=1)]
+    value["objects"], object_warnings = validate_object_list(value["objects"], "Project object")
+    validation_warnings.extend(object_warnings)
     ensure_legend_object(value)
     value["campaign"] = validate_campaign(value.get("campaign", {}), value["objects"])
     value["zones"] = validate_zones(value.get("zones", []))
     value["markers"] = validate_markers(value.get("markers", []))
     value["views"] = validate_views(value.get("views", []))
+    value["exportFrames"] = validate_export_frames(value.get("exportFrames", []))
+    value["exportProfiles"] = validate_export_profiles(value.get("exportProfiles", []))
+    value["colorPalettes"] = validate_color_palettes(value.get("colorPalettes", []))
     if isinstance(value.get("maps"), list) and value["maps"]:
         active_id = str(value.get("activeMapId") or value["maps"][0].get("id") or "")
         for item in value["maps"]:
@@ -852,8 +947,9 @@ def validate_project(value: Any) -> dict[str, Any]:
                 item["zones"] = json_clone(value["zones"])
                 item["markers"] = json_clone(value["markers"])
                 item["views"] = json_clone(value["views"])
+                item["exportFrames"] = json_clone(value["exportFrames"])
                 break
-    value["maps"] = validate_maps(value.get("maps"), value["settings"], value["layers"], value["objects"], value["campaign"], value["zones"], value["markers"], value["views"])
+    value["maps"] = validate_maps(value.get("maps"), value["settings"], value["layers"], value["objects"], value["campaign"], value["zones"], value["markers"], value["views"], value["exportFrames"], validation_warnings)
     active_id = str(value.get("activeMapId") or "")
     map_ids = {item["id"] for item in value["maps"]}
     if active_id not in map_ids:
@@ -867,8 +963,44 @@ def validate_project(value: Any) -> dict[str, Any]:
     value["zones"] = json_clone(active_map["zones"])
     value["markers"] = json_clone(active_map["markers"])
     value["views"] = json_clone(active_map["views"])
+    value["exportFrames"] = json_clone(active_map.get("exportFrames", []))
+    validation_warnings.extend(project_validation_warnings(value))
+    value["validationWarnings"] = dedupe_strings(validation_warnings)
     value["schemaVersion"] = CURRENT_SCHEMA_VERSION
     return value
+
+
+def dedupe_strings(values: list[str]) -> list[str]:
+    seen: set[str] = set()
+    result: list[str] = []
+    for value in values:
+        text = str(value).strip()
+        if text and text not in seen:
+            result.append(text)
+            seen.add(text)
+    return result
+
+
+def project_validation_warnings(project: dict[str, Any]) -> list[str]:
+    warnings: list[str] = []
+    ids: set[str] = set()
+    duplicates: set[str] = set()
+    for obj in project.get("objects", []):
+        obj_id = str(obj.get("id") or "")
+        if obj_id in ids:
+            duplicates.add(obj_id)
+        ids.add(obj_id)
+    for obj_id in sorted(duplicates):
+        warnings.append(f"Duplicate object id: {obj_id}")
+    map_ids = {str(item.get("id")) for item in project.get("maps", [])}
+    for obj in project.get("objects", []):
+        if obj.get("type") == "symbol" and obj.get("targetMapId") and str(obj.get("targetMapId")) not in map_ids:
+            warnings.append(f"{obj.get('id')}: linked target map does not exist.")
+        if obj.get("type") == "text" and obj.get("roomId") and str(obj.get("roomId")) not in ids:
+            warnings.append(f"{obj.get('id')}: linked room does not exist.")
+    for _kind, label, path_value in missing_custom_symbol_files(project):
+        warnings.append(f"Custom symbol file missing for {label}: {path_value}")
+    return warnings
 
 
 def validate_campaign(value: Any, objects: list[dict[str, Any]]) -> dict[str, Any]:
@@ -953,6 +1085,114 @@ def validate_views(value: Any) -> list[dict[str, Any]]:
     return views
 
 
+def validate_export_options(value: Any) -> dict[str, Any]:
+    raw = value if isinstance(value, dict) else {}
+    fmt = str(raw.get("format") or "png").lower()
+    if fmt == "jpg":
+        fmt = "jpeg"
+    if fmt not in {"png", "jpeg", "webp", "pdf", "svg"}:
+        fmt = "png"
+    scope = str(raw.get("scope") or "page").lower()
+    if scope not in {"map", "page", "selection", "frame"}:
+        scope = "page"
+    audience = str(raw.get("audience") or "GM")
+    if audience not in {"GM", "Player"}:
+        audience = "GM"
+    return {
+        "format": fmt,
+        "scale": max(1, min(4, int(coerce_float(raw.get("scale"), 1)))),
+        "jpeg_quality": max(1, min(100, int(coerce_float(raw.get("jpeg_quality"), 92)))),
+        "webp_quality": max(1, min(100, int(coerce_float(raw.get("webp_quality"), 92)))),
+        "transparent": bool(raw.get("transparent", False)),
+        "include_legend": bool(raw.get("include_legend", True)),
+        "export_grid": bool(raw.get("export_grid", True)),
+        "audience": audience,
+        "scope": scope,
+        "print_margin_cells": max(0, min(24, int(coerce_float(raw.get("print_margin_cells"), 0)))),
+        "title_area": bool(raw.get("title_area", False)),
+        "frame_id": str(raw.get("frame_id") or ""),
+    }
+
+
+def validate_export_profiles(value: Any) -> list[dict[str, Any]]:
+    profiles: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for item in DEFAULT_EXPORT_PROFILES:
+        profile = {"name": str(item["name"]), **validate_export_options(item)}
+        profiles.append(profile)
+        seen.add(profile["name"].lower())
+    if isinstance(value, list):
+        for index, item in enumerate(value, start=1):
+            if not isinstance(item, dict):
+                continue
+            name = str(item.get("name") or f"Export Profile {index}").strip() or f"Export Profile {index}"
+            profile = {"name": name, **validate_export_options(item)}
+            existing = next((idx for idx, candidate in enumerate(profiles) if candidate["name"].lower() == name.lower()), None)
+            if existing is not None:
+                profiles[existing] = profile
+            elif name.lower() not in seen:
+                profiles.append(profile)
+                seen.add(name.lower())
+    return profiles
+
+
+def validate_export_frames(value: Any) -> list[dict[str, Any]]:
+    frames: list[dict[str, Any]] = []
+    if not isinstance(value, list):
+        return frames
+    seen_ids: set[str] = set()
+    for index, item in enumerate(value, start=1):
+        if not isinstance(item, dict):
+            continue
+        frame_id = str(item.get("id") or nav_id("frame"))
+        if frame_id in seen_ids:
+            frame_id = nav_id("frame")
+        seen_ids.add(frame_id)
+        frames.append(
+            {
+                "id": frame_id,
+                "name": str(item.get("name") or f"Export Frame {index}"),
+                "x": coerce_float(item.get("x")),
+                "y": coerce_float(item.get("y")),
+                "width": max(0.25, coerce_float(item.get("width"), 1.0)),
+                "height": max(0.25, coerce_float(item.get("height"), 1.0)),
+            }
+        )
+    return frames
+
+
+def validate_color_palettes(value: Any) -> list[dict[str, Any]]:
+    palettes: list[dict[str, Any]] = []
+    color_keys = ("backgroundColor", "floorColor", "gridColor", "textColor", "selectionColor", "legendColor")
+    if not isinstance(value, list):
+        return palettes
+    for index, item in enumerate(value, start=1):
+        if not isinstance(item, dict):
+            continue
+        colors = item.get("colors") if isinstance(item.get("colors"), dict) else item
+        palette = {"name": str(item.get("name") or f"Palette {index}"), "colors": {}}
+        for key in color_keys:
+            value_color = str(colors.get(key) or "").strip()
+            if value_color:
+                palette["colors"][key] = value_color
+        if palette["colors"]:
+            palettes.append(palette)
+    return palettes
+
+
+def validate_object_list(value: Any, warning_prefix: str = "Object") -> tuple[list[dict[str, Any]], list[str]]:
+    objects: list[dict[str, Any]] = []
+    warnings: list[str] = []
+    if not isinstance(value, list):
+        return objects, [f"{warning_prefix} list is missing or invalid."]
+    for index, item in enumerate(value, start=1):
+        try:
+            objects.append(validate_object(item, index))
+        except ValueError as exc:
+            warnings.append(f"{warning_prefix} {index}: {exc}")
+    return objects, warnings
+
+
 def validate_map_record(
     value: Any,
     index: int,
@@ -963,6 +1203,8 @@ def validate_map_record(
     fallback_zones: list[dict[str, Any]],
     fallback_markers: list[dict[str, Any]],
     fallback_views: list[dict[str, Any]],
+    fallback_export_frames: list[dict[str, Any]] | None = None,
+    warnings: list[str] | None = None,
 ) -> dict[str, Any]:
     record = value if isinstance(value, dict) else {}
     raw_settings = json_clone(fallback_settings)
@@ -971,7 +1213,9 @@ def validate_map_record(
     settings = validate_settings(raw_settings)
     layers = validate_layers(record.get("layers", fallback_layers))
     raw_objects = record.get("objects") if isinstance(record.get("objects"), list) else fallback_objects
-    objects = [validate_object(obj, item_index) for item_index, obj in enumerate(raw_objects, start=1)]
+    objects, object_warnings = validate_object_list(raw_objects, f"Map {index} object")
+    if warnings is not None:
+        warnings.extend(object_warnings)
     map_project = {"settings": settings, "objects": objects}
     ensure_legend_object(map_project)
     objects = map_project["objects"]
@@ -986,6 +1230,7 @@ def validate_map_record(
         "zones": validate_zones(record.get("zones", fallback_zones)),
         "markers": validate_markers(record.get("markers", fallback_markers)),
         "views": validate_views(record.get("views", fallback_views)),
+        "exportFrames": validate_export_frames(record.get("exportFrames", fallback_export_frames or [])),
     }
 
 
@@ -998,19 +1243,33 @@ def validate_maps(
     root_zones: list[dict[str, Any]],
     root_markers: list[dict[str, Any]],
     root_views: list[dict[str, Any]],
+    root_export_frames: list[dict[str, Any]] | None = None,
+    warnings: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     if not isinstance(value, list) or not value:
-        return [create_map_record("Level 1", root_settings, root_layers, root_objects, root_campaign, root_zones, root_markers, root_views)]
+        return [create_map_record("Level 1", root_settings, root_layers, root_objects, root_campaign, root_zones, root_markers, root_views, root_export_frames)]
     maps = []
     seen_ids: set[str] = set()
     for index, item in enumerate(value, start=1):
         fallback_objects = root_objects if index == 1 else [legend_obj(root_settings)]
-        record = validate_map_record(item, index, root_settings, root_layers, fallback_objects, root_campaign, root_zones if index == 1 else [], root_markers if index == 1 else [], root_views if index == 1 else [])
+        record = validate_map_record(
+            item,
+            index,
+            root_settings,
+            root_layers,
+            fallback_objects,
+            root_campaign,
+            root_zones if index == 1 else [],
+            root_markers if index == 1 else [],
+            root_views if index == 1 else [],
+            root_export_frames if index == 1 else [],
+            warnings,
+        )
         if record["id"] in seen_ids:
             record["id"] = map_id()
         seen_ids.add(record["id"])
         maps.append(record)
-    return maps or [create_map_record("Level 1", root_settings, root_layers, root_objects, root_campaign, root_zones, root_markers, root_views)]
+    return maps or [create_map_record("Level 1", root_settings, root_layers, root_objects, root_campaign, root_zones, root_markers, root_views, root_export_frames)]
 
 
 def validate_layers(value: Any) -> list[dict[str, Any]]:
@@ -1024,6 +1283,7 @@ def validate_layers(value: Any) -> list[dict[str, Any]]:
                 "name": str(layer.get("name") or name),
                 "visible": bool(layer.get("visible", True)),
                 "locked": bool(layer.get("locked", layer_id == "background")),
+                "opacity": max(0.0, min(1.0, coerce_float(layer.get("opacity"), 1.0))),
             }
         )
     return layers
@@ -1439,6 +1699,9 @@ class OSRMapMaker(tk.Tk):
         self.history: list[HistoryCommand] = []
         self.future: list[HistoryCommand] = []
         self.current_file: Path | None = None
+        self.saved_state = canonical_project_state(self.project)
+        self.autosave_file = autosave_path()
+        self.bound_shortcut_sequences: list[str] = []
         self.tool_buttons: dict[str, tk.Button] = {}
         self.group_buttons: dict[str, tk.Button] = {}
         self.active_symbol_group = tk.StringVar(value=SYMBOL_GROUPS[0][0])
@@ -1490,9 +1753,11 @@ class OSRMapMaker(tk.Tk):
         self.number_start_var = tk.IntVar(value=self.settings["numberStart"])
         self.number_area_var = tk.StringVar(value=self.settings["numberArea"])
         self.shortcuts = dict(self.settings.get("shortcuts", DEFAULT_SHORTCUTS))
+        self.palette_var = tk.StringVar(value="")
         self.current_layer_var = tk.StringVar(value="Symbols")
         self.layer_visible_vars: dict[str, tk.BooleanVar] = {}
         self.layer_locked_vars: dict[str, tk.BooleanVar] = {}
+        self.layer_opacity_vars: dict[str, tk.DoubleVar] = {}
         self.object_search_var = tk.StringVar(value="")
         self.object_type_filter_var = tk.StringVar(value="All")
         self.object_layer_filter_var = tk.StringVar(value="All")
@@ -1501,11 +1766,15 @@ class OSRMapMaker(tk.Tk):
         self.link_target_map_var = tk.StringVar(value="")
         self.object_listbox: tk.Listbox | None = None
         self.navigator_listbox: tk.Listbox | None = None
+        self.history_listbox: tk.Listbox | None = None
         self.map_combo: ttk.Combobox | None = None
 
         self._build_ui()
         self._bind_events()
+        self.protocol("WM_DELETE_WINDOW", self.on_close)
+        self.check_autosave_recovery()
         self.redraw()
+        self.schedule_autosave()
 
     @property
     def settings(self) -> dict[str, Any]:
@@ -1518,7 +1787,19 @@ class OSRMapMaker(tk.Tk):
     def maps(self) -> list[dict[str, Any]]:
         maps = self.project.setdefault("maps", [])
         if not maps:
-            maps.append(create_map_record("Level 1", self.settings, self.project.get("layers", default_layers()), self.project.get("objects", []), self.project.get("campaign", {"rooms": []})))
+            maps.append(
+                create_map_record(
+                    "Level 1",
+                    self.settings,
+                    self.project.get("layers", default_layers()),
+                    self.project.get("objects", []),
+                    self.project.get("campaign", {"rooms": []}),
+                    self.project.get("zones", []),
+                    self.project.get("markers", []),
+                    self.project.get("views", []),
+                    self.project.get("exportFrames", []),
+                )
+            )
             self.project["activeMapId"] = maps[0]["id"]
         return maps
 
@@ -1545,6 +1826,7 @@ class OSRMapMaker(tk.Tk):
         record["zones"] = json_clone(self.project.get("zones", []))
         record["markers"] = json_clone(self.project.get("markers", []))
         record["views"] = json_clone(self.project.get("views", []))
+        record["exportFrames"] = json_clone(self.project.get("exportFrames", []))
 
     def load_map_record(self, record: dict[str, Any]) -> None:
         self.project["activeMapId"] = record["id"]
@@ -1555,6 +1837,7 @@ class OSRMapMaker(tk.Tk):
         self.project["zones"] = json_clone(record.get("zones", []))
         self.project["markers"] = json_clone(record.get("markers", []))
         self.project["views"] = json_clone(record.get("views", []))
+        self.project["exportFrames"] = json_clone(record.get("exportFrames", []))
 
     def _build_menu(self) -> None:
         menu = tk.Menu(self)
@@ -1567,6 +1850,11 @@ class OSRMapMaker(tk.Tk):
         file_menu.add_command(label="Export", command=self.export_image)
         file_menu.add_command(label="Player Export", command=lambda: self.quick_export_audience("Player"))
         file_menu.add_command(label="GM Export", command=lambda: self.quick_export_audience("GM"))
+        file_menu.add_command(label="Batch Export", command=self.batch_export)
+        file_menu.add_command(label="Legend Export", command=self.export_legend_image)
+        file_menu.add_separator()
+        file_menu.add_command(label="Foundry Scene JSON", command=lambda: self.export_scene_json("foundry"))
+        file_menu.add_command(label="Roll20 Page JSON", command=lambda: self.export_scene_json("roll20"))
         menu.add_cascade(label="File", menu=file_menu)
 
         edit_menu = tk.Menu(menu, tearoff=False)
@@ -1705,36 +1993,46 @@ class OSRMapMaker(tk.Tk):
             start=8,
         ):
             ttk.Button(map_tab, text=f"{label} color", command=lambda value=key: self.pick_color(value)).grid(row=offset, column=0, sticky="ew", pady=1)
-        ttk.Separator(map_tab).grid(row=14, column=0, sticky="ew", pady=8)
-        ttk.Label(map_tab, text="Snap & Grid", font=("Segoe UI", 11, "bold")).grid(row=15, column=0, sticky="w")
-        ttk.Checkbutton(map_tab, text="Snap to grid", variable=self.snap_var, command=self.apply_settings).grid(row=16, column=0, sticky="w")
+        palette_row = ttk.Frame(map_tab)
+        palette_row.grid(row=14, column=0, sticky="ew", pady=(4, 0))
+        palette_row.columnconfigure(1, weight=1)
+        ttk.Label(palette_row, text="Palette", width=8).grid(row=0, column=0, sticky="w")
+        self.palette_combo = ttk.Combobox(palette_row, textvariable=self.palette_var, values=(), state="readonly", width=16)
+        self.palette_combo.grid(row=0, column=1, sticky="ew")
+        self.palette_combo.bind("<<ComboboxSelected>>", lambda _e: self.apply_color_palette())
+        ttk.Button(palette_row, text="Save", command=self.save_color_palette).grid(row=0, column=2, padx=(4, 0))
+        ttk.Separator(map_tab).grid(row=15, column=0, sticky="ew", pady=8)
+        ttk.Label(map_tab, text="Snap & Grid", font=("Segoe UI", 11, "bold")).grid(row=16, column=0, sticky="w")
+        ttk.Checkbutton(map_tab, text="Snap to grid", variable=self.snap_var, command=self.apply_settings).grid(row=17, column=0, sticky="w")
         snap_row = ttk.Frame(map_tab)
-        snap_row.grid(row=17, column=0, sticky="ew", pady=2)
+        snap_row.grid(row=18, column=0, sticky="ew", pady=2)
         snap_row.columnconfigure(1, weight=1)
         ttk.Label(snap_row, text="Step", width=8).grid(row=0, column=0, sticky="w")
         snap_combo = ttk.Combobox(snap_row, textvariable=self.snap_step_var, values=tuple(SNAP_STEP_LABELS), width=10, state="readonly")
         snap_combo.grid(row=0, column=1, sticky="ew")
         snap_combo.bind("<<ComboboxSelected>>", lambda _e: self.apply_settings())
-        ttk.Checkbutton(map_tab, text="Main grid", variable=self.main_grid_var, command=self.apply_settings).grid(row=18, column=0, sticky="w")
-        ttk.Checkbutton(map_tab, text="Subgrid", variable=self.sub_grid_var, command=self.apply_settings).grid(row=19, column=0, sticky="w")
+        ttk.Checkbutton(map_tab, text="Main grid", variable=self.main_grid_var, command=self.apply_settings).grid(row=19, column=0, sticky="w")
+        ttk.Checkbutton(map_tab, text="Subgrid", variable=self.sub_grid_var, command=self.apply_settings).grid(row=20, column=0, sticky="w")
         overlay_opts = ttk.Frame(map_tab)
-        overlay_opts.grid(row=20, column=0, sticky="ew")
+        overlay_opts.grid(row=21, column=0, sticky="ew")
         ttk.Checkbutton(overlay_opts, text="Snap to object edges", variable=self.snap_objects_var, command=self.apply_settings).grid(row=0, column=0, sticky="w")
         ttk.Checkbutton(overlay_opts, text="Coordinates", variable=self.coordinate_var, command=self.apply_settings).grid(row=1, column=0, sticky="w")
         ttk.Checkbutton(overlay_opts, text="Zones", variable=self.zone_overlay_var, command=self.apply_settings).grid(row=2, column=0, sticky="w")
         ttk.Checkbutton(overlay_opts, text="Ruler", variable=self.ruler_overlay_var, command=self.apply_settings).grid(row=3, column=0, sticky="w")
-        ttk.Separator(map_tab).grid(row=21, column=0, sticky="ew", pady=8)
-        ttk.Label(map_tab, text="Text Defaults", font=("Segoe UI", 11, "bold")).grid(row=22, column=0, sticky="w")
-        self._entry(map_tab, "Font", self.text_font_var, 23)
-        self._entry(map_tab, "Size", self.text_size_var, 24)
-        self._entry(map_tab, "Start", self.number_start_var, 25)
-        self._entry(map_tab, "Area", self.number_area_var, 26)
-        self._entry(map_tab, "Shape W", self.shape_line_width_var, 27)
-        ttk.Button(map_tab, text="Shape line color", command=lambda: self.pick_color("defaultShapeStrokeColor")).grid(row=28, column=0, sticky="ew", pady=1)
-        ttk.Separator(map_tab).grid(row=29, column=0, sticky="ew", pady=8)
-        ttk.Label(map_tab, text="Procedural", font=("Segoe UI", 11, "bold")).grid(row=30, column=0, sticky="w")
+        ttk.Separator(map_tab).grid(row=22, column=0, sticky="ew", pady=8)
+        ttk.Label(map_tab, text="Text Defaults", font=("Segoe UI", 11, "bold")).grid(row=23, column=0, sticky="w")
+        self._entry(map_tab, "Font", self.text_font_var, 24)
+        self._entry(map_tab, "Size", self.text_size_var, 25)
+        self._entry(map_tab, "Start", self.number_start_var, 26)
+        self._entry(map_tab, "Area", self.number_area_var, 27)
+        self._entry(map_tab, "Shape W", self.shape_line_width_var, 28)
+        shape_color_button = ttk.Button(map_tab, text="Shape line color", command=lambda: self.pick_color("defaultShapeStrokeColor"))
+        shape_color_button.grid(row=29, column=0, sticky="ew", pady=1)
+        ToolTip(shape_color_button, "Default stroke color for new rectangles, circles, polygons and lines.")
+        ttk.Separator(map_tab).grid(row=30, column=0, sticky="ew", pady=8)
+        ttk.Label(map_tab, text="Procedural", font=("Segoe UI", 11, "bold")).grid(row=31, column=0, sticky="w")
         proc = ttk.Frame(map_tab)
-        proc.grid(row=31, column=0, sticky="ew")
+        proc.grid(row=32, column=0, sticky="ew")
         proc.columnconfigure(0, weight=1)
         proc.columnconfigure(1, weight=1)
         for index, (label, command) in enumerate(
@@ -1755,7 +2053,7 @@ class OSRMapMaker(tk.Tk):
         ):
             ttk.Button(proc, text=label, command=command).grid(row=index // 2, column=index % 2, sticky="ew", padx=1, pady=1)
         export_opts = ttk.Frame(map_tab)
-        export_opts.grid(row=32, column=0, sticky="ew", pady=(8, 0))
+        export_opts.grid(row=33, column=0, sticky="ew", pady=(8, 0))
         export_opts.columnconfigure(1, weight=1)
         ttk.Checkbutton(export_opts, text="Export grid", variable=self.export_grid_var, command=self.apply_settings).grid(row=0, column=0, sticky="w")
         ttk.Label(export_opts, text="VTT").grid(row=1, column=0, sticky="w")
@@ -1766,10 +2064,14 @@ class OSRMapMaker(tk.Tk):
         audience = ttk.Combobox(export_opts, textvariable=self.export_audience_var, values=("GM", "Player"), state="readonly", width=10)
         audience.grid(row=2, column=1, sticky="ew")
         audience.bind("<<ComboboxSelected>>", lambda _e: self.apply_settings())
-        ttk.Button(export_opts, text="Shortcuts", command=self.open_shortcuts_dialog).grid(row=3, column=0, columnspan=2, sticky="ew", pady=(6, 0))
-        ttk.Separator(map_tab).grid(row=33, column=0, sticky="ew", pady=8)
+        ttk.Button(export_opts, text="Batch", command=self.batch_export).grid(row=3, column=0, sticky="ew", pady=(6, 0), padx=(0, 2))
+        ttk.Button(export_opts, text="Legend", command=self.export_legend_image).grid(row=3, column=1, sticky="ew", pady=(6, 0), padx=(2, 0))
+        ttk.Button(export_opts, text="Foundry JSON", command=lambda: self.export_scene_json("foundry")).grid(row=4, column=0, sticky="ew", pady=(2, 0), padx=(0, 2))
+        ttk.Button(export_opts, text="Roll20 JSON", command=lambda: self.export_scene_json("roll20")).grid(row=4, column=1, sticky="ew", pady=(2, 0), padx=(2, 0))
+        ttk.Button(export_opts, text="Shortcuts", command=self.open_shortcuts_dialog).grid(row=5, column=0, columnspan=2, sticky="ew", pady=(6, 0))
+        ttk.Separator(map_tab).grid(row=34, column=0, sticky="ew", pady=8)
         self.maps_frame = ttk.Frame(map_tab)
-        self.maps_frame.grid(row=34, column=0, sticky="ew")
+        self.maps_frame.grid(row=35, column=0, sticky="ew")
         self.maps_frame.columnconfigure(0, weight=1)
         self.rebuild_maps_panel()
 
@@ -1838,6 +2140,28 @@ class OSRMapMaker(tk.Tk):
         self.object_listbox.configure(yscrollcommand=object_scroll.set)
         ttk.Button(objects_tab, text="Show selected", command=self.jump_to_selected_object).grid(row=4, column=0, sticky="ew", pady=(6, 0))
 
+        history_tab = ttk.Frame(notebook, padding=8)
+        history_tab.columnconfigure(0, weight=1)
+        history_tab.rowconfigure(1, weight=1)
+        notebook.add(history_tab, text="History")
+        ttk.Label(history_tab, text="Undo History", font=("Segoe UI", 11, "bold")).grid(row=0, column=0, sticky="w")
+        history_list_frame = ttk.Frame(history_tab)
+        history_list_frame.grid(row=1, column=0, sticky="nsew", pady=(4, 0))
+        history_list_frame.columnconfigure(0, weight=1)
+        history_list_frame.rowconfigure(0, weight=1)
+        self.history_listbox = tk.Listbox(history_list_frame, height=12, exportselection=False)
+        self.history_listbox.grid(row=0, column=0, sticky="nsew")
+        history_scroll = ttk.Scrollbar(history_list_frame, orient="vertical", command=self.history_listbox.yview)
+        history_scroll.grid(row=0, column=1, sticky="ns")
+        self.history_listbox.configure(yscrollcommand=history_scroll.set)
+        history_buttons = ttk.Frame(history_tab)
+        history_buttons.grid(row=2, column=0, sticky="ew", pady=(6, 0))
+        history_buttons.columnconfigure(0, weight=1)
+        history_buttons.columnconfigure(1, weight=1)
+        ttk.Button(history_buttons, text="Undo", command=self.undo).grid(row=0, column=0, sticky="ew", padx=(0, 2))
+        ttk.Button(history_buttons, text="Redo", command=self.redo).grid(row=0, column=1, sticky="ew", padx=(2, 0))
+        self.refresh_history_panel()
+
         nav_tab = ttk.Frame(notebook, padding=8)
         nav_tab.columnconfigure(0, weight=1)
         nav_tab.rowconfigure(2, weight=1)
@@ -1850,7 +2174,8 @@ class OSRMapMaker(tk.Tk):
         ttk.Button(nav_actions, text="Save view", command=self.save_current_view).grid(row=0, column=0, sticky="ew", padx=(0, 2), pady=1)
         ttk.Button(nav_actions, text="Add marker", command=self.add_jump_marker).grid(row=0, column=1, sticky="ew", padx=(2, 0), pady=1)
         ttk.Button(nav_actions, text="Zone from selection", command=self.define_zone_from_selection).grid(row=1, column=0, sticky="ew", padx=(0, 2), pady=1)
-        ttk.Button(nav_actions, text="Clear measure", command=self.clear_measurement).grid(row=1, column=1, sticky="ew", padx=(2, 0), pady=1)
+        ttk.Button(nav_actions, text="Export frame", command=self.define_export_frame).grid(row=1, column=1, sticky="ew", padx=(2, 0), pady=1)
+        ttk.Button(nav_actions, text="Clear measure", command=self.clear_measurement).grid(row=2, column=0, columnspan=2, sticky="ew", pady=1)
         nav_list_frame = ttk.Frame(nav_tab)
         nav_list_frame.grid(row=2, column=0, sticky="nsew")
         nav_list_frame.columnconfigure(0, weight=1)
@@ -1993,7 +2318,7 @@ class OSRMapMaker(tk.Tk):
         settings = validate_settings(json_clone(self.settings))
         settings["showLegend"] = self.settings.get("showLegend", True)
         objects = [legend_obj(settings)]
-        record = create_map_record(name, settings, self.project.get("layers", default_layers()), objects, {"rooms": []})
+        record = create_map_record(name, settings, self.project.get("layers", default_layers()), objects, {"rooms": []}, [], [], [], [])
         self.project["maps"].append(record)
         self.load_map_record(record)
         self.set_selection(set())
@@ -2018,6 +2343,7 @@ class OSRMapMaker(tk.Tk):
             source.get("zones", []),
             source.get("markers", []),
             source.get("views", []),
+            source.get("exportFrames", []),
         )
         self.project["maps"].append(record)
         self.load_map_record(record)
@@ -2444,14 +2770,21 @@ class OSRMapMaker(tk.Tk):
         self.canvas.bind("<Configure>", lambda _e: self.redraw_minimap())
 
     def bind_configured_shortcuts(self) -> None:
+        for sequence in self.bound_shortcut_sequences:
+            self.unbind_all(sequence)
+        self.bound_shortcut_sequences = []
         for action, sequence in self.shortcuts.items():
             if not sequence:
                 continue
             callback = self.shortcut_callback(action)
             if callback:
-                self.bind_all(sequence if sequence.startswith("<") else sequence.lower(), callback)
+                normalized = sequence if sequence.startswith("<") else sequence.lower()
+                self.bind_all(normalized, callback)
+                self.bound_shortcut_sequences.append(normalized)
                 if len(sequence) == 1 and sequence.isalpha():
-                    self.bind_all(sequence.upper(), callback)
+                    upper = sequence.upper()
+                    self.bind_all(upper, callback)
+                    self.bound_shortcut_sequences.append(upper)
 
     def shortcut_callback(self, action: str):
         tool = next((tool for tool, mapped_action in TOOL_ACTIONS.items() if mapped_action == action), None)
@@ -2473,6 +2806,86 @@ class OSRMapMaker(tk.Tk):
         self.select_tool(value)
         return "break"
 
+    def is_dirty(self) -> bool:
+        return canonical_project_state(self.project_snapshot()) != self.saved_state
+
+    def mark_saved(self) -> None:
+        self.saved_state = canonical_project_state(self.project_snapshot())
+
+    def confirm_discard_changes(self, action: str) -> bool:
+        if not self.is_dirty():
+            return True
+        result = messagebox.askyesnocancel("Unsaved changes", f"Save changes before {action}?", parent=self)
+        if result is None:
+            return False
+        if result:
+            return self.save_project()
+        return True
+
+    def on_close(self) -> None:
+        if not self.confirm_discard_changes("closing"):
+            return
+        self.clear_autosave()
+        self.destroy()
+
+    def schedule_autosave(self) -> None:
+        self.after(AUTOSAVE_INTERVAL_MS, self.run_autosave)
+
+    def run_autosave(self) -> None:
+        try:
+            if self.is_dirty():
+                self.autosave_file.parent.mkdir(parents=True, exist_ok=True)
+                self.sync_campaign_from_rooms()
+                self.sync_active_map_storage()
+                self.autosave_file.write_text(json.dumps(self.project, indent=2), encoding="utf-8")
+                self.show_status(f"Autosaved {self.autosave_file.name}")
+        finally:
+            if self.winfo_exists():
+                self.schedule_autosave()
+
+    def clear_autosave(self) -> None:
+        try:
+            if self.autosave_file.exists():
+                self.autosave_file.unlink()
+        except OSError:
+            pass
+
+    def check_autosave_recovery(self) -> None:
+        if not self.autosave_file.exists():
+            return
+        result = messagebox.askyesnocancel(
+            "Recover autosave",
+            f"An autosave was found from {datetime.fromtimestamp(self.autosave_file.stat().st_mtime).strftime('%Y-%m-%d %H:%M')}.\nRecover it now?",
+            parent=self,
+        )
+        if result is None:
+            return
+        if not result:
+            self.clear_autosave()
+            return
+        try:
+            self.project = validate_project(json.loads(self.autosave_file.read_text(encoding="utf-8")))
+        except Exception as exc:
+            self.show_error("Autosave recovery failed", str(exc), parent=self)
+            return
+        self.current_file = None
+        self.set_selection(set())
+        self.sync_vars()
+        self.refresh_symbol_browser()
+        self.show_validation_warnings()
+        self.show_status("Recovered autosave.")
+
+    def refresh_history_panel(self) -> None:
+        if not self.__dict__.get("history_listbox"):
+            return
+        self.history_listbox.delete(0, "end")
+        for index, command in enumerate(reversed(self.history), start=1):
+            self.history_listbox.insert("end", f"Undo {index}: {command.description}")
+        if self.future:
+            self.history_listbox.insert("end", "-- redo --")
+            for index, command in enumerate(self.future, start=1):
+                self.history_listbox.insert("end", f"Redo {index}: {command.description}")
+
     def project_snapshot(self) -> dict[str, Any]:
         self.sync_campaign_from_rooms()
         self.sync_active_map_storage()
@@ -2486,6 +2899,7 @@ class OSRMapMaker(tk.Tk):
         self.history = self.history[-50:]
         self.future.clear()
         self.project["meta"]["updatedAt"] = now_iso()
+        self.refresh_history_panel()
 
     def push_history(self) -> dict[str, Any]:
         return self.project_snapshot()
@@ -2565,9 +2979,10 @@ class OSRMapMaker(tk.Tk):
             self.shortcuts = {action: var.get().strip() for action, var in entries.items()}
             self.settings["shortcuts"] = dict(self.shortcuts)
             self.commit_history(before, "Change shortcuts")
+            self.bind_configured_shortcuts()
             self.populate_symbol_panel()
             self.refresh_toolbar()
-            self.show_status("Shortcuts saved. Restart the app to rebind changed keys.")
+            self.show_status("Shortcuts saved and rebound.")
             dialog.destroy()
 
         buttons = ttk.Frame(frame)
@@ -2599,6 +3014,44 @@ class OSRMapMaker(tk.Tk):
         self.commit_history(before, f"Apply {self.style_var.get()} style")
         self.redraw()
 
+    def refresh_color_palette_options(self) -> None:
+        if not hasattr(self, "palette_combo"):
+            return
+        names = [str(item.get("name") or "") for item in self.project.get("colorPalettes", []) if item.get("name")]
+        self.palette_combo.configure(values=tuple(names))
+        if self.palette_var.get() not in names:
+            self.palette_var.set(names[0] if names else "")
+
+    def save_color_palette(self) -> None:
+        name = simpledialog.askstring("Color palette", "Name", initialvalue=f"Palette {len(self.project.get('colorPalettes', [])) + 1}", parent=self)
+        if not name:
+            return
+        color_keys = ("backgroundColor", "floorColor", "gridColor", "textColor", "selectionColor", "legendColor")
+        palette = {"name": name.strip() or "Palette", "colors": {key: self.settings.get(key, "") for key in color_keys}}
+        before = self.project_snapshot()
+        palettes = self.project.setdefault("colorPalettes", [])
+        existing = next((index for index, item in enumerate(palettes) if str(item.get("name", "")).lower() == palette["name"].lower()), None)
+        if existing is None:
+            palettes.append(palette)
+        else:
+            palettes[existing] = palette
+        self.palette_var.set(palette["name"])
+        self.commit_history(before, "Save color palette")
+        self.refresh_color_palette_options()
+
+    def apply_color_palette(self) -> None:
+        name = self.palette_var.get()
+        palette = next((item for item in self.project.get("colorPalettes", []) if item.get("name") == name), None)
+        if not palette:
+            return
+        before = self.project_snapshot()
+        for key, value in palette.get("colors", {}).items():
+            if key in {"backgroundColor", "floorColor", "gridColor", "textColor", "selectionColor", "legendColor"} and value:
+                self.settings[key] = value
+        self.commit_history(before, f"Apply {name} palette")
+        self.sync_vars()
+        self.redraw()
+
     def rebuild_layers_panel(self) -> None:
         if not hasattr(self, "layers_frame"):
             return
@@ -2606,22 +3059,30 @@ class OSRMapMaker(tk.Tk):
             child.destroy()
         self.layer_visible_vars.clear()
         self.layer_locked_vars.clear()
+        self.layer_opacity_vars.clear()
         layer_names = [layer["name"] for layer in self.project.get("layers", default_layers()) if layer["id"] != "background"]
-        ttk.Label(self.layers_frame, text="Active layer", font=("Segoe UI", 11, "bold")).grid(row=0, column=0, columnspan=3, sticky="w")
+        ttk.Label(self.layers_frame, text="Active layer", font=("Segoe UI", 11, "bold")).grid(row=0, column=0, columnspan=4, sticky="w")
         combo = ttk.Combobox(self.layers_frame, textvariable=self.current_layer_var, values=layer_names, state="readonly")
-        combo.grid(row=1, column=0, columnspan=3, sticky="ew", pady=(2, 8))
+        combo.grid(row=1, column=0, columnspan=4, sticky="ew", pady=(2, 8))
         combo.bind("<<ComboboxSelected>>", lambda _e: None)
         ttk.Label(self.layers_frame, text="Layer").grid(row=2, column=0, sticky="w")
         ttk.Label(self.layers_frame, text="Visible").grid(row=2, column=1, sticky="w")
         ttk.Label(self.layers_frame, text="Locked").grid(row=2, column=2, sticky="w")
+        ttk.Label(self.layers_frame, text="Opacity").grid(row=2, column=3, sticky="w")
         for row, layer in enumerate(self.project.get("layers", default_layers()), start=3):
             visible = tk.BooleanVar(value=layer.get("visible", True))
             locked = tk.BooleanVar(value=layer.get("locked", False))
+            opacity = tk.DoubleVar(value=float(layer.get("opacity", 1.0)))
             self.layer_visible_vars[layer["id"]] = visible
             self.layer_locked_vars[layer["id"]] = locked
+            self.layer_opacity_vars[layer["id"]] = opacity
             ttk.Label(self.layers_frame, text=layer.get("name", layer["id"])).grid(row=row, column=0, sticky="w", pady=1)
             ttk.Checkbutton(self.layers_frame, variable=visible, command=self.apply_layer_states).grid(row=row, column=1, sticky="w")
             ttk.Checkbutton(self.layers_frame, variable=locked, command=self.apply_layer_states).grid(row=row, column=2, sticky="w")
+            spin = ttk.Spinbox(self.layers_frame, from_=0.0, to=1.0, increment=0.05, textvariable=opacity, width=6, command=self.apply_layer_states)
+            spin.grid(row=row, column=3, sticky="ew", padx=(4, 0))
+            spin.bind("<Return>", lambda _e: self.apply_layer_states())
+            spin.bind("<FocusOut>", lambda _e: self.apply_layer_states())
 
     def apply_layer_states(self) -> None:
         before = self.project_snapshot()
@@ -2631,6 +3092,8 @@ class OSRMapMaker(tk.Tk):
                 layer["visible"] = bool(self.layer_visible_vars[layer_id].get())
             if layer_id in self.layer_locked_vars:
                 layer["locked"] = bool(self.layer_locked_vars[layer_id].get())
+            if layer_id in self.layer_opacity_vars:
+                layer["opacity"] = max(0.0, min(1.0, coerce_float(self.layer_opacity_vars[layer_id].get(), 1.0)))
         self.commit_history(before, "Change layer state")
         self.redraw()
 
@@ -2644,15 +3107,20 @@ class OSRMapMaker(tk.Tk):
         self.redraw()
 
     def new_project(self) -> None:
+        if not self.confirm_discard_changes("starting a new project"):
+            return
         before = self.project_snapshot()
         self.project = create_project()
+        self.current_file = None
         self.set_selection(set())
         self.sync_vars()
         self.refresh_symbol_browser()
         self.commit_history(before, "New project")
+        self.mark_saved()
+        self.clear_autosave()
         self.redraw()
 
-    def save_project(self) -> None:
+    def save_project(self) -> bool:
         path = filedialog.asksaveasfilename(
             title="Save OSR map",
             defaultextension=".osrmap.json",
@@ -2660,15 +3128,20 @@ class OSRMapMaker(tk.Tk):
             initialfile=f"{safe_name(self.project['meta']['title'])}.osrmap.json",
         )
         if not path:
-            return
+            return False
         self.sync_campaign_from_rooms()
         self.sync_active_map_storage()
         self.project["meta"]["updatedAt"] = now_iso()
         Path(path).write_text(json.dumps(self.project, indent=2), encoding="utf-8")
         self.current_file = Path(path)
+        self.mark_saved()
+        self.clear_autosave()
         self.show_status(f"Saved {Path(path).name}")
+        return True
 
     def load_project(self) -> None:
+        if not self.confirm_discard_changes("loading another project"):
+            return
         path = filedialog.askopenfilename(
             title="Load OSR map",
             filetypes=[("OSR Map", "*.osrmap.json"), ("JSON", "*.json"), ("All files", "*.*")],
@@ -2687,7 +3160,10 @@ class OSRMapMaker(tk.Tk):
         self.sync_vars()
         self.refresh_symbol_browser()
         self.commit_history(before, "Load project")
+        self.mark_saved()
+        self.clear_autosave()
         self.redraw()
+        self.show_validation_warnings()
         self.show_status(f"Loaded {Path(path).name}")
 
     def export_image(self) -> None:
@@ -2712,6 +3188,7 @@ class OSRMapMaker(tk.Tk):
         self.set_selection(set())
         self.sync_vars()
         self.refresh_symbol_browser()
+        self.refresh_history_panel()
         self.redraw()
         self.show_status(f"Undid {command.description}")
 
@@ -2724,6 +3201,7 @@ class OSRMapMaker(tk.Tk):
         self.set_selection(set())
         self.sync_vars()
         self.refresh_symbol_browser()
+        self.refresh_history_panel()
         self.redraw()
         self.show_status(f"Redid {command.description}")
 
@@ -2735,6 +3213,16 @@ class OSRMapMaker(tk.Tk):
         self.after(7000, lambda: self.error_status.set(""))
         self.show_status(f"{title}: {message}")
         messagebox.showerror(title, message, parent=parent or self)
+
+    def show_validation_warnings(self) -> None:
+        warnings = self.project.get("validationWarnings", [])
+        if not warnings:
+            return
+        preview = "\n".join(f"- {item}" for item in warnings[:12])
+        if len(warnings) > 12:
+            preview += f"\n- ... {len(warnings) - 12} more"
+        self.error_status.set(f"{len(warnings)} project warning(s)")
+        messagebox.showwarning("Project validation warnings", preview, parent=self)
 
     def status_with_mouse(self, base: str) -> str:
         if not self.mouse_grid:
@@ -2788,12 +3276,16 @@ class OSRMapMaker(tk.Tk):
         self.number_start_var.set(self.settings.get("numberStart", 1))
         self.number_area_var.set(self.settings.get("numberArea", ""))
         self.shortcuts = {**DEFAULT_SHORTCUTS, **self.settings.get("shortcuts", {})}
+        if hasattr(self, "bound_shortcut_sequences"):
+            self.bind_configured_shortcuts()
         self.ensure_available_tool()
         self.rebuild_layers_panel()
         self.rebuild_maps_panel()
         self.rebuild_navigator_panel()
         self.refresh_recent_tools()
         self.refresh_object_list()
+        self.refresh_color_palette_options()
+        self.refresh_history_panel()
 
     def on_motion(self, event: tk.Event) -> None:
         self.mouse_grid = self.event_to_grid(event)
@@ -3542,6 +4034,7 @@ class OSRMapMaker(tk.Tk):
 
     def draw_navigation_overlays(self) -> None:
         draw_tk_zones(self.canvas, self.project, self.zoom.get())
+        draw_tk_export_frames(self.canvas, self.project, self.zoom.get())
         draw_tk_markers(self.canvas, self.project, self.zoom.get())
         draw_tk_measure_overlay(self.canvas, self.settings, self.measure_points, self.measure_preview, self.zoom.get())
         draw_tk_ruler_overlay(self.canvas, self.project, self.zoom.get(), self.mouse_grid, self.live_measure_points())
@@ -3733,6 +4226,29 @@ class OSRMapMaker(tk.Tk):
         self.rebuild_navigator_panel()
         self.redraw()
 
+    def define_export_frame(self) -> None:
+        box = union_bounds(self.selected_objects()) if self.selected_ids else self.current_view_box()
+        if not box:
+            return
+        name = simpledialog.askstring("Export frame", "Name", initialvalue=f"Frame {len(self.project.get('exportFrames', [])) + 1}", parent=self)
+        if not name:
+            return
+        before = self.project_snapshot()
+        x, y, width, height = box
+        self.project.setdefault("exportFrames", []).append(
+            {
+                "id": nav_id("frame"),
+                "name": name.strip() or "Frame",
+                "x": x,
+                "y": y,
+                "width": max(0.25, width),
+                "height": max(0.25, height),
+            }
+        )
+        self.commit_history(before, "Define export frame")
+        self.rebuild_navigator_panel()
+        self.redraw()
+
     def add_measure_point(self, point: tuple[float, float]) -> None:
         if self.measure_points and math.hypot(point[0] - self.measure_points[-1][0], point[1] - self.measure_points[-1][1]) < 0.000001:
             return
@@ -3783,6 +4299,9 @@ class OSRMapMaker(tk.Tk):
         for zone in self.project.get("zones", []):
             self.nav_list_items.append(("zone", zone["id"]))
             self.navigator_listbox.insert("end", f"Zone | {zone['name']} | {zone['width']:.1f} x {zone['height']:.1f}")
+        for frame in self.project.get("exportFrames", []):
+            self.nav_list_items.append(("frame", frame["id"]))
+            self.navigator_listbox.insert("end", f"Export | {frame['name']} | {frame['width']:.1f} x {frame['height']:.1f}")
         if selected_item and selected_item in self.nav_list_items:
             index = self.nav_list_items.index(selected_item)
             self.navigator_listbox.selection_set(index)
@@ -3795,7 +4314,7 @@ class OSRMapMaker(tk.Tk):
         if not selection or selection[0] >= len(self.nav_list_items):
             return None
         kind, item_id = self.nav_list_items[selection[0]]
-        source = {"view": "views", "marker": "markers", "zone": "zones"}[kind]
+        source = {"view": "views", "marker": "markers", "zone": "zones", "frame": "exportFrames"}[kind]
         item = next((entry for entry in self.project.get(source, []) if entry.get("id") == item_id), None)
         return (kind, item) if item else None
 
@@ -3810,6 +4329,8 @@ class OSRMapMaker(tk.Tk):
             self.jump_to_grid(item["x"], item["y"])
         elif kind == "zone":
             self.jump_to_grid(item["x"] + item["width"] / 2, item["y"] + item["height"] / 2)
+        elif kind == "frame":
+            self.jump_to_grid(item["x"] + item["width"] / 2, item["y"] + item["height"] / 2)
         self.redraw()
 
     def delete_nav_item(self) -> None:
@@ -3817,7 +4338,7 @@ class OSRMapMaker(tk.Tk):
         if not selected:
             return
         kind, item = selected
-        source = {"view": "views", "marker": "markers", "zone": "zones"}[kind]
+        source = {"view": "views", "marker": "markers", "zone": "zones", "frame": "exportFrames"}[kind]
         before = self.project_snapshot()
         self.project[source] = [entry for entry in self.project.get(source, []) if entry.get("id") != item.get("id")]
         self.commit_history(before, f"Delete {kind}")
@@ -4745,6 +5266,76 @@ class OSRMapMaker(tk.Tk):
         Path(path).write_text(campaign_report_markdown(self.project), encoding="utf-8")
         self.show_status(f"Exported {Path(path).name}")
 
+    def batch_export(self) -> None:
+        if Image is None:
+            self.show_error("Batch export failed", "Pillow ist nicht installiert: python -m pip install pillow", parent=self)
+            return
+        directory = filedialog.askdirectory(title="Batch export folder", parent=self)
+        if not directory:
+            return
+        base = safe_name(self.project["meta"]["title"])
+        jobs = [
+            ("gm", {"format": "png", "scale": int(self.export_scale.get()), "audience": "GM", "export_grid": True, "include_legend": self.settings.get("showLegend", True), "scope": "page"}),
+            ("player", {"format": "png", "scale": int(self.export_scale.get()), "audience": "Player", "export_grid": True, "include_legend": False, "scope": "map"}),
+            ("gridless", {"format": "png", "scale": int(self.export_scale.get()), "audience": "Player", "export_grid": False, "include_legend": False, "scope": "map"}),
+        ]
+        try:
+            for suffix, opts in jobs:
+                image = self.render_image(scale=opts["scale"], options=opts)
+                save_export_image(Path(directory) / f"{base}-{suffix}.png", image, "png", opts, self.settings["backgroundColor"])
+        except Exception as exc:
+            self.show_error("Batch export failed", str(exc), parent=self)
+            return
+        self.show_status(f"Batch exported {len(jobs)} files to {Path(directory).name}")
+
+    def export_legend_image(self) -> None:
+        if Image is None or ImageDraw is None:
+            self.show_error("Legend export failed", "Pillow ist nicht installiert: python -m pip install pillow", parent=self)
+            return
+        legend = next((obj for obj in self.project.get("objects", []) if obj.get("type") == "legend"), None)
+        if not legend:
+            self.show_error("Legend export failed", "No legend object exists.", parent=self)
+            return
+        path = filedialog.asksaveasfilename(
+            title="Export legend",
+            defaultextension=".png",
+            filetypes=[("PNG", "*.png")],
+            initialfile=f"{safe_name(self.project['meta']['title'])}-legend.png",
+            parent=self,
+        )
+        if not path:
+            return
+        scale = int(self.export_scale.get())
+        cell = self.settings["cellSize"] * scale
+        width = max(1, int(math.ceil(legend["width"] * cell)))
+        height = max(1, int(math.ceil(legend["height"] * cell)))
+        image = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(image)
+        draw._target_image = image
+        legend_copy = json_clone(legend)
+        legend_copy["x"] = 0
+        legend_copy["y"] = 0
+        draw_pillow_legend_object(draw, self.project, legend_copy, scale)
+        image.save(path, "PNG")
+        self.show_status(f"Exported {Path(path).name}")
+
+    def export_scene_json(self, target: str) -> None:
+        title = "Export Foundry scene" if target == "foundry" else "Export Roll20 page"
+        path = filedialog.asksaveasfilename(
+            title=title,
+            defaultextension=".json",
+            filetypes=[("JSON", "*.json")],
+            initialfile=f"{safe_name(self.project['meta']['title'])}-{target}.json",
+            parent=self,
+        )
+        if not path:
+            return
+        self.sync_campaign_from_rooms()
+        project = self.project_snapshot()
+        data = foundry_scene_data(project) if target == "foundry" else roll20_page_data(project)
+        Path(path).write_text(json.dumps(data, indent=2), encoding="utf-8")
+        self.show_status(f"Exported {Path(path).name}")
+
     def open_export_dialog(self) -> None:
         dialog = tk.Toplevel(self)
         dialog.title("Export")
@@ -4764,30 +5355,44 @@ class OSRMapMaker(tk.Tk):
         scope_var = tk.StringVar(value="page")
         margin_var = tk.IntVar(value=0)
         title_area_var = tk.BooleanVar(value=False)
+        frame_names = [str(frame.get("name") or frame.get("id")) for frame in self.project.get("exportFrames", [])]
+        frame_var = tk.StringVar(value=frame_names[0] if frame_names else "")
+        profile_names = [str(profile.get("name") or "") for profile in self.project.get("exportProfiles", DEFAULT_EXPORT_PROFILES)]
+        profile_var = tk.StringVar(value=self.settings.get("activeExportProfile", profile_names[0] if profile_names else ""))
 
         controls = ttk.Frame(dialog, padding=12)
         controls.grid(row=0, column=0, sticky="nsew")
         preview = ttk.Label(dialog, padding=12)
         preview.grid(row=0, column=1, sticky="nsew")
 
-        ttk.Label(controls, text="Format").grid(row=0, column=0, sticky="w")
-        ttk.Combobox(controls, textvariable=fmt_var, values=("png", "jpeg", "webp", "pdf", "svg"), width=8, state="readonly").grid(row=0, column=1, sticky="ew", pady=2)
-        ttk.Label(controls, text="Scale").grid(row=1, column=0, sticky="w")
-        ttk.Combobox(controls, textvariable=scale_var, values=(1, 2, 3, 4), width=8, state="readonly").grid(row=1, column=1, sticky="ew", pady=2)
-        ttk.Label(controls, text="JPEG quality").grid(row=2, column=0, sticky="w")
-        ttk.Scale(controls, from_=50, to=100, variable=jpeg_quality_var, orient="horizontal").grid(row=2, column=1, sticky="ew", pady=2)
-        ttk.Label(controls, text="WebP quality").grid(row=3, column=0, sticky="w")
-        ttk.Scale(controls, from_=50, to=100, variable=webp_quality_var, orient="horizontal").grid(row=3, column=1, sticky="ew", pady=2)
-        ttk.Checkbutton(controls, text="Transparent background", variable=transparent_var).grid(row=4, column=0, columnspan=2, sticky="w", pady=2)
-        ttk.Checkbutton(controls, text="Export legend", variable=legend_var).grid(row=5, column=0, columnspan=2, sticky="w", pady=2)
-        ttk.Checkbutton(controls, text="Export grid", variable=grid_var).grid(row=6, column=0, columnspan=2, sticky="w", pady=2)
-        ttk.Label(controls, text="Audience").grid(row=7, column=0, sticky="w")
-        ttk.Combobox(controls, textvariable=audience_var, values=("GM", "Player"), width=12, state="readonly").grid(row=7, column=1, sticky="ew", pady=2)
-        ttk.Label(controls, text="Area").grid(row=8, column=0, sticky="w")
-        ttk.Combobox(controls, textvariable=scope_var, values=("map", "page", "selection"), width=12, state="readonly").grid(row=8, column=1, sticky="ew", pady=2)
-        ttk.Label(controls, text="Print margin").grid(row=9, column=0, sticky="w")
-        ttk.Spinbox(controls, from_=0, to=8, textvariable=margin_var, width=8).grid(row=9, column=1, sticky="ew", pady=2)
-        ttk.Checkbutton(controls, text="Title area", variable=title_area_var).grid(row=10, column=0, columnspan=2, sticky="w", pady=2)
+        ttk.Label(controls, text="Profile").grid(row=0, column=0, sticky="w")
+        profile_combo = ttk.Combobox(controls, textvariable=profile_var, values=tuple(profile_names), width=16, state="readonly")
+        profile_combo.grid(row=0, column=1, sticky="ew", pady=2)
+        ttk.Label(controls, text="Format").grid(row=1, column=0, sticky="w")
+        ttk.Combobox(controls, textvariable=fmt_var, values=("png", "jpeg", "webp", "pdf", "svg"), width=8, state="readonly").grid(row=1, column=1, sticky="ew", pady=2)
+        ttk.Label(controls, text="Scale").grid(row=2, column=0, sticky="w")
+        ttk.Combobox(controls, textvariable=scale_var, values=(1, 2, 3, 4), width=8, state="readonly").grid(row=2, column=1, sticky="ew", pady=2)
+        ttk.Label(controls, text="JPEG quality").grid(row=3, column=0, sticky="w")
+        ttk.Scale(controls, from_=50, to=100, variable=jpeg_quality_var, orient="horizontal").grid(row=3, column=1, sticky="ew", pady=2)
+        ttk.Label(controls, text="WebP quality").grid(row=4, column=0, sticky="w")
+        ttk.Scale(controls, from_=50, to=100, variable=webp_quality_var, orient="horizontal").grid(row=4, column=1, sticky="ew", pady=2)
+        ttk.Checkbutton(controls, text="Transparent background", variable=transparent_var).grid(row=5, column=0, columnspan=2, sticky="w", pady=2)
+        ttk.Checkbutton(controls, text="Export legend", variable=legend_var).grid(row=6, column=0, columnspan=2, sticky="w", pady=2)
+        ttk.Checkbutton(controls, text="Export grid", variable=grid_var).grid(row=7, column=0, columnspan=2, sticky="w", pady=2)
+        ttk.Label(controls, text="Audience").grid(row=8, column=0, sticky="w")
+        ttk.Combobox(controls, textvariable=audience_var, values=("GM", "Player"), width=12, state="readonly").grid(row=8, column=1, sticky="ew", pady=2)
+        ttk.Label(controls, text="Area").grid(row=9, column=0, sticky="w")
+        ttk.Combobox(controls, textvariable=scope_var, values=("map", "page", "selection", "frame"), width=12, state="readonly").grid(row=9, column=1, sticky="ew", pady=2)
+        ttk.Label(controls, text="Frame").grid(row=10, column=0, sticky="w")
+        ttk.Combobox(controls, textvariable=frame_var, values=tuple(frame_names), width=16, state="readonly").grid(row=10, column=1, sticky="ew", pady=2)
+        ttk.Label(controls, text="Print margin").grid(row=11, column=0, sticky="w")
+        ttk.Spinbox(controls, from_=0, to=8, textvariable=margin_var, width=8).grid(row=11, column=1, sticky="ew", pady=2)
+        ttk.Checkbutton(controls, text="Title area", variable=title_area_var).grid(row=12, column=0, columnspan=2, sticky="w", pady=2)
+
+        def selected_frame_id() -> str:
+            selected_name = frame_var.get()
+            frame = next((item for item in self.project.get("exportFrames", []) if str(item.get("name") or item.get("id")) == selected_name), None)
+            return str(frame.get("id") or "") if frame else ""
 
         def options() -> dict[str, Any]:
             return {
@@ -4802,7 +5407,49 @@ class OSRMapMaker(tk.Tk):
                 "scope": scope_var.get(),
                 "print_margin_cells": max(0, safe_int(margin_var.get(), 0)),
                 "title_area": bool(title_area_var.get()),
+                "frame_id": selected_frame_id(),
             }
+
+        def apply_profile(*_args: Any) -> None:
+            profile = next((item for item in self.project.get("exportProfiles", []) if item.get("name") == profile_var.get()), None)
+            if not profile:
+                return
+            opts = validate_export_options(profile)
+            fmt_var.set(opts["format"])
+            scale_var.set(opts["scale"])
+            jpeg_quality_var.set(opts["jpeg_quality"])
+            webp_quality_var.set(opts["webp_quality"])
+            transparent_var.set(opts["transparent"])
+            legend_var.set(opts["include_legend"])
+            grid_var.set(opts["export_grid"])
+            audience_var.set(opts["audience"])
+            scope_var.set(opts["scope"])
+            margin_var.set(opts["print_margin_cells"])
+            title_area_var.set(opts["title_area"])
+            frame = next((item for item in self.project.get("exportFrames", []) if item.get("id") == opts.get("frame_id")), None)
+            if frame:
+                frame_var.set(str(frame.get("name") or frame.get("id")))
+
+        def save_profile() -> None:
+            name = simpledialog.askstring("Export profile", "Name", initialvalue=profile_var.get() or "Export Profile", parent=dialog)
+            if not name:
+                return
+            before = self.project_snapshot()
+            profile = {"name": name.strip() or "Export Profile", **validate_export_options(options())}
+            profiles = self.project.setdefault("exportProfiles", json_clone(DEFAULT_EXPORT_PROFILES))
+            existing = next((index for index, item in enumerate(profiles) if str(item.get("name", "")).lower() == profile["name"].lower()), None)
+            if existing is None:
+                profiles.append(profile)
+            else:
+                profiles[existing] = profile
+            self.settings["activeExportProfile"] = profile["name"]
+            profile_var.set(profile["name"])
+            profile_combo.configure(values=tuple(item.get("name", "") for item in profiles))
+            self.commit_history(before, "Save export profile")
+            self.show_status(f"Saved export profile {profile['name']}")
+
+        profile_combo.bind("<<ComboboxSelected>>", apply_profile)
+        apply_profile()
 
         def update_preview(*_args: Any) -> None:
             try:
@@ -4834,43 +5481,35 @@ class OSRMapMaker(tk.Tk):
                 return
             try:
                 if fmt == "svg":
-                    save_svg(path, self.export_project_for_scope(opts["scope"]), opts)
+                    save_svg(path, self.export_project_for_scope(opts["scope"], opts.get("frame_id", "")), opts)
                     image = None
                 else:
                     image = self.render_image(scale=opts["scale"], options=opts)
             except Exception as exc:
                 self.show_error("Export failed", str(exc), parent=dialog)
                 return
-            save_kwargs: dict[str, Any] = {}
             if fmt == "svg":
                 pass
-            elif fmt == "pdf":
-                if image.mode == "RGBA":
-                    image = flatten_rgba(image, self.settings["backgroundColor"])
-                image.save(path, "PDF", resolution=300)
-            elif fmt == "jpeg":
-                save_kwargs["quality"] = opts["jpeg_quality"]
-                if image.mode == "RGBA":
-                    image = flatten_rgba(image, self.settings["backgroundColor"])
-            elif fmt == "webp":
-                save_kwargs["quality"] = opts["webp_quality"]
-            if fmt not in {"pdf", "svg"}:
-                image.save(path, fmt.upper() if fmt != "jpeg" else "JPEG", **save_kwargs)
+            else:
+                save_export_image(path, image, fmt, opts, self.settings["backgroundColor"])
             self.export_format.set(fmt)
             self.export_scale.set(opts["scale"])
             self.settings["exportAudience"] = opts["audience"]
             self.settings["exportGrid"] = opts["export_grid"]
+            self.settings["activeExportProfile"] = profile_var.get()
             self.show_status(f"Exported {Path(path).name}")
             dialog.destroy()
 
-        for variable in (fmt_var, scale_var, jpeg_quality_var, webp_quality_var, transparent_var, legend_var, grid_var, audience_var, scope_var, margin_var, title_area_var):
+        for variable in (fmt_var, scale_var, jpeg_quality_var, webp_quality_var, transparent_var, legend_var, grid_var, audience_var, scope_var, frame_var, margin_var, title_area_var):
             variable.trace_add("write", update_preview)
 
         actions = ttk.Frame(controls)
-        actions.grid(row=11, column=0, columnspan=2, sticky="ew", pady=(12, 0))
+        actions.grid(row=13, column=0, columnspan=2, sticky="ew", pady=(12, 0))
         actions.columnconfigure(0, weight=1)
-        ttk.Button(actions, text="Cancel", command=dialog.destroy).grid(row=0, column=0, sticky="ew", padx=(0, 4))
-        ttk.Button(actions, text="Save", command=save).grid(row=0, column=1, sticky="ew")
+        actions.columnconfigure(1, weight=1)
+        ttk.Button(actions, text="Save profile", command=save_profile).grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 4))
+        ttk.Button(actions, text="Cancel", command=dialog.destroy).grid(row=1, column=0, sticky="ew", padx=(0, 4))
+        ttk.Button(actions, text="Save", command=save).grid(row=1, column=1, sticky="ew")
         update_preview()
 
     def render_image(self, scale: int = 1, include_selection: bool = False, options: dict[str, Any] | None = None):
@@ -4880,12 +5519,16 @@ class OSRMapMaker(tk.Tk):
         scope = "selection" if include_selection else options.get("scope", "page")
         include_legend = bool(options.get("include_legend", self.settings.get("showLegend", True))) and scope == "page"
         transparent = bool(options.get("transparent", False)) and options.get("format", self.export_format.get()).lower() in {"png", "webp"}
-        project = self.export_project_for_scope(scope)
+        project = self.export_project_for_scope(scope, str(options.get("frame_id") or ""))
         project["settings"]["exportGrid"] = bool(options.get("export_grid", self.settings.get("exportGrid", True)))
         project["settings"]["exportAudience"] = options.get("audience", self.settings.get("exportAudience", "GM"))
         if scope == "selection":
             include_legend = any(obj.get("type") == "legend" for obj in project.get("objects", []))
-        width, height = canvas_size(project, scale, include_legend=include_legend)
+        if scope == "frame":
+            width = project["settings"]["width"] * project["settings"]["cellSize"] * scale
+            height = project["settings"]["height"] * project["settings"]["cellSize"] * scale
+        else:
+            width, height = canvas_size(project, scale, include_legend=include_legend)
         mode = "RGBA" if transparent else "RGB"
         background = (0, 0, 0, 0) if transparent else project["settings"]["backgroundColor"]
         image = Image.new(mode, (max(1, int(math.ceil(width))), max(1, int(math.ceil(height)))), background)
@@ -4898,7 +5541,12 @@ class OSRMapMaker(tk.Tk):
             image = add_export_page_chrome(image, project, scale, margin_cells, title_area, transparent)
         return image
 
-    def export_project_for_scope(self, scope: str) -> dict[str, Any]:
+    def export_project_for_scope(self, scope: str, frame_id: str = "") -> dict[str, Any]:
+        if scope == "frame":
+            frame = next((item for item in self.project.get("exportFrames", []) if item.get("id") == frame_id), None)
+            if not frame:
+                raise ValueError("Kein gespeicherter Exportrahmen ausgewaehlt.")
+            return export_project_for_frame(self.project_snapshot(), frame)
         if scope != "selection":
             project = self.project_snapshot()
             project["settings"]["showLegend"] = scope == "page" and self.settings.get("showLegend", True)
@@ -4921,6 +5569,22 @@ class OSRMapMaker(tk.Tk):
         project["settings"]["height"] = max(1, math.ceil(height + padding * 2))
         project["settings"]["showLegend"] = False
         return project
+
+
+def export_project_for_frame(project: dict[str, Any], frame: dict[str, Any]) -> dict[str, Any]:
+    result = json_clone(project)
+    offset_x = coerce_float(frame.get("x"))
+    offset_y = coerce_float(frame.get("y"))
+    width = max(1, math.ceil(coerce_float(frame.get("width"), 1.0)))
+    height = max(1, math.ceil(coerce_float(frame.get("height"), 1.0)))
+    frame_box = (offset_x, offset_y, float(width), float(height))
+    result["objects"] = [obj for obj in result.get("objects", []) if rects_overlap(bounds(obj), frame_box, padding=0.5)]
+    for obj in result.get("objects", []):
+        translate_object(obj, -offset_x, -offset_y)
+    result["settings"]["width"] = width
+    result["settings"]["height"] = height
+    result["settings"]["showLegend"] = False
+    return result
 
 
 def default_layer_for_tool(tool: str, is_symbol: bool = False) -> str:
@@ -5170,6 +5834,10 @@ def project_layer_visible(project: dict[str, Any], layer_id: str) -> bool:
     return bool(next((layer.get("visible", True) for layer in project.get("layers", []) if layer.get("id") == layer_id), True))
 
 
+def project_layer_opacity(project: dict[str, Any], layer_id: str) -> float:
+    return max(0.0, min(1.0, coerce_float(next((layer.get("opacity", 1.0) for layer in project.get("layers", []) if layer.get("id") == layer_id), 1.0), 1.0)))
+
+
 def should_render_object(project: dict[str, Any], obj: dict[str, Any], for_export: bool) -> bool:
     if not project_layer_visible(project, obj.get("layer", normalize_layer_id(None, obj.get("type")))):
         return False
@@ -5194,6 +5862,107 @@ def hidden_player_room_ids(project: dict[str, Any]) -> set[str]:
         for obj in project.get("objects", [])
         if obj.get("type") in {"room", "round", "cave"} and not obj.get("playerVisible", True)
     }
+
+
+def vtt_wall_segments_for_object(obj: dict[str, Any], cell: float) -> list[tuple[float, float, float, float]]:
+    if obj.get("type") == "diagonal_corridor":
+        points = floor_polygon_points(obj, cell)
+    elif obj.get("type") == "cave":
+        points = floor_polygon_points(obj, cell)
+    else:
+        x, y, w, h = bounds(obj)
+        points = [(x * cell, y * cell), ((x + w) * cell, y * cell), ((x + w) * cell, (y + h) * cell), (x * cell, (y + h) * cell)]
+    return [(x1, y1, x2, y2) for (x1, y1), (x2, y2) in zip(points, points[1:] + points[:1])]
+
+
+def vtt_door_segment(obj: dict[str, Any], cell: float) -> tuple[float, float, float, float]:
+    x = obj["x"] * cell
+    y = obj["y"] * cell
+    length = max(cell * 0.75, obj.get("size", 1) * cell * 0.75)
+    angle = math.radians(float(obj.get("rotation", 0)))
+    dx = math.cos(angle) * length / 2
+    dy = math.sin(angle) * length / 2
+    return x - dx, y - dy, x + dx, y + dy
+
+
+def foundry_scene_data(project: dict[str, Any]) -> dict[str, Any]:
+    settings = project["settings"]
+    cell = settings["cellSize"]
+    width = settings["width"] * cell
+    height = settings["height"] * cell
+    walls: list[dict[str, Any]] = []
+    lights: list[dict[str, Any]] = []
+    notes: list[dict[str, Any]] = []
+    for obj in project.get("objects", []):
+        if not should_render_object(project, obj, for_export=True):
+            continue
+        kind = effective_symbol_kind(project, obj) if obj.get("type") == "symbol" else ""
+        if obj.get("type") in FLOOR_TYPES:
+            for x1, y1, x2, y2 in vtt_wall_segments_for_object(obj, cell):
+                walls.append({"c": [round(x1, 2), round(y1, 2), round(x2, 2), round(y2, 2)], "move": 1, "sight": 1, "sound": 1, "door": 0, "ds": 0, "objectId": obj.get("id")})
+        elif obj.get("type") == "symbol" and kind in DOOR_SYMBOLS:
+            x1, y1, x2, y2 = vtt_door_segment(obj, cell)
+            walls.append({"c": [round(x1, 2), round(y1, 2), round(x2, 2), round(y2, 2)], "move": 1, "sight": 1, "sound": 1, "door": 2 if "secret" in kind else 1, "ds": 0, "objectId": obj.get("id")})
+        elif obj.get("type") == "symbol" and kind == "light_source":
+            lights.append({"x": round(obj["x"] * cell, 2), "y": round(obj["y"] * cell, 2), "dim": 20, "bright": 10, "color": symbol_ink(settings, obj), "objectId": obj.get("id")})
+        elif obj.get("type") == "text" and str(obj.get("text", "")).strip():
+            notes.append({"x": round(obj["x"] * cell, 2), "y": round(obj["y"] * cell, 2), "text": str(obj.get("text", "")), "objectId": obj.get("id")})
+    return {
+        "name": project.get("meta", {}).get("title", "Dungeon"),
+        "width": width,
+        "height": height,
+        "padding": 0,
+        "grid": {"type": 1, "size": cell, "distance": settings.get("cellScale", 5), "units": settings.get("cellScaleUnit", "ft.")},
+        "walls": walls,
+        "lights": lights,
+        "notes": notes,
+    }
+
+
+def roll20_page_data(project: dict[str, Any]) -> dict[str, Any]:
+    settings = project["settings"]
+    cell = settings["cellSize"]
+    objects: list[dict[str, Any]] = []
+    walls: list[dict[str, Any]] = []
+    doors: list[dict[str, Any]] = []
+    lights: list[dict[str, Any]] = []
+    for obj in project.get("objects", []):
+        if not should_render_object(project, obj, for_export=True):
+            continue
+        kind = effective_symbol_kind(project, obj) if obj.get("type") == "symbol" else ""
+        if obj.get("type") in FLOOR_TYPES:
+            for x1, y1, x2, y2 in vtt_wall_segments_for_object(obj, cell):
+                walls.append({"x1": round(x1, 2), "y1": round(y1, 2), "x2": round(x2, 2), "y2": round(y2, 2), "objectId": obj.get("id")})
+        elif obj.get("type") == "symbol" and kind in DOOR_SYMBOLS:
+            x1, y1, x2, y2 = vtt_door_segment(obj, cell)
+            doors.append({"x1": round(x1, 2), "y1": round(y1, 2), "x2": round(x2, 2), "y2": round(y2, 2), "secret": "secret" in kind, "objectId": obj.get("id")})
+        elif obj.get("type") == "symbol" and kind == "light_source":
+            lights.append({"x": round(obj["x"] * cell, 2), "y": round(obj["y"] * cell, 2), "radius": 20, "objectId": obj.get("id")})
+        elif obj.get("type") in {"symbol", "text", "shape", "legend"}:
+            objects.append({"id": obj.get("id"), "type": obj.get("type"), "name": object_vtt_name(project, obj), "x": round(bounds(obj)[0] * cell, 2), "y": round(bounds(obj)[1] * cell, 2)})
+    return {
+        "name": project.get("meta", {}).get("title", "Dungeon"),
+        "page": {
+            "width": settings["width"],
+            "height": settings["height"],
+            "grid_type": "square",
+            "scale_number": settings.get("cellScale", 5),
+            "scale_units": settings.get("cellScaleUnit", "ft."),
+            "cell_px": cell,
+        },
+        "objects": objects,
+        "walls": walls,
+        "doors": doors,
+        "lights": lights,
+    }
+
+
+def object_vtt_name(project: dict[str, Any], obj: dict[str, Any]) -> str:
+    if obj.get("type") == "symbol":
+        return symbol_label(project, effective_symbol_kind(project, obj))
+    if obj.get("type") == "text":
+        return str(obj.get("text") or "Text")
+    return str(obj.get("type") or "Object")
 
 
 def is_custom_symbol(project: dict[str, Any], kind: str) -> bool:
@@ -5508,6 +6277,16 @@ def paste_image_onto_draw(draw, image, x: float, y: float) -> None:
         target.alpha_composite(image, (left, top))
     else:
         target.paste(image.convert("RGB"), (left, top), image if image.mode == "RGBA" else None)
+
+
+def composite_overlay_onto_draw(draw, image) -> None:
+    target = getattr(draw, "_target_image", None)
+    if target is None:
+        return
+    if target.mode == "RGBA":
+        target.alpha_composite(image, (0, 0))
+    else:
+        target.paste(image.convert("RGB"), (0, 0), image if image.mode == "RGBA" else None)
 
 
 def text_measure(draw, text: str, font) -> float:
@@ -6028,6 +6807,23 @@ def flatten_rgba(image, background: str):
     return base
 
 
+def save_export_image(path: str | Path, image, fmt: str, options: dict[str, Any], background: str) -> None:
+    fmt = "jpeg" if fmt == "jpg" else fmt
+    save_kwargs: dict[str, Any] = {}
+    if fmt == "pdf":
+        if image.mode == "RGBA":
+            image = flatten_rgba(image, background)
+        image.save(path, "PDF", resolution=300)
+        return
+    if fmt == "jpeg":
+        save_kwargs["quality"] = int(options.get("jpeg_quality", 92))
+        if image.mode == "RGBA":
+            image = flatten_rgba(image, background)
+    elif fmt == "webp":
+        save_kwargs["quality"] = int(options.get("webp_quality", 92))
+    image.save(path, fmt.upper() if fmt != "jpeg" else "JPEG", **save_kwargs)
+
+
 def add_export_page_chrome(image, project: dict[str, Any], scale: int, margin_cells: int, title_area: bool, transparent: bool):
     settings = project["settings"]
     cell = settings["cellSize"] * scale
@@ -6046,15 +6842,47 @@ def add_export_page_chrome(image, project: dict[str, Any], scale: int, margin_ce
     return page
 
 
+def safe_svg_id(value: Any) -> str:
+    text = str(value or "object")
+    clean = "".join(char if char.isalnum() or char in {"_", "-"} else "_" for char in text)
+    if not clean or clean[0].isdigit():
+        clean = f"obj_{clean}"
+    return clean
+
+
+def svg_object_group(project: dict[str, Any], obj: dict[str, Any], parts: list[str], suffix: str = "") -> list[str]:
+    if not parts:
+        return []
+    obj_id = safe_svg_id(obj.get("id"))
+    group_id = f"{obj_id}-{suffix}" if suffix else obj_id
+    layer_id = obj.get("layer", normalize_layer_id(None, obj.get("type")))
+    opacity = project_layer_opacity(project, layer_id)
+    opacity_attr = f' opacity="{opacity:.3f}"' if opacity < 0.999 else ""
+    label = escape_xml(str(obj.get("type") or "object"))
+    return [f'<g id="{group_id}" data-object-id="{escape_xml(str(obj.get("id", "")))}" data-type="{label}" data-layer="{escape_xml(str(layer_id))}"{opacity_attr}>', *parts, "</g>"]
+
+
+def svg_for_floor_objects_grouped(project: dict[str, Any], objects: list[dict[str, Any]], scale: int) -> list[str]:
+    parts: list[str] = []
+    for suffix, renderer in (("outline", svg_for_floor_outline), ("fill", svg_for_floor_fill), ("grid", svg_for_floor_grid)):
+        for obj in objects:
+            parts.extend(svg_object_group(project, obj, renderer(project, obj, scale), suffix))
+    return parts
+
+
 def save_svg(path: str, project: dict[str, Any], options: dict[str, Any]) -> None:
     scale = int(options.get("scale", 1))
     project = json.loads(json.dumps(project))
     project["settings"]["exportGrid"] = bool(options.get("export_grid", project["settings"].get("exportGrid", True)))
     project["settings"]["exportAudience"] = options.get("audience", project["settings"].get("exportAudience", "GM"))
-    content_width, content_height = canvas_size(project, scale, include_legend=options.get("include_legend", True))
     settings = project["settings"]
     cell = settings["cellSize"] * scale
     scope = options.get("scope", "page")
+    if scope == "frame":
+        content_width = settings["width"] * cell
+        content_height = settings["height"] * cell
+    else:
+        content_width, content_height = canvas_size(project, scale, include_legend=options.get("include_legend", True))
     margin_cells = max(0, int(options.get("print_margin_cells", 0))) if scope == "page" else 0
     margin = margin_cells * cell
     title_area = bool(options.get("title_area", False)) if scope == "page" else False
@@ -6087,11 +6915,11 @@ def save_svg(path: str, project: dict[str, Any], options: dict[str, Any]) -> Non
         if obj.get("type") == "legend" and options.get("include_legend") is False:
             continue
         renderable_objects.append(obj)
-    parts.extend(svg_for_floor_objects(project, [obj for obj in renderable_objects if obj.get("type") in FLOOR_TYPES], scale))
+    parts.extend(svg_for_floor_objects_grouped(project, [obj for obj in renderable_objects if obj.get("type") in FLOOR_TYPES], scale))
     for obj in renderable_objects:
         if obj.get("type") in FLOOR_TYPES:
             continue
-        parts.extend(svg_for_object(project, obj, scale))
+        parts.extend(svg_object_group(project, obj, svg_for_object(project, obj, scale)))
     parts.append("</g>")
     parts.append("</svg>")
     Path(path).write_text("\n".join(parts), encoding="utf-8")
@@ -6769,6 +7597,19 @@ def draw_tk_zones(canvas: tk.Canvas, project: dict[str, Any], zoom: float) -> No
         canvas.create_text(x + max(4, c * 0.25), y + max(8, c * 0.35), text=str(zone.get("name", "Zone")), anchor="w", fill=color, font=("Segoe UI", max(7, int(c * 0.42)), "bold"))
 
 
+def draw_tk_export_frames(canvas: tk.Canvas, project: dict[str, Any], zoom: float) -> None:
+    settings = project["settings"]
+    c = settings["cellSize"] * zoom
+    color = settings.get("selectionColor", SELECT)
+    for frame in project.get("exportFrames", []):
+        x = frame["x"] * c
+        y = frame["y"] * c
+        w = frame["width"] * c
+        h = frame["height"] * c
+        canvas.create_rectangle(x, y, x + w, y + h, outline=color, width=max(1, int(c * 0.08)), dash=(10, 5))
+        canvas.create_text(x + max(4, c * 0.25), y + h - max(5, c * 0.3), text=str(frame.get("name", "Export")), anchor="w", fill=color, font=("Segoe UI", max(7, int(c * 0.38)), "bold"))
+
+
 def draw_tk_markers(canvas: tk.Canvas, project: dict[str, Any], zoom: float) -> None:
     settings = project["settings"]
     c = settings["cellSize"] * zoom
@@ -7421,6 +8262,26 @@ def render_pillow(draw, project: dict[str, Any], scale: int, selected_id: str | 
         if obj.get("type") == "legend" and include_legend is False:
             continue
         renderable_objects.append(obj)
+    if any(project_layer_opacity(project, layer.get("id", "")) < 0.999 for layer in project.get("layers", [])):
+        target = getattr(draw, "_target_image", None)
+        if target is not None and Image is not None and ImageDraw is not None:
+            for layer in project.get("layers", []):
+                layer_id = layer.get("id")
+                if layer_id == "background" or not project_layer_visible(project, layer_id):
+                    continue
+                layer_objects = [obj for obj in renderable_objects if obj.get("layer", normalize_layer_id(None, obj.get("type"))) == layer_id]
+                if not layer_objects:
+                    continue
+                overlay = Image.new("RGBA", target.size, (0, 0, 0, 0))
+                overlay_draw = ImageDraw.Draw(overlay)
+                overlay_draw._target_image = overlay
+                draw_pillow_floor_objects(overlay_draw, settings, [obj for obj in layer_objects if obj.get("type") in FLOOR_TYPES], scale)
+                for obj in layer_objects:
+                    if obj.get("type") not in FLOOR_TYPES:
+                        draw_pillow_object(overlay_draw, project, settings, obj, scale)
+                overlay = image_with_opacity(overlay, project_layer_opacity(project, layer_id))
+                composite_overlay_onto_draw(draw, overlay)
+            return
     draw_pillow_floor_objects(draw, settings, [obj for obj in renderable_objects if obj.get("type") in FLOOR_TYPES], scale)
     for obj in renderable_objects:
         if obj.get("type") in FLOOR_TYPES:

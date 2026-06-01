@@ -36,6 +36,7 @@ SVG-Importe werden angezeigt, wenn `cairosvg` installiert ist; ohne diese option
 - Ausgewaehlte Symbole haben Skalierungs- und Rotations-Handles. Die Drehung wird gespeichert und gerendert.
 - Mehrere ausgewaehlte Objekte koennen im rechten Panel gruppiert oder entgruppiert werden.
 - Der rechte Bereich hat Tabs fuer Karte, Ebenen und Auswahl; Ebenen koennen sichtbar/unsichtbar oder gesperrt sein, und ausgewaehlte Objekte koennen in eine andere Ebene verschoben werden.
+- Ebenen haben eine eigene Export-Deckkraft, sodass GM-Notizen, Hinweise oder VTT-Markierungen transparent ausgegeben werden koennen.
 - Projekte koennen mehrere Karten/Etagen enthalten; im Karten-Tab lassen sich Etagen anlegen, duplizieren, umbenennen, loeschen und wechseln.
 - Treppen-, Portal- oder Markersymbole koennen im `Nav`-Tab mit einer Zielkarte verknuepft und direkt verfolgt werden.
 - Der `Objects`-Tab bietet Suche, Typ-/Ebenenfilter und direkte Auswahl; ein Doppelklick springt zum Objekt.
@@ -55,10 +56,18 @@ SVG-Importe werden angezeigt, wenn `cairosvg` installiert ist; ohne diese option
 - Der Raumreport exportiert Inhaltsverzeichnis, Symbollegende, Begegnungstabellen, Raumtexte, verknuepfte Symbolnotizen und fehlende Custom-Symbol-Dateien als Markdown.
 - Nummern werden beim Platzieren mit dem darunterliegenden Raum verknuepft, wenn ein Raum getroffen wird.
 - VTT-Optionen unterstuetzen gridless Export sowie Foundry- und Roll20-Presets. `Player Export` blendet nicht exportierbare Notizen und GM-only Raeume aus; `GM Export` zeigt alles Sichtbare.
+- Exportprofile wie `Print A4`, `Foundry Player`, `Roll20 GM` und `Fantasy Grounds` koennen im Exportdialog angewendet und eigene Profile gespeichert werden.
+- Benannte Exportrahmen lassen sich im `Nav`-Tab aus Auswahl oder Sichtfenster speichern und im Exportdialog als eigener Bereich verwenden.
+- Batch-Export erstellt GM-, Player- und Gridless-PNGs in einem Schritt; Legende, Raumreport, Foundry-Szenen-JSON und Roll20-Page-JSON koennen separat exportiert werden.
+- SVG-Export schreibt gruppierte IDs und `data-object-id` je Kartenobjekt fuer spaetere Nachbearbeitung.
 - Snap-to-grid, Snap-Schritt, Haupt-/Unterraster und optionales Ausrichten an Objektkanten stehen im rechten Panel.
 - Das `Measure`-Werkzeug misst Segmentdistanz, Weglaenge und Flaeche in Rasterzellen und im eingestellten Realweltmassstab.
 - Mittlere oder rechte Maustaste verschiebt die Karte in jedem Werkzeug.
 - Mit dem Mausrad oder den Pfeiltasten hoch/runter zoomen.
 - Projekte koennen als `.osrmap.json` gespeichert und geladen werden.
 - Projektdateien verwenden `schemaVersion`; alte Symbolnamen wie `secret`, `pit` und `column` werden beim Laden migriert.
+- Autosave sichert ungespeicherte Arbeit und bietet beim Start eine Wiederherstellung an; beim Schliessen, Laden oder Neu-Anlegen fragt die App bei ungespeicherten Aenderungen nach.
+- Beim Laden sammelt die Projektvalidierung konkrete Warnungen zu uebersprungenen Objekten, defekten Links oder fehlenden Custom-Symbol-Dateien.
+- Tastaturkuerzel werden nach dem Speichern im Shortcut-Dialog direkt neu gebunden, und der `History`-Tab zeigt Undo-/Redo-Schritte sichtbar an.
+- Farbpaletten koennen pro Projekt gespeichert und wieder angewendet werden.
 - Export unterstuetzt PNG, JPEG, WebP, PDF und SVG mit 1x bis 4x Skalierung, Vorschau, Qualitaet, transparentem PNG/WebP-Hintergrund, Legendenschalter, Grid-Schalter, Karten-/Seiten-/Auswahlbereich sowie Druckrand und Titelbereich.
