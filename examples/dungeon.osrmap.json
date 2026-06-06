@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 10,
+  "meta": {"title": "Example Dungeon", "author": "OSR Map Maker"},
+  "settings": {"width": 24, "height": 18, "mapMode": "Dungeon"},
+  "layers": [],
+  "objects": [
+    {"type": "room", "x": 2, "y": 2, "width": 6, "height": 4, "roomNumber": "1", "roomName": "Entry Hall"},
+    {"type": "corridor", "x": 8, "y": 3, "width": 5, "height": 1},
+    {"type": "symbol", "kind": "door", "x": 8, "y": 3.5, "size": 1}
+  ],
+  "maps": [],
+  "exportProfiles": [],
+  "exportFrames": [{"id": "frame_dungeon", "name": "Dungeon Page", "x": 0, "y": 0, "width": 24, "height": 18}]
+}

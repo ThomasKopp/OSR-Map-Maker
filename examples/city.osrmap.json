@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 10,
+  "meta": {"title": "Example City", "author": "OSR Map Maker"},
+  "settings": {"width": 28, "height": 20, "mapMode": "City"},
+  "layers": [],
+  "objects": [
+    {"type": "shape", "kind": "rectangle", "x": 3, "y": 3, "width": 8, "height": 5, "district": "Market", "textureFill": "stone"},
+    {"type": "shape", "kind": "line", "x": 1, "y": 10, "x2": 26, "y2": 10, "poiRole": "street"},
+    {"type": "symbol", "kind": "city_gate", "x": 2, "y": 10, "size": 1.5, "poiRole": "gate"}
+  ],
+  "maps": [],
+  "exportProfiles": []
+}

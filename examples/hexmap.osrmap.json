@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 10,
+  "meta": {"title": "Example Hexmap", "author": "OSR Map Maker"},
+  "settings": {
+    "width": 24,
+    "height": 18,
+    "mapMode": "Hexmap",
+    "hexOrientation": "pointy",
+    "showHexCoordinates": true
+  },
+  "layers": [],
+  "objects": [
+    {"type": "shape", "kind": "polygon", "points": [[3, 3], [7, 3], [8, 6], [4, 8]], "terrain": "forest", "textureFill": "earth"},
+    {"type": "symbol", "kind": "party_start", "x": 5, "y": 5, "size": 1, "poiRole": "start"}
+  ],
+  "maps": [],
+  "exportProfiles": []
+}

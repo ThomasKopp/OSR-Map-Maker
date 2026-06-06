@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 10,
+  "meta": {"title": "Example VTT Export", "author": "OSR Map Maker"},
+  "settings": {"width": 20, "height": 16, "mapMode": "Dungeon", "vttPreset": "Foundry"},
+  "layers": [],
+  "objects": [
+    {"type": "room", "x": 2, "y": 2, "width": 6, "height": 5, "fogRevealed": false},
+    {"type": "symbol", "kind": "door", "x": 5, "y": 2, "size": 1},
+    {"type": "symbol", "kind": "light_source", "x": 5, "y": 5, "size": 1},
+    {"type": "symbol", "kind": "party_start", "x": 3, "y": 4, "size": 1, "encounterStart": true, "tokenCount": 4, "faction": "Party"}
+  ],
+  "maps": [],
+  "exportProfiles": []
+}
