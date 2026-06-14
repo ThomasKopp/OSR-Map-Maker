@@ -181,6 +181,7 @@ The built-in basic tools are:
 | `v` | Select | Select, move, resize, rotate, edit, and inspect objects |
 | `r` | Room | Draw rectangular room/floor areas |
 | `c` | Corridor | Draw straight or diagonal corridors |
+| `j` | Cave Tunnel | Draw natural point-by-point cave corridors |
 | `o` | Round | Draw rounded room areas |
 | `h` | Cave | Draw irregular cave-like areas |
 | `e` | Rect | Draw rectangle shape overlays |
@@ -203,8 +204,11 @@ outline cleanup, grid rendering, campaign room data, fog masks, and VTT exports.
 - Rooms are rectangular.
 - Corridors are rectangular when dragged horizontally or vertically.
 - Diagonal corridors are created when the corridor drag is diagonal.
+- Cave tunnels are natural corridor shapes placed point by point.
 - Round rooms render as circles or ellipses.
 - Caves use irregular edge treatment and can be roughened by procedural tools.
+- Rotated rooms and corridors keep their internal grid horizontal and vertical,
+  clipped to the rotated floor outline.
 
 ### Shapes
 
@@ -728,6 +732,7 @@ Default shortcuts:
 | `v` | Select tool |
 | `r` | Room tool |
 | `c` | Corridor tool |
+| `j` | Cave tunnel tool |
 | `o` | Round tool |
 | `h` | Cave tool |
 | `e` | Rectangle shape tool |

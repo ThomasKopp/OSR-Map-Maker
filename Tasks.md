@@ -1,296 +1,227 @@
-# OSR Map Maker: Neue GUI- und Funktionsvorschlaege
+# UI-Verbesserungsvorschlaege fuer OSR Map Maker
 
-Diese Liste baut auf dem aktuellen Stand der App auf. Viele Punkte aus dem alten Plan sind bereits umgesetzt; die folgenden Aufgaben sind als neue, offene Roadmap gedacht.
+Orientierung: Paint.NET wirkt stark, weil die Arbeitsflaeche im Zentrum bleibt,
+Werkzeuge schnell erreichbar sind, Ebenen und Verlauf als eigene Arbeitsfenster
+sichtbar sind und haeufige Aktionen ohne langes Suchen funktionieren. OSR Map
+Maker sollte diese Prinzipien auf Kartenbau, Symbole, Layer, Kampagnennotizen
+und Export/VTT-Workflows uebertragen.
 
-## Leitlinien
+## Leitprinzipien
 
-- [ ] Bedienung schneller machen: haeufige Aktionen sollen ohne Dialogsuche erreichbar sein.
-- [ ] Panels kontextsensitiver machen: nur relevante Felder zeigen, aber Detailbearbeitung nicht verstecken.
-- [ ] Kartenarbeit fehlertoleranter machen: mehr Vorschau, Validierung und Wiederherstellung.
-- [ ] Export- und VTT-Workflows reproduzierbarer machen: Profile, Pruefungen und klare Zielsysteme.
-- [ ] Das grosse `osr_map_maker.py` schrittweise in kleinere Module aufteilen, ohne laufende Features zu brechen.
+- [ ] Canvas-first: Die Karte bleibt immer der visuelle Mittelpunkt. Panels und
+      Werkzeugleisten unterstuetzen die Arbeit, sie dominieren sie nicht.
+- [ ] Sofort lernbar: Die wichtigsten Aktionen sollen durch Icon, Tooltip,
+      Shortcut und Statuszeile verstaendlich sein, ohne lange Hilfetexte im UI.
+- [ ] Schnelle Wege fuer haeufige Aufgaben: Zeichnen, Auswaehlen, Layer wechseln,
+      Symbol platzieren, Undo/Redo, Zoom und Export brauchen direkte Kontrollen.
+- [ ] Paint.NET-aehnliche Fensterlogik: Tools, Layers, History, Colors/Style,
+      Symbols und Navigator koennen gedockt, schwebend, geschlossen und wieder
+      eingeblendet werden.
+- [ ] Ruhige Windows-Desktop-Aesthetik: klare Linien, neutrale Flaechen,
+      konsistente Abstaende, Segoe-UI-Typografie, deutliche aktive Zustaende.
+- [ ] Weniger Registerkarten-Tiefe: Haefig genutzte Panels sollten direkt
+      sichtbar sein; seltene Spezialfunktionen duerfen in Dialoge oder
+      aufklappbare Bereiche wandern.
 
-## GUI-Verbesserungen
+## Hohe Prioritaet
 
-### Hauptlayout und Navigation
+- [x] Top-Leiste zu einer kompakten Command Bar umbauen.
+      Nur globale Kernaktionen sichtbar halten: Neu, Oeffnen/Laden, Speichern,
+      Undo, Redo, Zoom/Fit, Suche/Command Palette, Export. Detailoptionen wie
+      Exportformat, Exportskalierung und Toolbar-Dock in passende Panels oder
+      Menues verschieben, damit die Leiste ruhiger wird.
 
-- [x] Rechtes Inspector-Panel resizable machen und Breite pro Projekt oder global speichern.
-- [x] Inspector-Tabs in sinnvolle Gruppen trennen: `Build`, `Inspect`, `Campaign`, `Export`, `Project`.
-- [x] Optionalen kompakten Modus fuer kleine Bildschirme einfuehren, bei dem Symbolbrowser und Inspector einklappbar sind.
-- [x] Eine Command-Palette einbauen, z. B. fuer Werkzeuge, Exportprofile, Kartenwechsel, Symbolsuche und Einstellungen.
-- [x] Aktuelle Karte/Etage als Breadcrumb oder gut sichtbaren Titel oberhalb der Arbeitsflaeche anzeigen.
-- [x] Minimap einklappbar machen und mit Zoom-Rechteck, sichtbarem Ausschnitt und Layer-Filter ausstatten.
-- [x] Statusleiste erweitern um aktuelles Werkzeug, Rasterposition, Auswahlanzahl, Zoomwert und Speicherstatus.
-- [x] Globale Suche anbieten, die Objekte, Raeume, Symbole, Marker, Zonen und Karten findet.
+- [x] Werkzeugleiste staerker wie Paint.NET strukturieren.
+      Eine feste Icon-Matrix fuer Zeichenwerkzeuge nutzen, mit klarer aktiver
+      Markierung, 24-32 px Zielgroesse, einheitlichem Raster, Tooltip inklusive
+      Shortcut und kurzem Modus-Hinweis. Unicode-Symbole schrittweise durch
+      konsistente PNG/Icon-Assets ersetzen.
 
-### Werkzeugleiste
+- [x] Kontextuelle Werkzeugoptionen als eigene Optionsleiste einfuehren.
+      Direkt unter der Top-Leiste oder am oberen Canvas-Rand sollten nur die
+      Optionen des aktiven Werkzeugs erscheinen, z. B. Snap-Schritt, Linienbreite,
+      Symbolgroesse, Textgroesse, Fuelle/Farbe, Pfeilenden oder Zufallsvariante.
+      Dadurch muessen Nutzer fuer einfache Werkzeuganpassungen nicht in den
+      rechten Inspector wechseln.
 
-- [x] Werkzeugleiste frei andockbar machen: oben, links oder schwebend auf der Karte.
-- [x] Aktives Werkzeug staerker hervorheben und den zuletzt genutzten Submodus direkt sichtbar machen.
-- [x] Werkzeuggruppen einklappbar machen, damit Basiswerkzeuge, Formen, Marker und Messwerkzeuge nicht konkurrieren.
-- [x] Kleine Dropdowns fuer Werkzeugvarianten einbauen, z. B. Tuerart, Linienart, Raumform oder Symbolgroesse.
-- [x] Doppelklick auf ein Werkzeug als "Werkzeugoptionen" verwenden.
-- [x] Tooltips um Shortcut, letzte Nutzung und wichtigsten Modus ergaenzen.
-- [x] Werkzeugleiste per Tastatur fokussierbar machen.
+- [x] Rechte Seitenleiste in dockbare Einzelpanels aufteilen.
+      Statt alle Inhalte in verschachtelten Inspector-Tabs zu verstecken, sollten
+      die wichtigsten Panels separat sichtbar sein: Layers, History, Symbols,
+      Properties/Selection, Navigator und Export. Jedes Panel bekommt eine kleine
+      Titelleiste mit Schliessen, Andocken, Abdocken und optionalem Einklappen.
 
-### Canvas und direkte Bearbeitung
+- [x] Layers-Panel paint.net-aehnlich ueberarbeiten.
+      Jede Ebene als Zeile mit kleinem Layer-Thumbnail, Name, Sichtbarkeit,
+      Lock-Status, Opacity und Objektanzahl darstellen. Aktive Ebene blau
+      hervorheben, Drag-and-drop-Reihenfolge beibehalten, plus/minus/duplizieren/
+      nach oben/nach unten als Icon-Leiste am unteren Panelrand anbieten.
 
-- [x] Hover-Highlight fuer das Objekt unter dem Mauszeiger anzeigen, bevor geklickt wird.
-- [x] Auswahlgriffe visuell nach Typ unterscheiden: Skalieren, Rotieren, Punktbearbeitung, Link-Endpunkte.
-- [x] Snap-Vorschau anzeigen, z. B. Rasterpunkt, Objektkante oder Mittelpunkt.
-- [x] Smart Guides fuer Ausrichtung an Objektkanten, Mittelpunkten und gleichen Abstaenden einbauen.
-- [x] Beim Ziehen numerische Live-Masse direkt am Objekt anzeigen.
-- [x] Fit-to-map, Fit-to-selection und 100-Prozent-Zoom als Buttons und Shortcuts anbieten.
-- [x] Canvas-Hintergrund fuer Player-/GM-Vorschau schnell umschaltbar machen.
-- [x] Fokusmodus fuer grosse Karten anbieten: nur aktive Ebene oder aktive Zone hervorheben.
-- [x] Sichtbare Arbeitsbereichsgrenzen und Exportbereiche deutlicher markieren.
-- [x] Optionales Pixel-/Druckraster fuer hochaufloesende Exporte anzeigen.
+- [x] History-Panel prominenter machen.
+      Der Undo-Verlauf sollte nicht tief im Project-Tab versteckt sein. Ein
+      sichtbares History-Panel wie bei Paint.NET zeigt die letzten Aktionen mit
+      kleinem Icon, aktuellem Undo-Ziel und getrenntem Redo-Bereich. Unten:
+      Undo/Redo-Buttons als Icons, optional "Zu Zustand springen" als spaetere
+      Erweiterung.
 
-### Inspector und Objektbearbeitung
+- [x] Map-/Floor-Wechsel als Thumbnail-Tabs gestalten.
+      Paint.NET nutzt Bild-Tabs mit Live-Thumbnails. OSR Map Maker kann oben ueber
+      dem Canvas kleine Tabs fuer Karten/Floors anzeigen: Mini-Vorschau, Name,
+      Dirty-Indikator, Kontextmenue fuer Umbenennen/Duplizieren/Loeschen. Der
+      aktuelle Kombobox-Wechsel waere dann nur noch eine Zusatznavigation.
 
-- [x] Selection-Panel in Abschnitte gliedern: Position, Groesse, Darstellung, Inhalt, Links, Export.
-- [x] Boolean-Felder als Checkboxen anzeigen statt als Texteingabe, z. B. `export`, `shadow`, `outline`, `playerVisible`.
-- [x] Zahlenfelder mit Steppern, Min/Max und Einheit versehen.
-- [x] Rotation, Deckkraft, Linienbreite und Skalierung zusaetzlich als Slider anbieten.
-- [x] Farbfelder als klickbare Swatches anzeigen und zuletzt genutzte Farben direkt anbieten.
-- [x] Multi-Selection-Inspector fuer gemeinsame Eigenschaften einfuehren, z. B. Ebene, Farbe, Deckkraft, Exportflag.
-- [x] Konfliktanzeige fuer gemischte Werte in Mehrfachauswahl anzeigen.
-- [x] Text-, Raum- und GM-Notizfelder als groessere Editor-Dialoge mit Markdown-Vorschau oeffnen.
-- [x] Fehlerhafte Eingaben direkt am Feld markieren statt nur in der Statuszeile zu melden.
-- [x] Undo-Gruppierung fuer fortlaufende Inspector-Aenderungen einfuehren, damit ein Slider nicht hunderte History-Eintraege erzeugt.
+- [x] Canvas-Rahmung verbessern.
+      Den Arbeitsbereich neutraler gestalten: hellgrauer App-Hintergrund,
+      zentrierte Kartenflaeche mit subtiler Kante/Schatten, klare Map Bounds,
+      dezente Scrollbars und weniger dominante blaue Hintergrundflaeche. Das
+      hilft, die Karte wie ein Dokument auf einer Arbeitsflaeche zu lesen.
 
-### Symbolbrowser
+- [x] Statusleiste ausbauen.
+      Neben Meldungen auch aktive Koordinate, Grid-Zelle, Zoom, aktives Werkzeug,
+      aktive Ebene, Auswahlanzahl, Snap-Status, Speicherstatus/Autosave und
+      Validierungswarnungen anzeigen. Kritische Warnungen farblich rechts buendeln.
 
-- [x] Symbole per Drag-and-drop aus dem Browser auf die Karte ziehen.
-- [x] Symbolbrowser als Grid/List-Ansicht umschaltbar machen.
-- [x] Symbolsuche um Filterchips fuer Gruppe, Tags, Favoriten, Custom und zuletzt genutzt erweitern.
-- [x] Preview-Popover mit Varianten, Tags, Legendenname und Standardgroesse anzeigen.
-- [x] Favoriten und zuletzt genutzte Symbole getrennt darstellen.
-- [x] Symbolgruppen per Drag-and-drop sortierbar machen.
-- [x] Custom-Symbolverwaltung mit Umbenennen, Tag-Bearbeitung, Variantenloeschen und Dateipfad-Reparatur ergaenzen.
-- [x] Warnsymbol anzeigen, wenn eine Custom-Symbol-Datei fehlt oder nicht geladen werden kann.
-- [x] Symbol-Set-Import mit Vorschau und Konfliktloesung anbieten.
+- [x] Sprache vereinheitlichen.
+      Aktuell mischen UI-Texte Englisch und Deutsch, z. B. "Recover" neben
+      "Abbrechen" oder deutsche Tooltip-Fragmente. Eine Sprachstrategie festlegen:
+      entweder voll Englisch oder voll Deutsch, mit Begriffstabelle fuer Tool,
+      Layer, Export, Map, Room, Symbol, History.
 
-### Ebenen, Objekte und Navigator
+## Mittlere Prioritaet
 
-- [x] Layers-Panel als Tabelle mit Sichtbarkeit, Lock, Export-Opacity und Anzahl Objekte darstellen.
-- [x] Ebenen per Drag-and-drop sortieren und Objekt-Z-Reihenfolge sichtbar machen.
-- [x] Objekte als Baum anzeigen, inklusive Gruppen, Karten, Zonen und Ebenen.
-- [x] Objektliste um Mehrfachauswahl, Kontextmenue und Batch-Aktionen erweitern.
-- [x] Navigator nach Typen gruppieren: Ansichten, Marker, Zonen, Exportrahmen, Floor-Links.
-- [x] Navigator-Elemente umbenennen und farblich markieren koennen.
-- [x] Doppelklick-Aktionen konsistent machen: Jump, Auswahl und optional Zoom-to-fit.
+- [x] Properties-Panel fuer Auswahl fokussieren.
+      Bei einer Auswahl sollte sofort ein kompaktes Eigenschaften-Panel sichtbar
+      werden: Typ, Position, Groesse, Rotation, Layer, Farbe, Sichtbarkeit,
+      Export/Player-visible. Mehrfachauswahl zeigt Batch-Aktionen wie Align,
+      Distribute, Group, Lock und Layer wechseln.
 
-### Dialoge und Feedback
+- [x] Symbolbrowser visuell staerken.
+      Die Symbolgruppen als Icon-Tabs oder Segmented Control anzeigen, darunter
+      Suche, Filter und Raster/List-Umschalter. Symbolkacheln sollten echte
+      Vorschauen, Favorit, zuletzt genutzt, Custom/Missing-Indikator und
+      Drag-to-canvas unterstuetzen. Aktionen wie PNG/SVG/Set/Repair in ein
+      kleines Menue auslagern, damit das Raster ruhiger bleibt.
 
-- [x] Exportdialog mit groesserer, zoombarer Vorschau und Warnungen zu Aufloesung, Dateigroesse und transparentem Hintergrund erweitern.
-- [x] Batch-Exportdialog mit Dateinamen-Vorschau und Zielordner-Pruefung bauen.
-- [x] Projektvalidierung als Dialog mit kopierbarer Liste, Schweregrad und "zum Objekt springen" anzeigen.
-- [x] Autosave-Wiederherstellung mit Vorher/Nachher-Metadaten und Dateipfad anzeigen.
-- [x] Einheitliche Dialogbuttons verwenden: `Abbrechen`, `Anwenden`, `Speichern`, `Exportieren`.
-- [x] Toast- oder Inline-Meldungen fuer erfolgreiche Aktionen anzeigen, damit modale Dialoge seltener noetig sind.
+- [x] Farb- und Stilpanel nach Paint.NET-Vorbild anbieten.
+      Ein dockbares Colors/Style-Panel mit Primaer-/Sekundaerfarbe, aktuellen
+      Swatches, gespeicherten Paletten, Hintergrund/Floor/Grid/Text/Selection und
+      Style Templates. Farbbuttons sollten Farbflaechen zeigen, nicht nur Text.
 
-### Accessibility und Lokalisierung
+- [x] Minimap als Navigator-Panel behandeln.
+      Die Minimap sollte denselben Panel-Stil wie Layers/History bekommen:
+      Titelleiste, Pin/Dock, Layer-Filter, Viewport-Rechteck, Klick-zum-Springen
+      und optional transparenter Floating-Modus.
 
-- [x] Alle Buttons und Panels per Tastatur erreichbar machen.
-- [x] Fokusrahmen, Tab-Reihenfolge und Screenreader-Labels pruefen.
-- [x] Mindestgroessen fuer Buttons und Eingabefelder definieren.
-- [x] Farbige Statusanzeigen immer mit Text oder Icon kombinieren.
+- [x] View- und Workspace-Presets einfuehren.
+      Paint.NET bleibt uebersichtlich, weil Bildbearbeitung im Vordergrund steht.
+      OSR Map Maker hat mehr Domaenen. Sinnvolle Workspaces waeren "Drawing",
+      "Symbols", "Campaign", "Export/VTT" und "Print". Jeder Workspace schaltet
+      passende Panels ein und blendet Nebensachen aus.
 
-## Funktionsverbesserungen
+- [x] Menues neu sortieren.
+      Eine klarere Desktop-Struktur verwenden: File, Edit, View, Map, Layer,
+      Tools, Export, Help. Layer-Aktionen gehoeren in Layer, Export/VTT-Aktionen
+      in Export, Kartenstruktur in Map. So wird die Menueleiste erwartbarer.
 
-### Zeichen- und Bearbeitungsworkflow
+- [x] Context Menus konsequenter nutzen.
+      Rechtsklick auf Canvas, Auswahl, Layer, History, Symbol, Map-Tab und
+      Navigator-Eintrag sollte direkte, kontextpassende Aktionen bieten. Dadurch
+      muessen weniger Buttons dauerhaft sichtbar bleiben.
 
-- [x] Copy/Paste ueber Karten und Projekte hinweg unterstuetzen, inklusive Custom-Symbol-Referenzen.
-- [x] Paste-at-cursor einfuehren, damit eingefuegte Objekte direkt an der Mausposition erscheinen.
-- [x] Duplizieren mit wiederholbarem Offset anbieten.
-- [x] Nudge per Pfeiltasten und schnelles Nudge per Shift/Ctrl ergaenzen.
-- [x] Gruppen transformieren: skalieren, drehen, spiegeln und proportional anpassen.
-- [x] Mehrfachauswahl als wiederverwendbare Vorlage speichern koennen.
-- [x] Raum- und Korridorkanten automatisch verschmelzen, wenn sie exakt aneinanderliegen.
-- [x] Ueberlappende Flaechen optional bereinigen, damit interne Linien sauber verschwinden.
-- [x] Boolean-Operationen fuer Raumformen pruefen: Vereinen, Subtrahieren, Schnittmenge.
-- [x] Freihand-Zeichenmodus fuer Hoehlen, Wasser und Markierungen anbieten.
-- [x] Pinselwerkzeug fuer Wandstil, Bodenmarkierung oder schwieriges Gelaende einfuehren.
-- [x] Polygonpunkt-Bearbeitung mit Punktliste im Inspector synchronisieren.
-- [x] Objektrotation um frei waehlbaren Pivot ergaenzen.
+- [x] Zoom-Bedienung praezisieren.
+      Neben Slider und Fit-Buttons ein Zoom-Dropdown mit 25/50/75/100/150/200 %,
+      Fit Map, Fit Selection und Fit Width. Der aktuelle Prozentwert sollte auch
+      in der Statusleiste klickbar sein.
 
-### Kartenstruktur
+- [x] Auswahl- und Handle-Design modernisieren.
+      Selektionsrahmen, Resize-Handles, Polygonpunkte, Rotationsgriff und Hover
+      sollten einheitlich blau, gut kontrastiert und bei hohem Zoom nicht zu gross
+      wirken. Multi-Selection bekommt eine eigene Rahmenfarbe oder leichte
+      Binnenmarkierungen.
 
-- [x] Karten-Templates fuer Dungeon, Stadt, Overland, Hexmap und leere Skizze anbieten.
-- [x] Projektweite Einstellungen von kartenbezogenen Einstellungen deutlicher trennen.
-- [x] Karten/Etagen in Ordner oder Kapitel gruppieren.
-- [x] Floor-Link-Uebersicht bauen, die fehlende oder kaputte Links markiert.
-- [x] Etagenvergleich einbauen: darunterliegende Etage als halbtransparentes Overlay anzeigen.
-- [x] Kartenmassstab pro Karte und optional pro Zone speichern.
-- [x] Zonenhierarchie ermoeglichen, z. B. Dungeon > Tempelbezirk > Krypta.
-- [x] Exportrahmen mit Seitenformaten koppeln, z. B. A4, Letter, Foundry Scene, Roll20 Page.
+- [x] Live-Preview fuer Stil, Export und Generatoren staerken.
+      Paint.NET lebt von direktem Feedback. Style Templates, Exportprofile,
+      VTT-Audience, Random Dungeon und Effekte sollten eine kleine Vorschau mit
+      Apply/Cancel oder Vorher/Nachher-Diff bekommen, bevor sie committen.
 
-### Raum- und Kampagnenarbeit
+- [x] Notifications und Toasts standardisieren.
+      Toasts unten rechts im Canvas zeigen, mit einheitlichen Farben fuer Info,
+      Erfolg, Warnung und Fehler. Lange Fehler bleiben im Dialog oder in einem
+      Validation-Panel, kurze Statusmeldungen gehoeren in die Statusleiste.
 
-- [x] Raumformular mit Vorlagen fuer typische OSR-Raeume erweitern.
-- [x] Markdown-Vorschau fuer Raumtexte, Handouts und GM-Notizen anbieten.
-- [x] Raumstatus visuell auf der Karte codieren, optional nur im GM-Modus.
-- [x] Automatische Raumnummerierung mit Praefix, Suffix und Zonenbereich verbessern.
-- [x] Raumlisten-Ansicht mit Sortierung nach Nummer, Zone, Status, Gefahr und Spieler-Sichtbarkeit bauen.
-- [x] Encounter-/Loot-Tabellen aus Markdown oder CSV importieren.
-- [x] Zufallsinhalte mit Seed speichern, damit Ergebnisse nachvollziehbar bleiben.
-- [x] Beziehungen zwischen Raeumen speichern: Fraktion, Hinweis, Schluessel, Quest, Geheimtuer.
-- [x] Handout-Export separat erzeugen, ohne GM-Notizen und versteckte Informationen.
-- [x] GM-Booklet mit Templates fuer Kurzform, Volltext und Session-Prep anbieten.
-- [x] Kampagnenbericht mit offenen TODOs, fehlenden Raumnummern und ungenutzten Symbolnotizen erweitern.
+- [x] Panel-Layout speichern und zuruecksetzen.
+      Nutzer sollten das Layout nach Wunsch arrangieren koennen. Einstellungen:
+      Dockposition, Panelgroesse, Sichtbarkeit, Workspace, Toolbarposition.
+      Zusaetzlich ein Befehl "Reset Window Layout".
 
-### Prozedurale Werkzeuge
+## Niedrigere Prioritaet / Feinschliff
 
-- [x] Generatoren mit Seed-Feld, Vorschau und "erneut wuerfeln"-Button versehen.
-- [x] Generatoren sollen bestehende Auswahl/Zonen respektieren und optional nur dort arbeiten.
-- [x] Diff-Vorschau fuer Generatorergebnisse anzeigen, bevor Objekte uebernommen werden.
-- [x] Dungeon-Generator um Themenprofile erweitern: Krypta, Mine, Festung, Kanalisation, Zaubererlabor.
-- [x] Natural-Cave-Generator mit Wasser, Engstellen, Hoehenstufen und Sackgassenoptionen ausbauen.
-- [x] Automatische Tuerplatzierung mit Mindestabstand und Tuerwahrscheinlichkeit pro Wandtyp verbessern.
-- [x] Automatische Lichtquellen fuer VTT aus Raumtyp, Symbolen und Wandtyp ableiten.
-- [x] Patrouillenrouten mit Wegpunkten, Timing und Begegnungstabelle verbinden.
-- [x] "Map cleanup" als Werkzeug anbieten: kleine Artefakte entfernen, Kanten runden, Rasterausrichtung pruefen.
+- [ ] App-Theme definieren.
+      Ein konsistentes helles Theme mit neutralen Flaechen, dezenter
+      System-Akzentfarbe und gutem Kontrast. Spaeter optional Dark Theme. Wichtig:
+      keine zu stark blau dominierte UI, weil die Karte selbst visuell sprechen
+      soll.
 
-### Export und VTT
+- [ ] High-DPI und Skalierung pruefen.
+      Buttons, Icons, Canvas-Handles, Panelbreiten und Schriftgroessen auf 100 %,
+      125 %, 150 % und kleinen Laptop-Displays pruefen. Mindestgroessen fuer
+      Iconbuttons und Scrollbereiche festlegen.
 
-- [x] Exportprofile im Projekt und optional global speichern.
-- [x] Exportprofile duplizieren, loeschen und als Standard markieren.
-- [x] Export vor dem Speichern validieren: leere Auswahl, fehlender Frame, riesige Aufloesung, fehlende Assets.
-- [x] Dateinamen-Templates anbieten, z. B. `{project}_{map}_{audience}_{profile}`.
-- [x] Batch-Export mit mehreren Karten/Etagen kombinieren.
-- [x] Player-Export als Vorschau im Canvas anzeigen.
-- [x] Foundry-Export um Walls, Doors, Lights, Notes und Scene-Metadaten erweitern.
-- [x] Roll20-Export um Page-Groesse, Grid, Dynamic-Lighting-Hinweise und Layer-Zuordnung verbessern.
-- [x] Fantasy-Grounds-Exportprofil pruefen und dokumentieren.
-- [x] SVG-Export mit CSS-Klassen, Titel/Description und stabilen IDs fuer Nachbearbeitung erweitern.
-- [x] PDF-Export mit Seitenumbruch fuer grosse Karten und Kartenatlas-Modus ausbauen.
-- [x] WebP/JPEG-Export mit sichtbarer Qualitaetszahl neben dem Slider anzeigen.
+- [ ] Empty States fuer leere Panels gestalten.
+      Leere History, keine Auswahl, keine Suchtreffer, fehlende Custom Symbols
+      und leere Navigator-Listen sollten knapp, ruhig und handlungsorientiert
+      aussehen. Keine langen Erklaertexte im Arbeitsbereich.
 
-### Speichern, Laden und Sicherheit
+- [ ] Dirty-/Autosave-Zustaende sichtbar machen.
+      Im Fenstertitel, Map-Thumbnail-Tab und Statusbar anzeigen, ob ungespeicherte
+      Aenderungen oder ein aktueller Autosave existieren. Nach Autosave kurze
+      Statusmeldung statt stoerendem Dialog.
 
-- [x] Autosave-Versionen mit Zeitstempel statt nur einer Datei aufbewahren.
-- [x] Projektdateien optional komprimiert speichern, wenn viele Custom-Symbole eingebettet werden.
-- [x] Beim Laden fehlende Custom-Symbole reparieren: Ordner suchen, Pfad ersetzen, Symbol aus Projekt entfernen.
-- [x] Projektvalidierung als eigener Menuepunkt mit Reparaturvorschlaegen anbieten.
-- [x] Backups vor groesseren Migrationsschritten automatisch anlegen.
-- [x] Speichern unter neuem Namen als klare Aktion in Menue und Toolbar anbieten.
-- [x] Zuletzt geoeffnete Projekte im File-Menue anzeigen.
-- [x] Crash-Recovery mit Projektname, letzter Aenderung und Objektanzahl anzeigen.
+- [ ] Dialoge vereinheitlichen.
+      Export, Shortcuts, Autosave Recovery, Project Settings, Asset Library und
+      Validation sollten dieselbe Button-Reihenfolge, Padding, Titelstruktur und
+      Fehlermeldungslogik nutzen.
 
-### Tastatur und Produktivitaet
+- [ ] Tastaturbedienung sichtbarer machen.
+      Tooltips, Menues und Command Palette zeigen Shortcuts. In Panels klare
+      Fokusrahmen, Enter/Space-Aktivierung und Pfeilnavigation beibehalten.
 
-- [x] Shortcut-Editor um Konfliktwarnungen und Reset-auf-Standard erweitern.
-- [x] Shortcut-Presets fuer Zeichenmodus, VTT-Workflow und Laptop ohne Maus anbieten.
-- [x] Wiederholbare letzte Aktion einfuehren, z. B. "noch eine Tuer dieses Typs".
-- [x] Quick-actions per Kontextmenue und Command-Palette angleichen.
-- [x] Objektaktionen per `/` oder `Ctrl+K` suchbar machen.
-- [x] Temporare Werkzeuge per gehaltenem Shortcut einfuehren, z. B. Space fuer Pan.
+- [ ] Icons fuer globale Aktionen einfuehren.
+      Speichern, Oeffnen, Export, Undo, Redo, Suche, Zoom, Fit, Lock, Sichtbarkeit,
+      Layer hoch/runter und Loeschen sollten vertraute Symbole erhalten. Text nur
+      dort nutzen, wo die Aktion sonst nicht eindeutig ist.
 
-## Funktionserweiterungen
+- [ ] Performance als Designmerkmal behandeln.
+      Paint.NET betont Geschwindigkeit. OSR Map Maker sollte UI-Aktionen sofort
+      rueckmelden: Canvas-Redraw inkrementell halten, lange Exporte/Generatoren
+      mit Progress anzeigen, Panels nicht beim Tippen sichtbar ruckeln lassen.
 
-### Neue Kartentypen und Inhalte
+- [ ] Review- und Validation-Hinweise visuell trennen.
+      Nicht jede Warnung muss modal sein. Ein kleines Warning-Symbol in der
+      Statusleiste kann ein Validation-Panel oeffnen, in dem Probleme nach Asset,
+      Layer, Export und Campaign gruppiert sind.
 
-- [x] Hexmap-Modus mit Hexraster, Terrain-Symbolen und Koordinaten einfuehren.
-- [x] Stadtplan-Modus mit Strassen, Gebaeuden, Bezirken und POI-Markern pruefen.
-- [x] Overland-Modus mit Hoehenlinien, Wegen, Flusssystemen und Landmarken ergaenzen.
-- [x] Isometrische oder Seitenansicht-Symbole als optionale Symbolsets vorbereiten.
-- [x] Kartenunterlage als Bild importieren und abpausen koennen.
-- [x] Rasterausrichtung fuer importierte Bildunterlagen anbieten.
-- [x] Procedural texture fills fuer Stein, Erde, Wasser, Holz und Lava ergaenzen.
+## Konkrete erste Umsetzungsschritte
 
-### Asset- und Symbolsystem
+- [ ] Eine kleine UI-Spezifikation anlegen: Farben, Abstaende, Buttonhoehen,
+      Icongroessen, Panel-Titelleisten, aktive Zustaende, Fokusrahmen.
+- [x] Den rechten Inspector testweise in drei sichtbare Dock-Panels umbauen:
+      Symbols, Layers, Properties. History als viertes optionales Panel.
+- [ ] Map-Thumbnail-Tabs ueber dem Canvas prototypisieren.
+- [x] Werkzeugoptionen aus Toolbar/Map-Tab in eine kontextuelle Optionsleiste
+      verschieben.
+- [ ] Layers- und History-Panel optisch an Paint.NET annaehern.
+- [ ] Statusleiste erweitern und die Top-Leiste vereinfachen.
+- [ ] Danach Usability-Runde: Ein Nutzer soll in unter 60 Sekunden Raum,
+      Korridor, Tuer, Nummer, Layerwechsel, Undo und Export finden koennen.
 
-- [x] Symbolpacks mit Manifest, Lizenzhinweis und Preview-Bild definieren.
-- [x] Custom-Symbole optional ins Projekt einbetten, damit Dateien portabel bleiben.
-- [x] Farbvarianten fuer Built-in-Symbole als Palette speichern.
-- [x] Symbol-Aliase erlauben, z. B. `secret door` findet `one_way_secret_door`.
-- [x] Symbol-Metadaten um VTT-Rolle erweitern: Door, Wall, Light, Hazard, Spawn, Note.
-- [x] Automatische Legendenkategorien pro Projekt editierbar machen.
-- [x] Kleine Asset-Bibliothek fuer Papiertexturen, Kartenstempel und Rahmen anbieten.
+## Referenzpunkte aus Paint.NET
 
-### Kollaboration und Review
+- Paint.NET beschreibt seine UI als schnell lernbar und intuitiv.
+- Die Bild-/Dokumentnavigation nutzt Tabs mit Live-Thumbnails statt nur Text.
+- Layers und History sind zentrale, sichtbare Arbeitsfenster.
+- History ist nicht nur Undo/Redo, sondern ein nachvollziehbarer Verlauf.
+- Werkzeuge bleiben einfach erreichbar, waehrend fortgeschrittene Funktionen in
+      Menues, Panels und Dialogen liegen.
+- Performance und unmittelbares Feedback sind Teil der Produktwirkung.
 
-- [x] Projektkommentare als nicht exportierbare Review-Notizen einfuehren.
-- [x] Aenderungslog im Projekt speichern: Autor, Zeit, Kurzbeschreibung.
-- [x] Zwei Projektdateien vergleichen und Unterschiede als Liste ausgeben.
-- [x] Review-Export erzeugen, der neue/geaenderte Objekte seit einem Snapshot markiert.
-- [x] Snapshot-Bookmarks fuer wichtige Versionen innerhalb eines Projekts anbieten.
-
-### Druck und Publishing
-
-- [x] Drucklayout-Editor fuer Titel, Legende, Massstab, Copyright und Seitenzahlen bauen.
-- [x] Kartenatlas-Modus fuer mehrere Exportrahmen in einer PDF-Datei ergaenzen.
-- [x] One-page-dungeon-Layout mit Karte plus Raumliste anbieten.
-- [x] Spielerhandouts als separates PDF mit freigegebenen Texten und Bildern exportieren.
-- [x] Print-Proof-Ansicht mit Beschnitt, Rand und DPI-Warnung anzeigen.
-
-### Spieltisch- und VTT-Hilfen
-
-- [x] Fog-of-war-Masken aus Raeumen, Tueren und Sichtblockern ableiten.
-- [x] Sichtlinien-Test fuer VTT-Walls im Canvas anzeigen.
-- [x] Lichtreichweiten und Dunkelheitszonen visuell simulieren.
-- [x] Encounter-Startpunkte mit Token-Anzahl und Fraktion verbinden.
-- [x] Zufallstabellen direkt aus Raum oder Zone wuerfeln und Ergebnis speichern.
-- [x] Session-Modus pruefen: Player-View, GM-View und schnelle Statusupdates.
-
-## Technische Verbesserungen
-
-### Architektur
-
-- [x] Datenmodell, Validierung und Migrationen vollstaendig aus `osr_map_maker.py` nach `models.py` ziehen.
-- [x] Tk-Rendering, Pillow-Rendering und SVG-Export klar trennen.
-- [x] UI-Aufbau in Komponenten aufteilen: Toolbar, Inspector, Symbolbrowser, Navigator, Exportdialog.
-- [x] Commands fuer Undo/Redo vereinheitlichen und History-Transaktionen unterstuetzen.
-- [x] Projektoperationen als testbare Services kapseln.
-- [x] Konstanten, Defaultwerte und Symboldefinitionen in eigene Module verschieben.
-
-### Tests
-
-- [x] Tests fuer GUI-unabhaengige Inspector-Validierung schreiben.
-- [x] Tests fuer Exportprofile, Batch-Export und Dateinamen-Templates erweitern.
-- [x] Tests fuer Autosave-Versionierung und Wiederherstellung ergaenzen.
-- [x] Tests fuer VTT-Export mit Walls, Doors, Lights und Player-Sichtbarkeit ausbauen.
-- [x] Regressionstests fuer Copy/Paste, Gruppentransform und Multi-Selection einfuehren.
-- [x] Snapshot-Tests fuer SVG-Ausgabe mit stabilen IDs pruefen.
-
-### Performance
-
-- [x] Canvas-Redraw auf sichtbaren Ausschnitt begrenzen.
-- [x] Statische Layer als Cache rendern und nur bei Aenderung neu zeichnen.
-- [x] Symbolbilder und Custom-SVG-Rasterungen mit Groesse, Rotation und Variante cachen.
-- [x] Objekt-Hit-Detection mit raeumlichem Index beschleunigen.
-- [x] Grosse Projekte mit 10.000+ Objekten als Performance-Szenario testen.
-- [x] Exportvorschau entkoppeln oder debouncen, damit Dialoge fluessig bleiben.
-
-### Qualitaet und Wartbarkeit
-
-- [x] Typisierung mit `mypy` oder `pyright` schrittweise pruefen.
-- [x] Linting/Formatting als Skript oder Make-Task dokumentieren.
-- [x] README mit aktueller Featureliste, Screenshots und typischen Workflows aktualisieren.
-- [x] Architekturentscheidung fuer Projektformat und Exportformat dokumentieren.
-- [x] Beispielprojekte fuer Dungeon, Stadt, Hexmap und VTT-Export anlegen.
-
-## Priorisierte naechste Umsetzung
-
-1. [x] Inspector verbessern: Boolean-Felder, Slider, Farbswatches und bessere Feldvalidierung.
-2. [x] Command-Palette plus globale Suche fuer Werkzeuge, Objekte, Karten und Exportprofile bauen.
-3. [x] Exportdialog aufwerten: groessere Vorschau, Validierung, Dateinamen-Templates und Profilverwaltung.
-4. [x] Symbolbrowser modernisieren: Drag-and-drop, Filterchips, Variantenverwaltung und fehlende Assets reparieren.
-5. [x] Canvas-Bearbeitung verbessern: Hover-Highlight, Smart Guides, Snap-Vorschau und Live-Masse.
-6. [x] Autosave-Versionierung und zuletzt geoeffnete Projekte einfuehren.
-7. [ ] Batch-Export ueber mehrere Karten/Etagen inklusive Player-/GM-/Gridless-Ausgaben erweitern.
-8. [x] Code modularisieren, beginnend mit Inspector, Exportdialog und Symbolbrowser.
-
-## Kleine, schnell umsetzbare Wins
-
-- [x] Zoomwert als Prozentzahl neben dem Slider anzeigen.
-- [x] Buttons fuer `Fit map`, `Fit selection` und `100%` ergaenzen.
-- [x] Export-Qualitaet als Zahl neben JPEG-/WebP-Slidern anzeigen.
-- [x] `Save As` und `Recent Projects` ins File-Menue aufnehmen.
-- [x] Im Selection-Panel `export` und `playerVisible` als Checkboxen anzeigen.
-- [x] Fehlende Custom-Symbole in Symbolbrowser und Statuszeile deutlicher markieren.
-- [x] Objektliste mit `Select all visible` und `Invert selection` erweitern.
-- [x] Aktives Werkzeug in der Statusleiste inklusive Shortcut anzeigen.
-- [x] Drag-to-pan mit Space-Taste als temporaeres Werkzeug einbauen.
-- [x] Projektvalidierung als Menuepunkt `Tools > Validate Project` anbieten.
+Referenz: https://paint.net/ und https://paint.net/features.html

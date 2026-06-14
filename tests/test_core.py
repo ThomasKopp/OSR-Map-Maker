@@ -41,6 +41,112 @@ class ProjectModelTests(unittest.TestCase):
         self.assertTrue(app.validate_settings({})["showTooltips"])
         self.assertFalse(app.validate_settings({"showTooltips": False})["showTooltips"])
 
+    def test_validate_settings_hides_minimap_by_default(self) -> None:
+        self.assertFalse(app.validate_settings({})["showMinimap"])
+        self.assertTrue(app.validate_settings({"showMinimap": True})["showMinimap"])
+
+    def test_validate_settings_controls_floor_outlines(self) -> None:
+        default = app.validate_settings({})
+        hidden = app.validate_settings({"showFloorOutlines": False})
+
+        self.assertTrue(default["showFloorOutlines"])
+        self.assertEqual(default["floorOutlineColor"], app.BLUE)
+        self.assertFalse(hidden["showFloorOutlines"])
+
+    def test_validate_settings_controls_room_status_overlay(self) -> None:
+        default = app.validate_settings({})
+        hidden = app.validate_settings({"showRoomStatus": False})
+
+        self.assertTrue(default["showRoomStatus"])
+        self.assertTrue(default["roomStatusGmOnly"])
+        self.assertFalse(hidden["showRoomStatus"])
+
+    def test_validate_settings_preserves_floating_panel_state(self) -> None:
+        settings = app.validate_settings(
+            {
+                "showToolbar": False,
+                "showMinimap": False,
+                "showColorPicker": True,
+                "toolbarX": 120,
+                "toolbarY": 80,
+                "minimapX": 220,
+                "minimapY": 160,
+                "rightPanels": {
+                    "layers": {
+                        "visible": False,
+                        "docked": False,
+                        "collapsed": True,
+                        "x": 44,
+                        "y": 55,
+                    }
+                },
+            }
+        )
+
+        self.assertFalse(settings["showToolbar"])
+        self.assertFalse(settings["showMinimap"])
+        self.assertTrue(settings["showColorPicker"])
+        self.assertEqual(settings["toolbarX"], 120)
+        self.assertEqual(settings["minimapY"], 160)
+        self.assertFalse(settings["rightPanels"]["layers"]["visible"])
+        self.assertFalse(settings["rightPanels"]["layers"]["docked"])
+        self.assertFalse(settings["rightPanels"]["layers"]["collapsed"])
+        self.assertEqual(settings["rightPanels"]["layers"]["x"], 44)
+
+    def test_validate_settings_preserves_minimap_and_workspace_state(self) -> None:
+        settings = app.validate_settings(
+            {
+                "minimapDocked": True,
+                "minimapTransparent": True,
+                "workspacePreset": "Export/VTT",
+                "rightPanels": {"nav": {"visible": False}},
+            }
+        )
+        fallback = app.validate_settings({"workspacePreset": "Unknown"})
+
+        self.assertTrue(settings["minimapDocked"])
+        self.assertTrue(settings["minimapTransparent"])
+        self.assertEqual(settings["workspacePreset"], "Export/VTT")
+        self.assertIn("navigator", settings["rightPanels"])
+        self.assertFalse(settings["rightPanels"]["navigator"]["visible"])
+        self.assertEqual(fallback["workspacePreset"], "Drawing")
+
+    def test_workspace_panel_visibility_matches_presets(self) -> None:
+        export_panels = app.workspace_panel_visibility("Export/VTT")
+        campaign_panels = app.workspace_panel_visibility("Campaign")
+
+        self.assertTrue(export_panels["export"])
+        self.assertTrue(export_panels["navigator"])
+        self.assertFalse(export_panels["symbols"])
+        self.assertTrue(campaign_panels["rooms"])
+        self.assertFalse(campaign_panels["colors_style"])
+
+    def test_default_window_layout_settings_reset_to_drawing_workspace(self) -> None:
+        layout = app.default_window_layout_settings("Drawing")
+
+        self.assertEqual(layout["workspacePreset"], "Drawing")
+        self.assertEqual(layout["toolbarDock"], "floating")
+        self.assertEqual(layout["inspectorWidth"], 420)
+        self.assertTrue(layout["showToolbar"])
+        self.assertTrue(layout["showMinimap"])
+        self.assertTrue(layout["minimapDocked"])
+        self.assertTrue(layout["rightPanels"]["layers"]["visible"])
+        self.assertFalse(layout["rightPanels"]["symbols"]["visible"])
+        self.assertTrue(
+            all(not state["docked"] for state in layout["rightPanels"].values())
+        )
+
+    def test_toast_styles_cover_expected_status_types(self) -> None:
+        self.assertEqual(
+            {"info", "success", "warning", "error"}, set(app.TOAST_STYLES)
+        )
+        self.assertEqual(app.TOAST_STYLES["success"]["foreground"], "#ffffff")
+
+    def test_hex_color_normalization_expands_short_values(self) -> None:
+        self.assertEqual(app.normalize_hex_color("#abc"), "#aabbcc")
+        self.assertEqual(app.normalize_hex_color("123456"), "#123456")
+        self.assertEqual(app.normalize_hex_color("not-a-color"), "")
+
     def test_compressed_project_file_round_trips(self) -> None:
         project = app.create_project()
         project["meta"]["title"] = "Compressed Test"
@@ -248,6 +354,62 @@ class ProjectModelTests(unittest.TestCase):
         edges = app.shared_exact_floor_edges([left, right])
         self.assertEqual(edges[0][:4], (4, 0, 4, 4))
 
+    def test_cave_corridor_validates_as_corridor_floor_without_room_fields(self) -> None:
+        tunnel = app.validate_object(app.rect("cave_corridor", 1, 2, 5, 1), 1)
+
+        self.assertEqual(tunnel["type"], "cave_corridor")
+        self.assertEqual(tunnel["layer"], "corridors")
+        self.assertEqual(tunnel["wallType"], "natural")
+        self.assertIn("seed", tunnel)
+        self.assertNotIn("roomName", tunnel)
+        self.assertIn("cave_corridor", app.FLOOR_TYPES)
+
+    def test_cave_corridor_preserves_free_polygon_points(self) -> None:
+        tunnel = app.validate_object(
+            app.cave_corridor_from_points([(1, 1), (5, 1), (4, 3), (1, 4)]),
+            1,
+        )
+
+        self.assertEqual(len(tunnel["points"]), 4)
+        self.assertEqual(tunnel["width"], 4)
+        self.assertEqual(
+            app.floor_polygon_points(tunnel, 10),
+            [(10, 10), (50, 10), (40, 30), (10, 40)],
+        )
+
+    def test_rectangular_rooms_preserve_rotation_and_rotated_geometry(self) -> None:
+        room = app.validate_object(
+            {**app.rect("room", 1, 1, 4, 2), "rotation": 90},
+            1,
+        )
+
+        self.assertEqual(room["rotation"], 90)
+        for actual, expected in zip(app.bounds(room), (2.0, 0.0, 2.0, 4.0)):
+            self.assertAlmostEqual(actual, expected)
+        for actual, expected in zip(
+            app.floor_polygon_points(room, 1),
+            [(4.0, 0.0), (4.0, 4.0), (2.0, 4.0), (2.0, 0.0)],
+        ):
+            self.assertAlmostEqual(actual[0], expected[0])
+            self.assertAlmostEqual(actual[1], expected[1])
+        self.assertIn("rotate", [name for name, _x, _y in app.selection_handles(room)])
+
+    def test_svg_for_rotated_room_uses_floor_polygons(self) -> None:
+        project = app.create_project()
+        room = app.validate_object(
+            {**app.rect("room", 1, 1, 4, 2), "rotation": 45},
+            1,
+        )
+        parts = app.svg_for_object(project, room, 1)
+
+        self.assertTrue(any(part.startswith("<polygon") for part in parts))
+        self.assertTrue(
+            any(
+                x1 != x2 and y1 != y2
+                for x1, y1, x2, y2 in app.vtt_wall_segments_for_object(room, 18)
+            )
+        )
+
     def test_export_filename_template_formats_safe_names(self) -> None:
         filename = app.export_filename_from_template(
             "The Lost Vault",
@@ -264,6 +426,64 @@ class ProjectModelTests(unittest.TestCase):
         self.assertEqual(
             filename, "the-lost-vault-level-2-shrine-player-foundry-player-frame.jpg"
         )
+
+    def test_batch_export_targets_cover_all_maps_and_standard_outputs(self) -> None:
+        project = app.create_project()
+        project["meta"]["title"] = "Lost Vault"
+        second = app.create_map_record(
+            "Lower / Level",
+            project["settings"],
+            project["layers"],
+            [],
+        )
+        project["maps"].append(second)
+        jobs = app.default_batch_export_jobs(2, include_gm_legend=False)
+
+        targets = app.batch_export_targets(
+            project,
+            project["maps"],
+            project["maps"][0],
+            Path("exports"),
+            True,
+            jobs,
+        )
+
+        self.assertEqual(len(targets), 6)
+        self.assertEqual(
+            [suffix for _record, suffix, _opts, _path in targets[:3]],
+            ["gm", "player", "gridless"],
+        )
+        self.assertTrue(
+            any(
+                path.name == "lost-vault-lower-level-gridless.png"
+                for *_rest, path in targets
+            )
+        )
+        gridless = next(
+            opts for _record, suffix, opts, _path in targets if suffix == "gridless"
+        )
+        self.assertEqual(gridless["audience"], "Player")
+        self.assertFalse(gridless["export_grid"])
+
+    def test_map_storage_round_trips_underlays_print_layouts_and_session_state(
+        self,
+    ) -> None:
+        maker = app.OSRMapMaker.__new__(app.OSRMapMaker)
+        maker.project = app.create_project()
+        maker.project["underlays"] = [{"id": "underlay_a", "path": "map.png"}]
+        maker.project["printLayouts"] = [{"name": "Atlas"}]
+        maker.project["sessionState"] = {"mode": "GM"}
+
+        app.OSRMapMaker.sync_active_map_storage(maker)
+        record = maker.active_map_record()
+        maker.project["underlays"] = []
+        maker.project["printLayouts"] = []
+        maker.project["sessionState"] = {}
+        app.OSRMapMaker.load_map_record(maker, record)
+
+        self.assertEqual(maker.project["underlays"][0]["id"], "underlay_a")
+        self.assertEqual(maker.project["printLayouts"][0]["name"], "Atlas")
+        self.assertEqual(maker.project["sessionState"]["mode"], "GM")
 
     def test_autosave_candidates_sort_latest_version_first_and_prune(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -423,7 +643,22 @@ class ProjectModelTests(unittest.TestCase):
             "open_door",
             [item["id"] for item in app.symbol_variant_options(project, "door")],
         )
+        self.assertIn(
+            "stairs_up",
+            [item["id"] for item in app.symbol_variant_options(project, "stairs")],
+        )
+        self.assertIn(
+            "covered_round_pit",
+            [
+                item["id"]
+                for item in app.symbol_variant_options(project, "covered_pit")
+            ],
+        )
         self.assertIn("barred", app.symbol_search_blob(project, "door", "Door"))
+        self.assertIn(
+            "treasure chest",
+            app.symbol_search_blob(project, "chest", app.SYMBOL_LABELS["chest"]),
+        )
         self.assertIn(
             "one way secret door",
             app.symbol_search_blob(
@@ -431,6 +666,7 @@ class ProjectModelTests(unittest.TestCase):
             ),
         )
         self.assertEqual(app.symbol_vtt_role(project, "light_source"), "Light")
+        self.assertEqual(app.symbol_vtt_role(project, "round_pit"), "Hazard")
 
         styled = app.validate_object(
             {
@@ -452,6 +688,76 @@ class ProjectModelTests(unittest.TestCase):
         self.assertAlmostEqual(styled["opacity"], 0.42)
         self.assertTrue(styled["shadow"])
         self.assertTrue(styled["outline"])
+
+    def test_reference_symbol_extensions_have_vector_rendering(self) -> None:
+        reference_kinds = [
+            "round_pit",
+            "covered_round_pit",
+            "stairs_up",
+            "ladder_down",
+            "double_bed",
+            "bench",
+            "chair",
+            "chest",
+            "cask",
+            "key",
+            "loot_pile",
+            "table_set",
+            "coffin",
+            "open_coffin",
+            "grave",
+            "circle_marker",
+            "dotted_square_marker",
+        ]
+
+        for kind in reference_kinds:
+            self.assertIn(kind, app.SYMBOL_LABELS)
+            self.assertTrue(app.vector_symbol_ops(kind), kind)
+
+        parts = app.svg_for_symbol(
+            "table_set", 40, 40, 24, "#000000", "#ffffff", 1
+        )
+        self.assertTrue(any(part.startswith("<rect") for part in parts))
+
+    def test_unrotated_builtin_symbols_draw_directly_on_tk_canvas(self) -> None:
+        class RecordingCanvas:
+            def __init__(self) -> None:
+                self.calls: list[str] = []
+
+            def _record(self, name: str) -> None:
+                self.calls.append(name)
+
+            def create_line(self, *_args, **_kwargs) -> None:
+                self._record("create_line")
+
+            def create_rectangle(self, *_args, **_kwargs) -> None:
+                self._record("create_rectangle")
+
+            def create_oval(self, *_args, **_kwargs) -> None:
+                self._record("create_oval")
+
+            def create_polygon(self, *_args, **_kwargs) -> None:
+                self._record("create_polygon")
+
+            def create_text(self, *_args, **_kwargs) -> None:
+                self._record("create_text")
+
+            def create_arc(self, *_args, **_kwargs) -> None:
+                self._record("create_arc")
+
+            def create_image(self, *_args, **_kwargs) -> None:
+                self._record("create_image")
+
+        project = app.create_project()
+        obj = app.validate_object(app.symbol("table_set", 2, 2, 1.2), 1)
+        canvas = RecordingCanvas()
+
+        app.draw_tk_builtin_symbol_rotated(
+            canvas, project, obj, 32, project["settings"]
+        )
+
+        self.assertIn("create_rectangle", canvas.calls)
+        self.assertNotIn("create_image", canvas.calls)
 
     def test_symbol_vtt_roles_legend_categories_and_asset_library_validate(
         self,
@@ -822,6 +1128,94 @@ class ProjectModelTests(unittest.TestCase):
         self.assertTrue(all(x1 == x2 or y1 == y2 for x1, y1, x2, y2 in segments))
         self.assertTrue(any(x1 == x2 for x1, _y1, x2, _y2 in segments))
         self.assertTrue(any(y1 == y2 for _x1, y1, _x2, y2 in segments))
+
+    def test_floor_grid_segments_can_hide_rect_boundary(self) -> None:
+        room = app.validate_object(app.rect("room", 1, 1, 3, 3), 1)
+        segments = app.floor_grid_segments(room, 10, include_boundary=False)
+
+        self.assertEqual(len(segments), 4)
+        self.assertNotIn((10, 10, 10, 40), segments)
+        self.assertNotIn((40, 10, 40, 40), segments)
+        self.assertNotIn((10, 10, 40, 10), segments)
+        self.assertNotIn((10, 40, 40, 40), segments)
+        self.assertIn((20, 10, 20, 40), segments)
+        self.assertIn((10, 20, 40, 20), segments)
+
+    def test_rotated_room_grid_segments_stay_horizontal_and_vertical(self) -> None:
+        room = app.validate_object(
+            {**app.rect("room", 2, 2, 5, 4), "rotation": 35},
+            1,
+        )
+        segments = app.floor_grid_segments(room, 10, include_boundary=True)
+
+        self.assertGreater(len(segments), 0)
+        self.assertTrue(all(x1 == x2 or y1 == y2 for x1, y1, x2, y2 in segments))
+        self.assertTrue(any(x1 == x2 for x1, _y1, x2, _y2 in segments))
+        self.assertTrue(any(y1 == y2 for _x1, y1, _x2, y2 in segments))
+
+    def test_svg_floor_grid_hides_rect_boundary_without_room_outlines(self) -> None:
+        project = app.create_project()
+        project["settings"]["showFloorOutlines"] = False
+        room = app.validate_object(app.rect("room", 1, 1, 3, 3), 1)
+        parts = app.svg_for_object(project, room, 1)
+
+        self.assertTrue(
+            any(
+                part.startswith("<rect")
+                and f'stroke="{project["settings"]["floorColor"]}"' in part
+                for part in parts
+            )
+        )
+        self.assertFalse(
+            any('x1="18.00" y1="18.00" x2="18.00" y2="72.00"' in part for part in parts)
+        )
+        self.assertTrue(
+            any('x1="36.00" y1="18.00" x2="36.00" y2="72.00"' in part for part in parts)
+        )
+
+    def test_render_tk_room_status_overlay_can_be_hidden(self) -> None:
+        class RecordingCanvas:
+            def __init__(self) -> None:
+                self.rectangles: list[tuple[tuple[object, ...], dict[str, object]]] = []
+
+            def create_rectangle(self, *args, **kwargs):
+                self.rectangles.append((args, kwargs))
+                return len(self.rectangles)
+
+            def create_line(self, *_args, **_kwargs):
+                return None
+
+            def create_polygon(self, *_args, **_kwargs):
+                return None
+
+            def create_oval(self, *_args, **_kwargs):
+                return None
+
+            def create_text(self, *_args, **_kwargs):
+                return 1
+
+            def create_image(self, *_args, **_kwargs):
+                return None
+
+            def bbox(self, *_args):
+                return None
+
+            def tag_raise(self, *_args):
+                return None
+
+        project = app.create_project()
+        project["objects"].append(app.validate_object(app.rect("room", 1, 1, 3, 3), 2))
+        project["settings"]["showRoomStatus"] = False
+        canvas = RecordingCanvas()
+
+        app.render_tk(canvas, project, 1, set(), None, None, None, None)
+
+        self.assertFalse(
+            any(
+                kwargs.get("outline") == app.ROOM_STATUS_COLORS["undiscovered"]
+                for _args, kwargs in canvas.rectangles
+            )
+        )
 
     def test_svg_diagonal_corridor_uses_polygon_and_grid_lines(self) -> None:
         project = app.create_project()
@@ -1226,6 +1620,30 @@ class ProjectModelTests(unittest.TestCase):
         self.assertEqual(app.OSRMapMaker.paste_delta(maker, objects, True), (6.0, 5.0))
         self.assertEqual(app.OSRMapMaker.paste_delta(maker, objects, False), (1.0, 1.0))
 
+    def test_enter_closes_cave_corridor_draft(self) -> None:
+        maker = app.OSRMapMaker.__new__(app.OSRMapMaker)
+        added: list[dict[str, object]] = []
+        maker.draft = app.Draft(
+            "cave_corridor",
+            1,
+            1,
+            3,
+            3,
+            4,
+            4,
+            [(1, 1), (4, 1), (4, 4), (1, 4)],
+        )
+        maker.drag_start = (1, 1, None)
+        maker.add_object = lambda obj: added.append(obj)
+        maker.show_status = lambda _message: None
+
+        result = app.OSRMapMaker.handle_return_key(maker, object())
+
+        self.assertEqual(result, "break")
+        self.assertIsNone(maker.draft)
+        self.assertEqual(added[0]["type"], "cave_corridor")
+        self.assertEqual(len(added[0]["points"]), 4)
+
     def test_nudge_selection_moves_unlocked_objects_only(self) -> None:
         maker = app.OSRMapMaker.__new__(app.OSRMapMaker)
         maker.project = app.create_project()
@@ -1364,6 +1782,67 @@ class ExportSmokeTests(unittest.TestCase):
             image.getpixel((230, 97)),
             app.Image.new("RGBA", (1, 1), settings["floorColor"]).getpixel((0, 0)),
         )
+
+    def test_cave_corridor_export_smoke(self) -> None:
+        project = app.create_project()
+        tunnel = app.validate_object(app.rect("cave_corridor", 1, 1, 8, 2), 2)
+        project["objects"].append(tunnel)
+        image = app.Image.new(
+            "RGBA",
+            tuple(int(v) for v in app.canvas_size(project, 1, False)),
+            project["settings"]["backgroundColor"],
+        )
+        draw = app.ImageDraw.Draw(image)
+
+        app.render_pillow(draw, project, 1, None, None, include_legend=False)
+
+        self.assertGreater(len(app.floor_polygon_points(tunnel, 16)), 4)
+        self.assertGreater(image.getbbox()[2], 0)
+
+    def test_floor_outlines_can_be_hidden_in_pillow_renderer(self) -> None:
+        settings = app.validate_settings({"showFloorOutlines": False})
+        room = app.validate_object(app.rect("room", 1, 1, 3, 3), 1)
+        image = app.Image.new("RGBA", (80, 80), (0, 0, 0, 0))
+        draw = app.ImageDraw.Draw(image)
+        calls: list[str] = []
+        original_outline = app.draw_pillow_floor_outline
+
+        def fake_outline(*_args) -> None:
+            calls.append("outline")
+
+        app.draw_pillow_floor_outline = fake_outline
+        try:
+            app.draw_pillow_floor_objects(draw, settings, [room], 1)
+        finally:
+            app.draw_pillow_floor_outline = original_outline
+
+        self.assertNotIn("outline", calls)
+
+    def test_gridless_export_still_draws_underlays(self) -> None:
+        project = app.create_project()
+        project["settings"]["exportGrid"] = False
+        image = app.Image.new("RGBA", (80, 80), (0, 0, 0, 0))
+        draw = app.ImageDraw.Draw(image)
+        calls: list[str] = []
+        original_grid = app.draw_pillow_grid
+        original_underlays = app.draw_pillow_underlays
+
+        def fake_grid(*_args) -> None:
+            calls.append("grid")
+
+        def fake_underlays(*_args) -> None:
+            calls.append("underlays")
+
+        app.draw_pillow_grid = fake_grid
+        app.draw_pillow_underlays = fake_underlays
+        try:
+            app.render_pillow(draw, project, 1, None, None, include_legend=False)
+        finally:
+            app.draw_pillow_grid = original_grid
+            app.draw_pillow_underlays = original_underlays
+
+        self.assertNotIn("grid", calls)
+        self.assertIn("underlays", calls)
 
     def test_jpeg_export_smoke(self) -> None:
         image = app.flatten_rgba(self.render(), "#ffffff")
