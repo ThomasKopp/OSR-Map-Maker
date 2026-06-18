@@ -8,18 +8,18 @@ und Export/VTT-Workflows uebertragen.
 
 ## Leitprinzipien
 
-- [ ] Canvas-first: Die Karte bleibt immer der visuelle Mittelpunkt. Panels und
+- [x] Canvas-first: Die Karte bleibt immer der visuelle Mittelpunkt. Panels und
       Werkzeugleisten unterstuetzen die Arbeit, sie dominieren sie nicht.
-- [ ] Sofort lernbar: Die wichtigsten Aktionen sollen durch Icon, Tooltip,
+- [x] Sofort lernbar: Die wichtigsten Aktionen sollen durch Icon, Tooltip,
       Shortcut und Statuszeile verstaendlich sein, ohne lange Hilfetexte im UI.
-- [ ] Schnelle Wege fuer haeufige Aufgaben: Zeichnen, Auswaehlen, Layer wechseln,
+- [x] Schnelle Wege fuer haeufige Aufgaben: Zeichnen, Auswaehlen, Layer wechseln,
       Symbol platzieren, Undo/Redo, Zoom und Export brauchen direkte Kontrollen.
-- [ ] Paint.NET-aehnliche Fensterlogik: Tools, Layers, History, Colors/Style,
+- [x] Paint.NET-aehnliche Fensterlogik: Tools, Layers, History, Colors/Style,
       Symbols und Navigator koennen gedockt, schwebend, geschlossen und wieder
       eingeblendet werden.
-- [ ] Ruhige Windows-Desktop-Aesthetik: klare Linien, neutrale Flaechen,
+- [x] Ruhige Windows-Desktop-Aesthetik: klare Linien, neutrale Flaechen,
       konsistente Abstaende, Segoe-UI-Typografie, deutliche aktive Zustaende.
-- [ ] Weniger Registerkarten-Tiefe: Haefig genutzte Panels sollten direkt
+- [x] Weniger Registerkarten-Tiefe: Haefig genutzte Panels sollten direkt
       sichtbar sein; seltene Spezialfunktionen duerfen in Dialoge oder
       aufklappbare Bereiche wandern.
 
@@ -155,63 +155,63 @@ und Export/VTT-Workflows uebertragen.
 
 ## Niedrigere Prioritaet / Feinschliff
 
-- [ ] App-Theme definieren.
+- [x] App-Theme definieren.
       Ein konsistentes helles Theme mit neutralen Flaechen, dezenter
       System-Akzentfarbe und gutem Kontrast. Spaeter optional Dark Theme. Wichtig:
       keine zu stark blau dominierte UI, weil die Karte selbst visuell sprechen
       soll.
 
-- [ ] High-DPI und Skalierung pruefen.
+- [x] High-DPI und Skalierung pruefen.
       Buttons, Icons, Canvas-Handles, Panelbreiten und Schriftgroessen auf 100 %,
       125 %, 150 % und kleinen Laptop-Displays pruefen. Mindestgroessen fuer
       Iconbuttons und Scrollbereiche festlegen.
 
-- [ ] Empty States fuer leere Panels gestalten.
+- [x] Empty States fuer leere Panels gestalten.
       Leere History, keine Auswahl, keine Suchtreffer, fehlende Custom Symbols
       und leere Navigator-Listen sollten knapp, ruhig und handlungsorientiert
       aussehen. Keine langen Erklaertexte im Arbeitsbereich.
 
-- [ ] Dirty-/Autosave-Zustaende sichtbar machen.
+- [x] Dirty-/Autosave-Zustaende sichtbar machen.
       Im Fenstertitel, Map-Thumbnail-Tab und Statusbar anzeigen, ob ungespeicherte
       Aenderungen oder ein aktueller Autosave existieren. Nach Autosave kurze
       Statusmeldung statt stoerendem Dialog.
 
-- [ ] Dialoge vereinheitlichen.
+- [x] Dialoge vereinheitlichen.
       Export, Shortcuts, Autosave Recovery, Project Settings, Asset Library und
       Validation sollten dieselbe Button-Reihenfolge, Padding, Titelstruktur und
       Fehlermeldungslogik nutzen.
 
-- [ ] Tastaturbedienung sichtbarer machen.
+- [x] Tastaturbedienung sichtbarer machen.
       Tooltips, Menues und Command Palette zeigen Shortcuts. In Panels klare
       Fokusrahmen, Enter/Space-Aktivierung und Pfeilnavigation beibehalten.
 
-- [ ] Icons fuer globale Aktionen einfuehren.
+- [x] Icons fuer globale Aktionen einfuehren.
       Speichern, Oeffnen, Export, Undo, Redo, Suche, Zoom, Fit, Lock, Sichtbarkeit,
       Layer hoch/runter und Loeschen sollten vertraute Symbole erhalten. Text nur
       dort nutzen, wo die Aktion sonst nicht eindeutig ist.
 
-- [ ] Performance als Designmerkmal behandeln.
+- [x] Performance als Designmerkmal behandeln.
       Paint.NET betont Geschwindigkeit. OSR Map Maker sollte UI-Aktionen sofort
       rueckmelden: Canvas-Redraw inkrementell halten, lange Exporte/Generatoren
       mit Progress anzeigen, Panels nicht beim Tippen sichtbar ruckeln lassen.
 
-- [ ] Review- und Validation-Hinweise visuell trennen.
+- [x] Review- und Validation-Hinweise visuell trennen.
       Nicht jede Warnung muss modal sein. Ein kleines Warning-Symbol in der
       Statusleiste kann ein Validation-Panel oeffnen, in dem Probleme nach Asset,
       Layer, Export und Campaign gruppiert sind.
 
 ## Konkrete erste Umsetzungsschritte
 
-- [ ] Eine kleine UI-Spezifikation anlegen: Farben, Abstaende, Buttonhoehen,
+- [x] Eine kleine UI-Spezifikation anlegen: Farben, Abstaende, Buttonhoehen,
       Icongroessen, Panel-Titelleisten, aktive Zustaende, Fokusrahmen.
 - [x] Den rechten Inspector testweise in drei sichtbare Dock-Panels umbauen:
       Symbols, Layers, Properties. History als viertes optionales Panel.
-- [ ] Map-Thumbnail-Tabs ueber dem Canvas prototypisieren.
+- [x] Map-Thumbnail-Tabs ueber dem Canvas prototypisieren.
 - [x] Werkzeugoptionen aus Toolbar/Map-Tab in eine kontextuelle Optionsleiste
       verschieben.
-- [ ] Layers- und History-Panel optisch an Paint.NET annaehern.
-- [ ] Statusleiste erweitern und die Top-Leiste vereinfachen.
-- [ ] Danach Usability-Runde: Ein Nutzer soll in unter 60 Sekunden Raum,
+- [x] Layers- und History-Panel optisch an Paint.NET annaehern.
+- [x] Statusleiste erweitern und die Top-Leiste vereinfachen.
+- [x] Danach Usability-Runde: Ein Nutzer soll in unter 60 Sekunden Raum,
       Korridor, Tuer, Nummer, Layerwechsel, Undo und Export finden koennen.
 
 ## Referenzpunkte aus Paint.NET
@@ -225,3 +225,171 @@ und Export/VTT-Workflows uebertragen.
 - Performance und unmittelbares Feedback sind Teil der Produktwirkung.
 
 Referenz: https://paint.net/ und https://paint.net/features.html
+
+## Performance- und Effizienzvorschlaege
+
+Ziel: Die App soll auch bei grossen Karten, vielen Symbolen, Underlays,
+mehreren Floors und Exportvorschauen fluessig bleiben. Die folgenden Punkte
+basieren auf einer Code-Sichtung von `osr_map_maker.py`, besonders den Pfaden
+`redraw`, `render_tk`, Hit-Testing, Snapping, Autosave und Export.
+
+## Performance: Hohe Prioritaet
+
+- [x] `redraw()` in Canvas-Redraw und Panel-Refresh aufteilen.
+      Aktuell loescht `redraw()` den ganzen Canvas, rendert neu und aktualisiert
+      danach Selection-Panel, Objektliste, Navigator, Toolbar, Status und
+      Minimap. Bei Drag, Hover und Measure sollten nur Canvas/Overlay neu
+      gezeichnet werden; Objektliste, Navigator und Inspector reichen bei
+      Auswahlwechsel, Projektstruktur-Aenderungen oder Mouse-Release.
+
+- [x] Redraws aus Mausbewegungen zusammenfassen und begrenzen.
+      `on_motion` und `on_drag` rufen haeufig direkt `redraw()` auf. Eine
+      `schedule_redraw(reason)`-Methode mit `after_idle` oder einem 16-ms-Timer
+      kann doppelte Redraws pro Event-Flut verwerfen und die UI auf ca. 60 FPS
+      begrenzen. Fuer Live-Drag reicht oft ein schneller Overlay-Redraw.
+
+- [x] Canvas in Tags/Layer zerlegen statt immer `canvas.delete("all")`.
+      Sinnvolle Tags waeren `background`, `grid`, `underlays`, `floor`,
+      `objects`, `selection`, `hover`, `draft`, `guides` und `minimap`.
+      Unveraenderte Tags koennen stehen bleiben; beim Verschieben einer Auswahl
+      muessen nur betroffene Objekte und Overlays aktualisiert werden.
+
+- [x] Grid, Hintergrund und Workspace-Bounds cachen.
+      `draw_tk_grid` erzeugt bei jedem Redraw alle Grid-Linien neu. Fuer grosse
+      Karten und Subgrid ist das teuer. Eine Tk-PhotoImage- oder Canvas-Tag-Cache
+      pro `settings`/Zoom/Viewport wuerde Dragging und Hover deutlich
+      beschleunigen. Alternativ nur Grid-Linien im sichtbaren Viewport zeichnen.
+
+- [x] Sichtbarkeits- und Layerdaten pro Renderdurchlauf vorberechnen.
+      `should_render_object` ruft pro Objekt `project_layer_visible` auf, das
+      wiederum die Layerliste durchsucht. Im Player-Preview-Fall wird zudem
+      `hidden_player_room_ids` pro Objekt neu berechnet. Ein Render-Kontext mit
+      `visible_layer_ids`, `layer_opacity_by_id` und `hidden_player_room_ids`
+      macht diese Pruefungen O(1) statt wiederholt O(n).
+
+- [x] Spatial Index mit Dirty-Version statt JSON-Signatur invalidieren.
+      `current_spatial_index()` berechnet ueber `spatial_index_signature()` eine
+      JSON-Signatur aller Objekt-Bounds und Layerzustaende. Das passiert im
+      Select-Modus beim Hover/Hit-Test und kann bei vielen Objekten teurer sein
+      als der eigentliche Index. Besser: `project_revision` und
+      `spatial_index_revision` fuehren und nur bei Objekt-/Layer-Aenderungen neu
+      bauen.
+
+- [x] Objekt-Bounds und Objekt-Lookups cachen.
+      Viele Pfade scannen `project["objects"]` oder berechnen `bounds(obj)`
+      wiederholt: Auswahl, Hit-Test, Minimap, `canvas_size`, Export-Frame,
+      Snapping und Objektliste. Ein invalidierbarer Cache fuer `object_by_id`,
+      `bounds_by_id`, `selected_objects` und optional `objects_by_layer` wuerde
+      viele lineare Suchlaeufe entfernen.
+
+- [x] Objekt-Snapping vorberechnen.
+      `object_alignment_guides` wird bei Object-Snap aus allen Objekten neu
+      erzeugt. Beim Start eines Drags koennen X-/Y-Guides fuer alle nicht
+      bewegten Objekte einmal gebaut und danach wiederverwendet werden. Fuer
+      sehr grosse Karten sollten Guides nach Achsenwerten oder Buckets
+      abfragbar sein, statt jede Bewegung alle Guides zu pruefen.
+
+## Performance: Mittlere Prioritaet
+
+- [x] Underlay-Bilder und transformierte PhotoImages cachen.
+      `draw_tk_underlays` laedt, resized, rotiert und konvertiert Underlays beim
+      Redraw. Cache-Schluessel: Underlay-ID oder Pfad/Embedded-Hash, Zoom,
+      Groesse, Rotation und Opacity. Dasselbe lohnt sich fuer Pillow-Export,
+      besonders bei grossen eingebetteten Bildern.
+
+- [x] Symbol-Rendering fuer Tk cachen.
+      Custom Symbols werden zwar als PIL-Bilder geladen gecacht, aber
+      Styling/Opacity/Outline/Shadow und `ImageTk.PhotoImage` entstehen beim
+      Canvas-Redraw erneut. Rotierte Built-in-Symbole werden ebenfalls per
+      Pillow neu gerendert. Ein Symbol-PhotoImage-Cache pro
+      Kind/Groesse/Rotation/Farbe/Opacity/Style wuerde Karten mit vielen
+      Symbolen spuerbar entlasten.
+
+- [x] Floor-Geometrie und Grid-Segmente cachen.
+      `floor_polygon_points`, `floor_grid_segments`, Cave-Punkte, Rotation und
+      interne Bodenraster werden beim Rendern mehrfach berechnet. Pro Objekt-ID,
+      Objekt-Revision, Cellsize/Zoom und relevanten Style-Optionen cachen. Das
+      ist besonders fuer Caves, Rounds, rotierte Raeume und Cave-Corridors
+      nuetzlich.
+
+- [x] `canvas_size` cachen.
+      `canvas_size(project, scale, include_legend)` laeuft ueber alle Objekte
+      und wird waehrend Redraw, Minimap, Zoom, Export und Fit-Funktionen mehrfach
+      aufgerufen. Ein Cache pro Project-Revision, Scale und Legend-Flag reicht
+      aus; bei Objektbewegung oder Settings-Aenderung wird er invalidiert.
+
+- [x] Minimap-Redraw entkoppeln und drosseln.
+      `redraw()` ruft immer `redraw_minimap()` auf, und die Minimap iteriert
+      wieder ueber alle Objekte. Die Minimap sollte bei Drag/Hover nur gedrosselt
+      aktualisiert werden, z. B. alle 100-200 ms, und bei reinem Viewport-Scroll
+      nur das Viewport-Rechteck neu zeichnen.
+
+- [x] Exportvorschau mit Cache und niedriger Preview-Aufloesung rendern.
+      Der Exportdialog rendert nach Optionsaenderungen ein komplettes Bild und
+      skaliert es danach. Fuer Vorschauen reicht eine reduzierte Render-Skala
+      oder ein gecachter Preview-Render pro Optionshash/Project-Revision.
+      Lange Preview-Render sollten abbrechbar sein oder in einem Worker laufen.
+
+- [x] Autosave UI-schonender machen.
+      `run_autosave()` prueft Dirty-State ueber einen kompletten kanonischen
+      JSON-Vergleich und schreibt dann zwei pretty-printed JSON-Dateien. Besser:
+      Autosave nur bei geaenderter `project_revision`, Snapshot auf dem UI-Thread
+      erzeugen, Datei-I/O in einen Worker auslagern und fuer Autosave kompaktes
+      JSON ohne `indent=2` nutzen.
+
+- [x] Undo/Redo von Vollprojekt-Snapshots auf gezielte Diffs pruefen.
+      Viele Aktionen rufen `project_snapshot()` vor und nach der Aenderung auf;
+      das serialisiert das gesamte Projekt per JSON. Fuer grosse Projekte waeren
+      Command-Diffs oder objektbezogene Vorher/Nachher-Snapshots deutlich
+      sparsamer. Als Zwischenschritt: nur betroffene Map/Objekte snapshotten.
+
+- [x] Static-Layer-Cache auf die Tk-Vorschau erweitern.
+      Fuer Pillow-Export existiert bereits ein Static-Layer-Cache. Derselbe
+      Ansatz waere fuer die interaktive Tk-Canvas sinnvoll: statische Layer als
+      Bitmap oder unveraenderte Canvas-Tags halten und nur dynamische Layer,
+      Auswahl und Overlays neu zeichnen.
+
+## Performance: Niedrigere Prioritaet / Messbarkeit
+
+- [x] Performance-Benchmarks fuer echte UI-Szenarien ergaenzen.
+      Bestehende Tests decken grosse Bounds, viele Symbole, Spatial Index und
+      Static-Layer-Cache ab. Ergaenzen: Redraw einer 5.000-Objekt-Karte, Drag mit
+      100 selektierten Objekten, Player-Preview, Object-Snap, Minimap und
+      Autosave eines Projekts mit eingebetteten Symbolen.
+
+- [x] Kleine Profiling-Helfer einbauen.
+      Ein optionaler Dev-Modus kann Zeiten fuer `redraw`, `render_tk`,
+      `draw_tk_grid`, `draw_tk_floor_objects`, `draw_tk_object`,
+      `redraw_minimap`, `project_snapshot` und `render_image` in der Statuszeile
+      oder Konsole ausgeben. So werden Performance-Regressions schnell sichtbar.
+
+- [x] Layer- und Objektlisten nur bei Daten-Aenderung neu fuellen.
+      `refresh_object_list` baut Labels und Gruppen neu auf und nutzt dabei
+      `object_label`, das wiederum `index(obj)` und Layernamen berechnet. Die
+      Liste sollte nur bei Objekt-/Filter-/Auswahl-Aenderung refreshen, nicht bei
+      jedem Canvas-Redraw.
+
+- [x] Projektdateien fuer grosse Assets standardmaessig komprimiert anbieten.
+      Bei vielen eingebetteten Symbolen und Underlays sind `.osrmapz`-Dateien
+      effizienter. Die App kann frueher und deutlicher empfehlen, komprimiert zu
+      speichern, und Autosave-Versionen bei sehr grossen Projekten optional
+      seltener schreiben.
+
+- [x] Hilfsfunktionen fuer Layer-Zugriff vereinheitlichen.
+      `layer_state`, `layer_name`, `layer_id_from_name`,
+      `project_layer_visible` und `project_layer_opacity` suchen jeweils linear.
+      Zentrale Layer-Indizes vermeiden Duplikate und beschleunigen Render,
+      Inspector, Object List und Export.
+
+## Empfohlene Reihenfolge
+
+- [x] Zuerst messen: Profiling-Helfer und Benchmarks fuer Redraw, Drag,
+      Player-Preview, Snapping und Autosave anlegen.
+- [x] Danach Redraw entkoppeln: Canvas-only-Redraw, `schedule_redraw` und
+      Panel-Refresh nur bei echten Daten-/Auswahl-Aenderungen.
+- [x] Anschliessend Index- und Kontext-Caches: `object_by_id`, `bounds_by_id`,
+      Layer-Maps, Render-Kontext, Spatial-Index-Revision.
+- [x] Danach Bild-/Geometrie-Caches: Grid, Underlays, Symbole, Floor-Geometrie,
+      Static-Layer fuer Tk.
+- [x] Zum Schluss Export/Autosave/Undo optimieren, weil diese Pfade weniger
+      haeufig sind, aber bei grossen Projekten stark blockieren koennen.

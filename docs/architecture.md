@@ -38,3 +38,10 @@ notes, fog masks, line-of-sight blockers, encounter starts, and session state.
 Canvas redraws can use a visible viewport. Hit detection uses a bucketed spatial
 index. Pillow export can cache layers marked with `staticCache`; the cache key
 is derived from layer objects, scale, and render-relevant settings.
+
+Undo/redo still stores before/after project snapshots, but snapshots no longer
+round-trip through JSON for routine history work. Dirty state and autosave use
+project revisions, autosave files are compact JSON, and large embedded assets
+throttle autosave version writes. Targeted command diffs were reviewed; they are
+best introduced gradually, starting with object-level map edits before settings,
+campaign data, layer changes, and multi-map operations.

@@ -41,6 +41,11 @@ class ProjectModelTests(unittest.TestCase):
         self.assertTrue(app.validate_settings({})["showTooltips"])
         self.assertFalse(app.validate_settings({"showTooltips": False})["showTooltips"])
 
+    def test_default_settings_are_already_normalized(self) -> None:
+        defaults = app.default_settings()
+
+        self.assertEqual(defaults, app.validate_settings(defaults))
+
     def test_validate_settings_hides_minimap_by_default(self) -> None:
         self.assertFalse(app.validate_settings({})["showMinimap"])
         self.assertTrue(app.validate_settings({"showMinimap": True})["showMinimap"])
@@ -52,6 +57,13 @@ class ProjectModelTests(unittest.TestCase):
         self.assertTrue(default["showFloorOutlines"])
         self.assertEqual(default["floorOutlineColor"], app.BLUE)
         self.assertFalse(hidden["showFloorOutlines"])
+
+    def test_validate_settings_controls_default_cave_corridor_smoothing(self) -> None:
+        default = app.validate_settings({})
+        sharp = app.validate_settings({"smoothCaveCorridors": False})
+
+        self.assertTrue(default["smoothCaveCorridors"])
+        self.assertFalse(sharp["smoothCaveCorridors"])
 
     def test_validate_settings_controls_room_status_overlay(self) -> None:
         default = app.validate_settings({})
@@ -377,6 +389,24 @@ class ProjectModelTests(unittest.TestCase):
             [(10, 10), (50, 10), (40, 30), (10, 40)],
         )
 
+    def test_cave_corridor_can_disable_smoothed_boundary(self) -> None:
+        tunnel = app.validate_object(
+            app.cave_corridor_from_points(
+                [(1, 1), (5, 1), (4, 3), (1, 4)], smooth_boundary=False
+            ),
+            1,
+        )
+        project = app.create_project()
+
+        self.assertFalse(tunnel["smoothBoundary"])
+        self.assertFalse(app.floor_boundary_is_smooth(tunnel))
+        self.assertTrue(
+            any(
+                'stroke-linejoin="miter"' in part
+                for part in app.svg_for_floor_outline(project, tunnel, 1)
+            )
+        )
+
     def test_rectangular_rooms_preserve_rotation_and_rotated_geometry(self) -> None:
         room = app.validate_object(
             {**app.rect("room", 1, 1, 4, 2), "rotation": 90},
@@ -533,6 +563,99 @@ class ProjectModelTests(unittest.TestCase):
         self.assertEqual(metadata["autosaveUpdated"], "2026-01-02T03:04:05+00:00")
         self.assertEqual(metadata["autosaveMaps"], 2)
         self.assertGreaterEqual(metadata["autosaveObjects"], 2)
+
+    def test_dirty_state_uses_project_revision_without_snapshot(self) -> None:
+        maker = app.OSRMapMaker.__new__(app.OSRMapMaker)
+        maker.project = app.create_project()
+        maker.saved_state = app.canonical_project_state(maker.project)
+        maker._project_revision = 3
+        maker._saved_revision = 3
+        maker.project_snapshot = lambda: (_ for _ in ()).throw(
+            AssertionError("is_dirty should not snapshot when revisions are available")
+        )
+
+        self.assertFalse(app.OSRMapMaker.is_dirty(maker))
+        maker._project_revision = 4
+        self.assertTrue(app.OSRMapMaker.is_dirty(maker))
+
+    def test_save_state_and_window_title_helpers_show_autosave(self) -> None:
+        self.assertEqual(app.save_state_label(False, False), "Saved")
+        self.assertEqual(app.save_state_label(True, False), "Unsaved")
+        self.assertEqual(app.save_state_label(True, True), "Autosaved")
+        self.assertEqual(
+            app.window_title_text("Vault", "Level 1", "vault.osrmap.json", True, True),
+            "*Vault - Level 1 - vault.osrmap.json | autosaved - OSR Map Maker",
+        )
+
+    def test_autosave_skips_unchanged_revision_and_writes_compact_json(self) -> None:
+        maker = app.OSRMapMaker.__new__(app.OSRMapMaker)
+        maker.project = app.create_project()
+        maker._project_revision = 1
+        maker._saved_revision = 0
+        maker._autosave_revision = -1
+        maker.performance_profiler = app.PerformanceProfiler(False)
+        maker.sync_campaign_from_rooms = lambda: None
+        maker.sync_active_map_storage = lambda: None
+        maker.show_status = lambda _value: None
+        maker.winfo_exists = lambda: False
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            maker.autosave_file = root / "autosave.osrmap.json"
+            maker.autosave_versions_dir = root / "versions"
+
+            app.OSRMapMaker.run_autosave(maker)
+            first_versions = sorted(maker.autosave_versions_dir.glob("*.json"))
+            first_content = maker.autosave_file.read_text(encoding="utf-8")
+            app.OSRMapMaker.run_autosave(maker)
+            second_versions = sorted(maker.autosave_versions_dir.glob("*.json"))
+            maker._project_revision = 2
+            app.OSRMapMaker.run_autosave(maker)
+            third_versions = sorted(maker.autosave_versions_dir.glob("*.json"))
+
+        self.assertEqual(len(first_versions), 1)
+        self.assertEqual(len(second_versions), 1)
+        self.assertEqual(len(third_versions), 2)
+        self.assertNotIn("\n  ", first_content)
+
+    def test_large_embedded_assets_throttle_autosave_versions(self) -> None:
+        maker = app.OSRMapMaker.__new__(app.OSRMapMaker)
+        maker.project = app.create_project()
+        maker.project["underlays"].append(
+            {
+                "id": "underlay_large",
+                "embeddedData": "x" * (app.EMBEDDED_SYMBOL_COMPRESS_THRESHOLD + 1),
+                "visible": True,
+                "x": 0,
+                "y": 0,
+                "width": 1,
+                "height": 1,
+            }
+        )
+        maker._saved_revision = 0
+        maker._autosave_revision = -1
+        maker._autosave_version_revision = -1
+        maker.performance_profiler = app.PerformanceProfiler(False)
+        maker.sync_campaign_from_rooms = lambda: None
+        maker.sync_active_map_storage = lambda: None
+        maker.show_status = lambda _value: None
+        maker.winfo_exists = lambda: False
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            maker.autosave_file = root / "autosave.osrmap.json"
+            maker.autosave_versions_dir = root / "versions"
+            for revision in (1, 2, 3, 4):
+                maker._project_revision = revision
+                app.OSRMapMaker.run_autosave(maker)
+            versions_after_small_steps = sorted(
+                maker.autosave_versions_dir.glob("*.json")
+            )
+            maker._project_revision = 6
+            app.OSRMapMaker.run_autosave(maker)
+            versions_after_interval = sorted(maker.autosave_versions_dir.glob("*.json"))
+
+        self.assertEqual(app.project_embedded_underlay_bytes(maker.project), app.EMBEDDED_SYMBOL_COMPRESS_THRESHOLD + 1)
+        self.assertEqual(len(versions_after_small_steps), 1)
+        self.assertEqual(len(versions_after_interval), 2)
 
     def test_inspector_field_normalization_is_gui_independent(self) -> None:
         def color_ok(value: str) -> bool:
@@ -782,6 +905,21 @@ class ProjectModelTests(unittest.TestCase):
         self.assertTrue(
             any(asset["id"] == "custom_my_frame" for asset in validated["assetLibrary"])
         )
+
+    def test_legacy_symbol_metadata_matches_normalized_symbols(self) -> None:
+        project = app.create_project()
+
+        for legacy, current in app.LEGACY_SYMBOL_KINDS.items():
+            self.assertEqual(app.SYMBOL_LABELS[legacy], app.SYMBOL_LABELS[current])
+            self.assertEqual(app.SYMBOL_ICONS[legacy], app.SYMBOL_ICONS[current])
+            self.assertEqual(
+                app.SYMBOL_GROUP_BY_KIND[legacy],
+                app.SYMBOL_GROUP_BY_KIND[current],
+            )
+            self.assertEqual(
+                app.symbol_group_name(project, legacy),
+                app.symbol_group_name(project, current),
+            )
 
     def test_symbol_set_import_export_merges_custom_symbols(self) -> None:
         source = app.create_project()
@@ -1249,6 +1387,60 @@ class ProjectModelTests(unittest.TestCase):
 
         self.assertEqual(entries[1], ("door", "Dungeon Door"))
         self.assertEqual(entries[2], ("trap", "Trap"))
+
+    def test_legend_layout_grows_to_show_all_symbol_entries(self) -> None:
+        project = app.create_project()
+        kinds = list(app.SYMBOL_LABELS)[:24]
+        for index, kind in enumerate(kinds, start=2):
+            project["objects"].append(
+                app.validate_object(
+                    app.symbol(kind, 1 + index % 10, 2 + index // 10, 1),
+                    index,
+                )
+            )
+        legend = project["objects"][0]
+
+        layout = app.legend_layout(project, legend)
+        legend_parts = app.svg_for_object(project, legend, 1)
+
+        self.assertGreater(layout.height, legend["height"])
+        self.assertEqual(len(layout.entries), len(kinds) + 1)
+        self.assertGreater(layout.columns, 4)
+        self.assertTrue(any(layout.entries[-1][1] in part for part in legend_parts))
+
+    def test_legend_entries_include_every_visible_symbol_kind_on_map(self) -> None:
+        project = app.create_project()
+        project["customSymbols"]["custom_banner"] = {
+            "label": "Banner",
+            "sourceType": "png",
+            "path": "",
+            "embeddedData": "",
+            "variants": [],
+        }
+        kinds = ["door", "open_pit", "stairs_up", "custom_banner"]
+        for index, kind in enumerate(kinds, start=2):
+            project["objects"].append(
+                app.validate_object(app.symbol(kind, index, 2, 1), index)
+            )
+
+        entries = dict(app.legend_entries(project, project["objects"][0]))
+
+        for kind in kinds:
+            self.assertIn(kind, entries)
+
+    def test_canvas_size_uses_dynamic_legend_height(self) -> None:
+        project = app.create_project()
+        for index, kind in enumerate(list(app.SYMBOL_LABELS)[:28], start=2):
+            project["objects"].append(
+                app.validate_object(app.symbol(kind, index, index % 8, 1), index)
+            )
+        legend = project["objects"][0]
+        base_height = (
+            legend["y"] + legend["height"] + 1
+        ) * project["settings"]["cellSize"]
+        _width, actual_height = app.canvas_size(project, 1)
+
+        self.assertGreater(actual_height, base_height)
 
     def test_report_lists_missing_custom_symbol_files(self) -> None:
         project = app.create_project()

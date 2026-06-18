@@ -3,14 +3,17 @@ from __future__ import annotations
 import io
 import base64
 import csv
+import copy
 import hashlib
 import json
 import math
 import random
 import re
+import time
 import tkinter as tk
 import weakref
 import zipfile
+from collections import OrderedDict
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from functools import lru_cache
@@ -165,6 +168,77 @@ TOAST_STYLES: dict[str, dict[str, str]] = {
     "warning": {"background": "#9a5b00", "foreground": "#ffffff"},
     "error": {"background": "#8f2525", "foreground": "#ffffff"},
 }
+APP_THEME: dict[str, str | tuple[str, int] | tuple[str, int, str]] = {
+    "font": ("Segoe UI", 9),
+    "heading_font": ("Segoe UI", 11, "bold"),
+    "brand_font": ("Segoe UI", 13, "bold"),
+    "app_bg": "#eef2f4",
+    "panel_bg": "#f7f9fa",
+    "panel_border": "#b7c3ca",
+    "canvas_bg": "#e6eaed",
+    "surface": "#ffffff",
+    "surface_alt": "#f9fcfd",
+    "text": "#1f2d35",
+    "muted": "#53666f",
+    "accent": "#2d7fc1",
+    "accent_soft": "#d9ecff",
+    "warning": "#9a5b00",
+    "error": "#a12b2b",
+    "focus": "#f6c85f",
+}
+UI_METRICS = {
+    "window_min_width": 1050,
+    "window_min_height": 720,
+    "button_padding_x": 7,
+    "button_padding_y": 4,
+    "entry_padding_x": 4,
+    "entry_padding_y": 3,
+    "icon_button_width": 4,
+    "panel_padding": 8,
+    "dialog_padding": 12,
+    "focus_ring": 1,
+}
+GLOBAL_ACTION_ICONS = {
+    "New": "+",
+    "Load": "⇱",
+    "Save": "▣",
+    "Undo": "↶",
+    "Redo": "↷",
+    "Search": "⌕",
+    "Command": "⌘",
+    "Export": "⇩",
+    "Fit": "▢",
+    "100%": "1:1",
+    "Sel": "⧉",
+    "Width": "↔",
+}
+
+
+def icon_label(action: str, label: str | None = None) -> str:
+    icon = GLOBAL_ACTION_ICONS.get(action, "")
+    text = label or action
+    return f"{icon} {text}" if icon else text
+
+
+def save_state_label(dirty: bool, autosaved: bool) -> str:
+    if not dirty:
+        return "Saved"
+    return "Autosaved" if autosaved else "Unsaved"
+
+
+def window_title_text(
+    project_title: str,
+    map_name: str,
+    file_label: str,
+    dirty: bool,
+    autosaved: bool,
+) -> str:
+    marker = "*" if dirty else ""
+    autosave = " | autosaved" if dirty and autosaved else ""
+    title = project_title.strip() or "Untitled Dungeon"
+    map_label = map_name.strip() or "Map"
+    file_part = file_label.strip() or "unsaved"
+    return f"{marker}{title} - {map_label} - {file_part}{autosave} - OSR Map Maker"
 EXPORT_FRAME_PRESETS: dict[str, tuple[float, float]] = {
     "Custom": (0.0, 0.0),
     "A4 portrait": (21.0, 29.7),
@@ -174,6 +248,27 @@ EXPORT_FRAME_PRESETS: dict[str, tuple[float, float]] = {
     "Foundry Scene": (28.0, 20.0),
     "Roll20 Page": (25.5, 33.0),
 }
+INTERACTIVE_REDRAW_DELAY_MS = 16
+MINIMAP_REDRAW_DELAY_MS = 160
+CANVAS_SIZE_CACHE_LIMIT = 96
+FLOOR_GEOMETRY_CACHE_LIMIT = 384
+UNDERLAY_IMAGE_CACHE_LIMIT = 64
+TK_SYMBOL_IMAGE_CACHE_LIMIT = 384
+LAYER_INDEX_CACHE_LIMIT = 128
+CANVAS_BASE_TAG = "map_base"
+CANVAS_STATIC_TAG = "map_static"
+CANVAS_STATIC_LAYER_TAG = "map_static_layers"
+CANVAS_NAVIGATION_TAG = "map_navigation"
+CANVAS_INTERACTION_TAG = "map_interaction"
+MINIMAP_BASE_TAG = "minimap_base"
+MINIMAP_VIEWPORT_TAG = "minimap_viewport"
+CANVAS_RENDER_TAGS = (
+    CANVAS_BASE_TAG,
+    CANVAS_STATIC_TAG,
+    CANVAS_STATIC_LAYER_TAG,
+    CANVAS_NAVIGATION_TAG,
+    CANVAS_INTERACTION_TAG,
+)
 AUTOSAVE_INTERVAL_MS = 60000
 AUTOSAVE_VERSION_LIMIT = 8
 APP_STATE_DIR_NAME = "OSR Map Maker"
@@ -862,14 +957,26 @@ SYMBOL_LABELS = {
     kind: label for _group, entries in SYMBOL_GROUPS for kind, _icon, label in entries
 }
 SYMBOL_LABELS.update(
-    {"secret": "Secret Door", "pit": "Covered Pit", "column": "Pillar"}
+    {
+        legacy: SYMBOL_LABELS[current]
+        for legacy, current in LEGACY_SYMBOL_KINDS.items()
+    }
 )
 SYMBOL_ICONS = {
     kind: icon for _group, entries in SYMBOL_GROUPS for kind, icon, _label in entries
 }
+SYMBOL_ICONS.update(
+    {legacy: SYMBOL_ICONS[current] for legacy, current in LEGACY_SYMBOL_KINDS.items()}
+)
 SYMBOL_GROUP_BY_KIND = {
     kind: group for group, entries in SYMBOL_GROUPS for kind, _icon, _label in entries
 }
+SYMBOL_GROUP_BY_KIND.update(
+    {
+        legacy: SYMBOL_GROUP_BY_KIND[current]
+        for legacy, current in LEGACY_SYMBOL_KINDS.items()
+    }
+)
 SYMBOL_GROUP_ORDER = {
     group: index for index, (group, _entries) in enumerate(SYMBOL_GROUPS)
 }
@@ -1285,7 +1392,7 @@ def nav_id(prefix: str) -> str:
 
 
 def json_clone(value: Any) -> Any:
-    return json.loads(json.dumps(value))
+    return copy.deepcopy(value)
 
 
 def shortcut_preset(name: str) -> dict[str, str]:
@@ -1406,7 +1513,7 @@ def read_project_file(path: Path) -> dict[str, Any]:
         data = path.read_text(encoding="utf-8")
     loaded = json.loads(data)
     if not isinstance(loaded, dict):
-        raise ValueError("Dieses Projektformat wird nicht unterstuetzt.")
+        raise ValueError("This project format is not supported.")
     return loaded
 
 
@@ -1439,6 +1546,18 @@ def project_embedded_symbol_bytes(project: dict[str, Any]) -> int:
             if data:
                 total += len(data)
     return total
+
+
+def project_embedded_underlay_bytes(project: dict[str, Any]) -> int:
+    return sum(
+        len(str(underlay.get("embeddedData") or ""))
+        for underlay in project.get("underlays", [])
+        if isinstance(underlay, dict) and underlay.get("embeddedData")
+    )
+
+
+def project_embedded_asset_bytes(project: dict[str, Any]) -> int:
+    return project_embedded_symbol_bytes(project) + project_embedded_underlay_bytes(project)
 
 
 def migration_backup_path(path: Path, schema_version: int) -> Path:
@@ -1495,6 +1614,7 @@ def default_settings() -> dict[str, Any]:
         "showZones": True,
         "showRuler": True,
         "showFloorOutlines": True,
+        "smoothCaveCorridors": True,
         "showRoomStatus": True,
         "roomStatusGmOnly": True,
         "showMinimap": False,
@@ -1503,6 +1623,7 @@ def default_settings() -> dict[str, Any]:
         "colorPickerX": 120,
         "colorPickerY": 120,
         "showTooltips": True,
+        "showPerformanceMetrics": False,
         "compactMode": False,
         "toolbarDock": "floating",
         "toolbarX": 8,
@@ -1543,6 +1664,10 @@ def default_settings() -> dict[str, Any]:
         "recentTools": [],
         "numberStart": 1,
         "numberArea": "",
+        "numberPrefix": "",
+        "numberSuffix": "",
+        "generatorSeed": "",
+        "generatorScope": "Map",
         "exportGrid": True,
         "vttPreset": "Generic",
         "exportAudience": "GM",
@@ -1706,7 +1831,9 @@ def rect(kind: str, x: float, y: float, width: float, height: float) -> dict[str
     return obj
 
 
-def cave_corridor_from_points(points: list[tuple[float, float]]) -> dict[str, Any]:
+def cave_corridor_from_points(
+    points: list[tuple[float, float]], smooth_boundary: bool = True
+) -> dict[str, Any]:
     point_dicts = [{"x": x, "y": y} for x, y in points]
     x, y, width, height = bounds_from_points(point_dicts)
     return {
@@ -1720,6 +1847,7 @@ def cave_corridor_from_points(points: list[tuple[float, float]]) -> dict[str, An
         "seed": random.randint(1, 100000),
         "wallType": "natural",
         "wallThickness": 0.22,
+        "smoothBoundary": bool(smooth_boundary),
         "layer": "corridors",
     }
 
@@ -1916,12 +2044,18 @@ def validate_settings(value: Any) -> dict[str, Any]:
     settings["showZones"] = bool(settings.get("showZones", True))
     settings["showRuler"] = bool(settings.get("showRuler", True))
     settings["showFloorOutlines"] = bool(settings.get("showFloorOutlines", True))
+    settings["smoothCaveCorridors"] = bool(
+        settings.get("smoothCaveCorridors", True)
+    )
     settings["showMinimap"] = bool(settings.get("showMinimap", False))
     settings["showToolbar"] = bool(settings.get("showToolbar", True))
     settings["showColorPicker"] = bool(settings.get("showColorPicker", False))
     settings["colorPickerX"] = max(0, min(4000, int(coerce_float(settings.get("colorPickerX"), 120))))
     settings["colorPickerY"] = max(0, min(4000, int(coerce_float(settings.get("colorPickerY"), 120))))
     settings["showTooltips"] = bool(settings.get("showTooltips", True))
+    settings["showPerformanceMetrics"] = bool(
+        settings.get("showPerformanceMetrics", False)
+    )
     settings["compactMode"] = bool(settings.get("compactMode", False))
     settings["toolbarDock"] = str(settings.get("toolbarDock") or "floating")
     if settings["toolbarDock"] not in {"floating", "top", "left"}:
@@ -2062,7 +2196,7 @@ def validate_settings(value: Any) -> dict[str, Any]:
 
 def validate_project(value: Any) -> dict[str, Any]:
     if not isinstance(value, dict):
-        raise ValueError("Dieses Projektformat wird nicht unterstuetzt.")
+        raise ValueError("This project format is not supported.")
     validation_warnings: list[str] = []
     if (
         not isinstance(value.get("objects"), list)
@@ -2086,11 +2220,11 @@ def validate_project(value: Any) -> dict[str, Any]:
             first_map.get("campaign", value.get("campaign", {}))
         )
     if not isinstance(value.get("objects"), list):
-        raise ValueError("Dieses Projektformat wird nicht unterstuetzt.")
+        raise ValueError("This project format is not supported.")
     schema_version = int(value.get("schemaVersion") or 1)
     if schema_version > CURRENT_SCHEMA_VERSION:
         raise ValueError(
-            f"Dieses Projektformat ist neuer als die App ({schema_version})."
+            f"This project format is newer than this app ({schema_version})."
         )
     settings = value.setdefault("settings", {})
     meta = value.setdefault("meta", {})
@@ -2256,7 +2390,14 @@ def normalize_inspector_field_value(
     try:
         if field in text_fields:
             new_value: Any = text
-        elif field in {"export", "playerVisible", "curve", "shadow", "outline"}:
+        elif field in {
+            "export",
+            "playerVisible",
+            "curve",
+            "shadow",
+            "outline",
+            "smoothBoundary",
+        }:
             new_value = parse_bool_text(text)
         elif field == "manualEntries":
             new_value = [
@@ -3569,7 +3710,7 @@ def bounds_from_points(
 
 def validate_object(obj: Any, index: int) -> dict[str, Any]:
     if not isinstance(obj, dict) or not obj.get("type"):
-        raise ValueError(f"Objekt {index} ist ungueltig.")
+        raise ValueError(f"Object {index} is invalid.")
     clean = dict(obj)
     clean["id"] = str(clean.get("id") or object_id())
     obj_type = clean["type"]
@@ -3589,6 +3730,9 @@ def validate_object(obj: Any, index: int) -> dict[str, Any]:
         if obj_type in {"cave", "cave_corridor"}:
             clean["seed"] = int(clean.get("seed") or 1)
         if obj_type == "cave_corridor":
+            clean["smoothBoundary"] = parse_bool_text(
+                clean.get("smoothBoundary", True)
+            )
             points = validate_shape_points(clean.get("points"))
             if len(points) >= 3:
                 clean["points"] = points
@@ -3765,6 +3909,100 @@ class HistoryCommand:
     after: dict[str, Any]
 
 
+@dataclass
+class PerformanceSample:
+    count: int = 0
+    total_ms: float = 0.0
+    max_ms: float = 0.0
+
+    @property
+    def average_ms(self) -> float:
+        return self.total_ms / self.count if self.count else 0.0
+
+
+class ProfileSpan:
+    def __init__(self, profiler: "PerformanceProfiler", label: str) -> None:
+        self.profiler = profiler
+        self.label = label
+        self.started = 0.0
+
+    def __enter__(self) -> "ProfileSpan":
+        self.started = time.perf_counter()
+        return self
+
+    def __exit__(self, *_exc: object) -> None:
+        self.profiler.record(self.label, (time.perf_counter() - self.started) * 1000)
+
+
+class PerformanceProfiler:
+    def __init__(self, enabled: bool = False) -> None:
+        self.enabled = bool(enabled)
+        self.samples: dict[str, PerformanceSample] = {}
+
+    def profile(self, label: str) -> ProfileSpan:
+        return ProfileSpan(self, label)
+
+    def record(self, label: str, elapsed_ms: float) -> None:
+        if not self.enabled:
+            return
+        sample = self.samples.setdefault(label, PerformanceSample())
+        sample.count += 1
+        sample.total_ms += elapsed_ms
+        sample.max_ms = max(sample.max_ms, elapsed_ms)
+
+    def reset(self) -> None:
+        self.samples.clear()
+
+    def summary(self, labels: tuple[str, ...] | None = None) -> str:
+        selected = labels or tuple(self.samples)
+        parts: list[str] = []
+        for label in selected:
+            sample = self.samples.get(label)
+            if sample and sample.count:
+                parts.append(f"{label} {sample.average_ms:.1f}/{sample.max_ms:.1f}ms")
+        return " | ".join(parts)
+
+
+@dataclass(frozen=True)
+class RenderContext:
+    visible_layer_ids: set[str]
+    layer_opacity_by_id: dict[str, float]
+    hidden_player_room_ids: set[str]
+    show_legend: bool
+    export_audience: str
+
+
+@dataclass(frozen=True)
+class ObjectIndex:
+    object_by_id: dict[str, dict[str, Any]]
+    bounds_by_id: dict[str, tuple[float, float, float, float]]
+    objects_by_layer: dict[str, list[dict[str, Any]]]
+    objects_by_group: dict[str, list[dict[str, Any]]]
+    order_by_id: dict[str, int]
+
+
+@dataclass(frozen=True)
+class LayerIndex:
+    by_id: dict[str, dict[str, Any]]
+    id_by_name: dict[str, str]
+    name_by_id: dict[str, str]
+    visible_ids: set[str]
+    locked_ids: set[str]
+    opacity_by_id: dict[str, float]
+
+
+@dataclass(frozen=True)
+class LegendLayout:
+    entries: list[tuple[str, str]]
+    columns: int
+    rows: int
+    width: float
+    height: float
+    entry_width: float
+    entry_height: float
+    scale: float
+
+
 class ToolTip:
     active_instances = weakref.WeakSet["ToolTip"]()
 
@@ -3901,7 +4139,11 @@ class OSRMapMaker(tk.Tk):
         super().__init__()
         self.title("OSR Map Maker")
         self.geometry("1280x860")
-        self.minsize(1050, 720)
+        self.minsize(
+            UI_METRICS["window_min_width"],
+            UI_METRICS["window_min_height"],
+        )
+        self.configure_high_dpi_scaling()
 
         self.project = create_project()
         self.tool = tk.StringVar(value="select")
@@ -3972,12 +4214,37 @@ class OSRMapMaker(tk.Tk):
         self.selected_polygon_point: int | None = None
         self.preview_photo: Any = None
         self.canvas_image_refs: list[Any] = []
+        self._object_index: ObjectIndex | None = None
+        self._object_index_revision = -1
+        self._layer_index: LayerIndex | None = None
+        self._layer_index_revision = -1
         self._spatial_index: dict[tuple[int, int], list[dict[str, Any]]] | None = None
-        self._spatial_index_signature = ""
+        self._spatial_index_revision = -1
         self._spatial_index_bucket_size = 8.0
+        self._project_revision = 0
+        self._saved_revision = 0
+        self._autosave_revision = -1
+        self._autosave_version_revision = -1
+        self._last_autosave_label = ""
+        self._static_canvas_signature = ""
+        self._tk_static_layer_signatures: dict[str, str] = {}
+        self._drag_snap_guides: tuple[list[float], list[float]] | None = None
+        self._drag_snap_exclude_ids: set[str] = set()
+        self._drag_moving_bounds: tuple[float, float, float, float] | None = None
         self.measure_points: list[tuple[float, float]] = []
         self.measure_preview: tuple[float, float] | None = None
         self.last_repeat_object: dict[str, Any] | None = None
+        self.redraw_after_id: str | None = None
+        self.minimap_after_id: str | None = None
+        self._pending_minimap_full = False
+        self._pending_redraw_full_canvas = False
+        self._pending_redraw_refresh_panels = False
+        self._pending_redraw_refresh_minimap = False
+        self._object_list_signature = ""
+        self._object_list_selection_signature = ""
+        self.performance_profiler = PerformanceProfiler(
+            self.settings.get("showPerformanceMetrics", False)
+        )
 
         self.status = tk.StringVar(value="Ready")
         self.error_status = tk.StringVar(value="")
@@ -4022,6 +4289,9 @@ class OSRMapMaker(tk.Tk):
         self.floor_outline_var = tk.BooleanVar(
             value=self.settings.get("showFloorOutlines", True)
         )
+        self.cave_corridor_smooth_var = tk.BooleanVar(
+            value=self.settings.get("smoothCaveCorridors", True)
+        )
         self.room_status_var = tk.BooleanVar(
             value=self.settings.get("showRoomStatus", True)
         )
@@ -4035,6 +4305,9 @@ class OSRMapMaker(tk.Tk):
             value=self.settings.get("showColorPicker", False)
         )
         self.tooltip_var = tk.BooleanVar(value=self.settings.get("showTooltips", True))
+        self.performance_var = tk.BooleanVar(
+            value=self.settings.get("showPerformanceMetrics", False)
+        )
         self.compact_mode_var = tk.BooleanVar(
             value=self.settings.get("compactMode", False)
         )
@@ -4138,6 +4411,12 @@ class OSRMapMaker(tk.Tk):
     def cell(self) -> float:
         return self.settings["cellSize"] * self.zoom.get()
 
+    def profile_span(self, label: str) -> ProfileSpan:
+        profiler = self.__dict__.get("performance_profiler")
+        if profiler is None:
+            profiler = PerformanceProfiler(False)
+        return profiler.profile(label)
+
     def maps(self) -> list[dict[str, Any]]:
         maps = self.project.setdefault("maps", [])
         if not maps:
@@ -4200,6 +4479,119 @@ class OSRMapMaker(tk.Tk):
         self.project["underlays"] = json_clone(record.get("underlays", []))
         self.project["printLayouts"] = json_clone(record.get("printLayouts", []))
         self.project["sessionState"] = json_clone(record.get("sessionState", {}))
+        if "_project_revision" in self.__dict__:
+            self.bump_project_revision()
+
+    def configure_high_dpi_scaling(self) -> None:
+        try:
+            current = float(self.tk.call("tk", "scaling"))
+            self.tk.call("tk", "scaling", max(1.0, current))
+        except (tk.TclError, ValueError):
+            pass
+
+    def apply_app_theme(self) -> None:
+        style = getattr(self, "ui_style", ttk.Style(self))
+        try:
+            style.theme_use("clam")
+        except tk.TclError:
+            pass
+        self.option_add("*Font", APP_THEME["font"])
+        self.configure(background=str(APP_THEME["app_bg"]))
+        style.configure(".", font=APP_THEME["font"])
+        style.configure("TFrame", background=str(APP_THEME["panel_bg"]))
+        style.configure(
+            "TLabel",
+            background=str(APP_THEME["panel_bg"]),
+            foreground=str(APP_THEME["text"]),
+        )
+        style.configure(
+            "TButton",
+            padding=(
+                UI_METRICS["button_padding_x"],
+                UI_METRICS["button_padding_y"],
+            ),
+        )
+        style.configure(
+            "Command.TButton",
+            padding=(
+                UI_METRICS["button_padding_x"],
+                UI_METRICS["button_padding_y"],
+            ),
+        )
+        style.configure(
+            "TEntry",
+            padding=(UI_METRICS["entry_padding_x"], UI_METRICS["entry_padding_y"]),
+        )
+        style.configure(
+            "TCombobox",
+            padding=(UI_METRICS["entry_padding_x"], UI_METRICS["entry_padding_y"]),
+        )
+        style.configure("TCheckbutton", padding=(2, 3))
+        style.configure(
+            "PanelTitle.TLabel",
+            font=APP_THEME["heading_font"],
+            foreground=str(APP_THEME["text"]),
+        )
+        style.configure(
+            "Status.TFrame",
+            background=str(APP_THEME["surface_alt"]),
+        )
+        style.configure(
+            "Status.TLabel",
+            background=str(APP_THEME["surface_alt"]),
+            foreground=str(APP_THEME["text"]),
+        )
+        style.map(
+            "TButton",
+            background=[("active", "#e9f2f5"), ("pressed", str(APP_THEME["accent_soft"]))],
+        )
+
+    def shortcut_for_action(self, action: str) -> str:
+        mapping = {
+            "Command": "command_palette",
+            "Fit": "fit_map",
+            "Sel": "fit_selection",
+            "100%": "zoom_100",
+        }
+        shortcut_key = mapping.get(action, "")
+        return str(self.shortcuts.get(shortcut_key, "")) if shortcut_key else ""
+
+    def command_button(
+        self,
+        parent: tk.Widget,
+        action: str,
+        command: Callable[[], Any],
+        *,
+        label: str | None = None,
+        width: int | None = None,
+    ) -> ttk.Button:
+        text = icon_label(action, label)
+        button = ttk.Button(parent, text=text, command=command, style="Command.TButton")
+        if width is not None:
+            button.configure(width=width)
+        shortcut = self.shortcut_for_action(action)
+        shortcut_text = f"\nShortcut: {shortcut}" if shortcut else ""
+        ToolTip(button, f"{label or action}{shortcut_text}", self.tooltips_enabled)
+        return button
+
+    def autosave_matches_revision(self) -> bool:
+        revision = int(self.__dict__.get("_project_revision", 0))
+        return revision > int(self.__dict__.get("_saved_revision", 0)) and int(
+            self.__dict__.get("_autosave_revision", -1)
+        ) == revision
+
+    def update_window_title(self) -> None:
+        try:
+            text = window_title_text(
+                str(self.project.get("meta", {}).get("title") or "Untitled Dungeon"),
+                self.active_map_name(),
+                self.current_file.name if self.current_file else "unsaved",
+                self.is_dirty(),
+                self.autosave_matches_revision(),
+            )
+            self.title(text)
+        except (AttributeError, tk.TclError, RuntimeError):
+            pass
 
     def _build_menu(self) -> None:
         menu = tk.Menu(self)
@@ -4309,6 +4701,11 @@ class OSRMapMaker(tk.Tk):
             label="Tooltips",
             variable=self.tooltip_var,
             command=self.toggle_tooltips,
+        )
+        view_menu.add_checkbutton(
+            label="Performance Metrics",
+            variable=self.performance_var,
+            command=self.toggle_performance_metrics,
         )
         focus_menu = tk.Menu(view_menu, tearoff=False)
         for value in ("Off", "Active layer", "Active zone"):
@@ -4466,6 +4863,7 @@ class OSRMapMaker(tk.Tk):
     def _build_ui(self) -> None:
         self._build_menu()
         self.ui_style = ttk.Style(self)
+        self.apply_app_theme()
         self.ui_style.map(
             "Invalid.TEntry",
             fieldbackground=[("invalid", "#ffe6e6")],
@@ -4476,10 +4874,6 @@ class OSRMapMaker(tk.Tk):
             fieldbackground=[("invalid", "#ffe6e6")],
             foreground=[("invalid", "#9c1f1f")],
         )
-        self.ui_style.configure("TButton", padding=(7, 4))
-        self.ui_style.configure("TEntry", padding=(4, 3))
-        self.ui_style.configure("TCombobox", padding=(4, 3))
-        self.ui_style.configure("TCheckbutton", padding=(2, 3))
         self.columnconfigure(0, weight=1)
         self.columnconfigure(1, weight=0)
         self.rowconfigure(2, weight=1)
@@ -4488,7 +4882,7 @@ class OSRMapMaker(tk.Tk):
         top.grid(row=0, column=0, columnspan=2, sticky="ew")
         top.columnconfigure(4, weight=1)
 
-        ttk.Label(top, text="OSR Map Maker", font=("Segoe UI", 13, "bold")).grid(
+        ttk.Label(top, text="OSR Map Maker", font=APP_THEME["brand_font"]).grid(
             row=0, column=0, sticky="w", padx=(0, 10)
         )
 
@@ -4499,7 +4893,7 @@ class OSRMapMaker(tk.Tk):
             ("Load", self.load_project),
             ("Save", self.save_project),
         ]:
-            ttk.Button(file_commands, text=label, command=command).pack(
+            self.command_button(file_commands, label, command, width=8).pack(
                 side="left", padx=(0, 2)
             )
 
@@ -4509,10 +4903,10 @@ class OSRMapMaker(tk.Tk):
 
         edit_commands = ttk.Frame(top)
         edit_commands.grid(row=0, column=3, sticky="w")
-        ttk.Button(edit_commands, text="Undo", command=self.undo, width=7).pack(
+        self.command_button(edit_commands, "Undo", self.undo, width=7).pack(
             side="left", padx=(0, 2)
         )
-        ttk.Button(edit_commands, text="Redo", command=self.redo, width=7).pack(
+        self.command_button(edit_commands, "Redo", self.redo, width=7).pack(
             side="left", padx=(0, 10)
         )
 
@@ -4539,20 +4933,20 @@ class OSRMapMaker(tk.Tk):
         )
         zoom_preset.grid(row=0, column=3, padx=(4, 2))
         zoom_preset.bind("<<ComboboxSelected>>", lambda _e: self.apply_zoom_preset())
-        ttk.Button(zoom_group, text="Fit", command=self.fit_map, width=5).grid(
+        self.command_button(zoom_group, "Fit", self.fit_map, width=6).grid(
             row=0, column=4, padx=(0, 2)
         )
-        ttk.Button(
+        self.command_button(
             zoom_group,
-            text="100%",
-            command=lambda: self.set_zoom(1.0),
-            width=5,
+            "100%",
+            lambda: self.set_zoom(1.0),
+            width=8,
         ).grid(row=0, column=5, padx=(0, 2))
-        ttk.Button(
-            zoom_group, text="Sel", command=self.fit_selection, width=5
+        self.command_button(
+            zoom_group, "Sel", self.fit_selection, label="Sel", width=6
         ).grid(row=0, column=6, padx=(0, 2))
-        ttk.Button(
-            zoom_group, text="Width", command=self.fit_width, width=6
+        self.command_button(
+            zoom_group, "Width", self.fit_width, width=7
         ).grid(row=0, column=7)
 
         ttk.Separator(top, orient="vertical").grid(
@@ -4561,13 +4955,13 @@ class OSRMapMaker(tk.Tk):
 
         nav_commands = ttk.Frame(top)
         nav_commands.grid(row=0, column=6, sticky="e")
-        ttk.Button(nav_commands, text="Search", command=self.open_global_search).pack(
+        self.command_button(nav_commands, "Search", self.open_global_search, width=8).pack(
             side="left", padx=(0, 2)
         )
-        ttk.Button(
-            nav_commands, text="Command", command=self.open_command_palette
+        self.command_button(
+            nav_commands, "Command", self.open_command_palette, width=9
         ).pack(side="left", padx=(0, 2))
-        export_menu_button = ttk.Menubutton(nav_commands, text="Export")
+        export_menu_button = ttk.Menubutton(nav_commands, text=icon_label("Export"))
         export_menu_button.pack(side="left", padx=(6, 0))
         export_menu = tk.Menu(export_menu_button, tearoff=False)
         export_menu.add_command(label="Export", command=self.export_image)
@@ -4602,14 +4996,18 @@ class OSRMapMaker(tk.Tk):
         self.canvas_frame = canvas_frame
         canvas_frame.columnconfigure(0, weight=1)
         canvas_frame.rowconfigure(0, weight=1)
-        self.canvas = tk.Canvas(canvas_frame, bg="#e6eaed", highlightthickness=0)
+        self.canvas = tk.Canvas(
+            canvas_frame,
+            bg=str(APP_THEME["canvas_bg"]),
+            highlightthickness=0,
+        )
         self.canvas.grid(row=0, column=0, sticky="nsew")
         map_title = ttk.Label(
             canvas_frame,
             textvariable=self.map_title_var,
             padding=(8, 3),
-            background="#f9fcfd",
-            foreground="#17384a",
+            background=str(APP_THEME["surface_alt"]),
+            foreground=str(APP_THEME["accent"]),
         )
         map_title.place(relx=0.5, y=8, anchor="n")
         toolbox = ttk.Frame(canvas_frame, padding=4, relief="raised", borderwidth=1)
@@ -5473,10 +5871,10 @@ class OSRMapMaker(tk.Tk):
 
         self.rebuild_contextual_tool_options()
 
-        status = ttk.Frame(self, padding=(8, 4))
+        status = ttk.Frame(self, padding=(8, 4), style="Status.TFrame")
         status.grid(row=3, column=0, columnspan=2, sticky="ew")
         status.columnconfigure(0, weight=1)
-        ttk.Label(status, textvariable=self.status).grid(
+        ttk.Label(status, textvariable=self.status, style="Status.TLabel").grid(
             row=0, column=0, sticky="w", padx=(0, 10)
         )
         for column, (variable, width) in enumerate(
@@ -5492,20 +5890,39 @@ class OSRMapMaker(tk.Tk):
             ),
             start=1,
         ):
-            label = ttk.Label(status, textvariable=variable, width=width)
+            label = ttk.Label(
+                status,
+                textvariable=variable,
+                width=width,
+                style="Status.TLabel",
+            )
             label.grid(
                 row=0, column=column, sticky="w", padx=(0, 8)
             )
             if variable is self.zoom_status_var:
                 label.configure(cursor="hand2")
                 label.bind("<Button-1>", lambda _e: self.open_zoom_menu_from_status())
-        ttk.Label(
+        validation_label = ttk.Label(
             status,
             textvariable=self.validation_status_var,
-            foreground="#9a5b00",
+            foreground=str(APP_THEME["warning"]),
             width=16,
-        ).grid(row=0, column=9, sticky="e", padx=(0, 8))
-        ttk.Label(status, textvariable=self.error_status, foreground="#a12b2b").grid(
+            style="Status.TLabel",
+        )
+        validation_label.grid(row=0, column=9, sticky="e", padx=(0, 8))
+        validation_label.configure(cursor="hand2")
+        validation_label.bind("<Button-1>", lambda _e: self.open_validation_dialog())
+        ToolTip(
+            validation_label,
+            "Validation warnings\nClick to open project validation.",
+            self.tooltips_enabled,
+        )
+        ttk.Label(
+            status,
+            textvariable=self.error_status,
+            foreground=str(APP_THEME["error"]),
+            style="Status.TLabel",
+        ).grid(
             row=0, column=10, sticky="e"
         )
 
@@ -5693,7 +6110,7 @@ class OSRMapMaker(tk.Tk):
         else:
             self.close_color_picker_panel(remember_geometry=False)
         self.apply_compact_mode()
-        self.redraw_minimap()
+        self.redraw_minimap(full=False)
         if show_message:
             self.show_status("Window layout applied.")
             self.show_toast("Window layout applied", "success")
@@ -5781,7 +6198,7 @@ class OSRMapMaker(tk.Tk):
         self.apply_minimap_visibility()
         self.color_picker_visible_var.set(bool(preset.get("colorPicker", False)))
         self.toggle_color_picker_panel()
-        self.redraw_minimap()
+        self.redraw_minimap(full=False)
         self.show_status(f"Workspace: {preset_name}")
 
     def reset_window_layout(self, confirm: bool = True) -> None:
@@ -5825,6 +6242,13 @@ class OSRMapMaker(tk.Tk):
         if isinstance(root, focusable):
             try:
                 root.configure(takefocus=1)
+            except tk.TclError:
+                pass
+            try:
+                root.configure(
+                    highlightthickness=UI_METRICS["focus_ring"],
+                    highlightcolor=str(APP_THEME["focus"]),
+                )
             except tk.TclError:
                 pass
         for child in root.winfo_children():
@@ -6049,6 +6473,14 @@ class OSRMapMaker(tk.Tk):
         if not enabled:
             ToolTip.hide_all()
             SymbolPreview.hide_all()
+
+    def toggle_performance_metrics(self) -> None:
+        enabled = bool(self.performance_var.get())
+        self.settings["showPerformanceMetrics"] = enabled
+        self.performance_profiler.enabled = enabled
+        if not enabled:
+            self.performance_profiler.reset()
+        self.update_status()
 
     def resize_symbol_scroll_window(self, event: tk.Event) -> None:
         if self.symbol_scroll_canvas is None or self.symbol_scroll_window is None:
@@ -6280,16 +6712,17 @@ class OSRMapMaker(tk.Tk):
             font=("Segoe UI", 7),
             anchor="w",
         ).grid(row=1, column=1, sticky="ew", padx=(0, 4), pady=(0, 4))
+        map_record_id = str(record.get("id") or "")
         for widget in (tab, preview, *tab.winfo_children()):
             widget.bind(
                 "<Button-1>",
-                lambda _event, value=str(record.get("id") or ""): self.set_active_map(
+                lambda _event, value=map_record_id: self.set_active_map(
                     value, commit=True
                 ),
             )
             widget.bind(
                 "<Button-3>",
-                lambda event, value=str(record.get("id") or ""): self.open_map_tab_menu(
+                lambda event, value=map_record_id: self.open_map_tab_menu(
                     event, value
                 ),
             )
@@ -6936,11 +7369,22 @@ class OSRMapMaker(tk.Tk):
             ttk.Button(
                 bar, text="Grid color", command=lambda: self.pick_color("gridColor")
             ).grid(row=0, column=column, sticky="w", padx=(0, 8))
+            column += 1
+            if active == "cave_corridor":
+                ttk.Checkbutton(
+                    bar,
+                    text="Smooth edges",
+                    variable=self.cave_corridor_smooth_var,
+                    command=self.apply_tool_variant_options,
+                ).grid(row=0, column=column, sticky="w", padx=(0, 8))
 
     def apply_tool_variant_options(self) -> None:
         before = self.project_snapshot()
         self.settings["snapStep"] = SNAP_STEP_LABELS.get(self.snap_step_var.get(), 1.0)
         self.settings["snapToObjects"] = bool(self.snap_objects_var.get())
+        self.settings["smoothCaveCorridors"] = bool(
+            self.cave_corridor_smooth_var.get()
+        )
         layer_id = self.layer_id_from_name(self.current_layer_var.get())
         if layer_id:
             self.current_layer_var.set(self.layer_name(layer_id))
@@ -7657,7 +8101,7 @@ class OSRMapMaker(tk.Tk):
         ttk.Button(actions, text="Cancel", command=dialog.destroy).grid(
             row=0, column=1, sticky="e", padx=(0, 6)
         )
-        ttk.Button(actions, text="Speichern", command=apply).grid(
+        ttk.Button(actions, text="Save", command=apply).grid(
             row=0, column=2, sticky="e"
         )
 
@@ -8144,7 +8588,9 @@ class OSRMapMaker(tk.Tk):
         self.bind_all("<Up>", lambda event: self.handle_arrow_key(event, 0, -1))
         self.bind_all("<Down>", lambda event: self.handle_arrow_key(event, 0, 1))
         self.bind_all("<Return>", self.handle_return_key)
-        self.canvas.bind("<Configure>", lambda _e: self.redraw_minimap())
+        self.canvas.bind(
+            "<Configure>", lambda _e: self.schedule_minimap_redraw(full=False)
+        )
 
     def handle_return_key(self, _event: tk.Event) -> str | None:
         if self.draft and self.draft.kind in {"shape_polygon", "cave_corridor"}:
@@ -8202,10 +8648,18 @@ class OSRMapMaker(tk.Tk):
         return "break"
 
     def is_dirty(self) -> bool:
+        if "_saved_revision" in self.__dict__:
+            return int(self.__dict__.get("_project_revision", 0)) != int(
+                self.__dict__.get("_saved_revision", 0)
+            )
         return canonical_project_state(self.project_snapshot()) != self.saved_state
 
     def mark_saved(self) -> None:
         self.saved_state = canonical_project_state(self.project_snapshot())
+        self._saved_revision = int(self.__dict__.get("_project_revision", 0))
+        self._autosave_revision = self._saved_revision
+        self._last_autosave_label = ""
+        self.update_window_title()
 
     def confirm_discard_changes(self, action: str) -> bool:
         if not self.is_dirty():
@@ -8230,17 +8684,42 @@ class OSRMapMaker(tk.Tk):
 
     def run_autosave(self) -> None:
         try:
-            if self.is_dirty():
+            with self.profile_span("autosave"):
+                if not self.is_dirty():
+                    return
+                revision = int(self.__dict__.get("_project_revision", 0))
+                if int(self.__dict__.get("_autosave_revision", -1)) == revision:
+                    return
                 self.autosave_file.parent.mkdir(parents=True, exist_ok=True)
                 self.autosave_versions_dir.mkdir(parents=True, exist_ok=True)
                 self.sync_campaign_from_rooms()
                 self.sync_active_map_storage()
-                content = json.dumps(self.project, indent=2)
+                content = json.dumps(self.project, separators=(",", ":"))
                 self.autosave_file.write_text(content, encoding="utf-8")
-                version_path = autosave_version_path(self.autosave_versions_dir)
-                version_path.write_text(content, encoding="utf-8")
-                prune_autosave_versions(self.autosave_versions_dir)
-                self.show_status(f"Autosaved {version_path.name}")
+                asset_bytes = project_embedded_asset_bytes(self.project)
+                last_version = int(
+                    self.__dict__.get("_autosave_version_revision", -1)
+                )
+                write_version = (
+                    asset_bytes < EMBEDDED_SYMBOL_COMPRESS_THRESHOLD
+                    or last_version < 0
+                    or revision - last_version >= 5
+                )
+                version_path = None
+                if write_version:
+                    version_path = autosave_version_path(self.autosave_versions_dir)
+                    version_path.write_text(content, encoding="utf-8")
+                    prune_autosave_versions(self.autosave_versions_dir)
+                    self._autosave_version_revision = revision
+                self._autosave_revision = revision
+                self._last_autosave_label = (
+                    version_path.name if version_path is not None else "current project"
+                )
+                self.update_window_title()
+                if version_path is not None:
+                    self.show_status(f"Autosaved {version_path.name}")
+                else:
+                    self.show_status("Autosaved current project")
         finally:
             if self.winfo_exists():
                 self.schedule_autosave()
@@ -8274,6 +8753,7 @@ class OSRMapMaker(tk.Tk):
             self.project = validate_project(
                 json.loads(recovery_file.read_text(encoding="utf-8"))
             )
+            self.bump_project_revision()
         except Exception as exc:
             self.show_error("Autosave recovery failed", str(exc), parent=self)
             return
@@ -8343,6 +8823,24 @@ class OSRMapMaker(tk.Tk):
         dialog.wait_window()
         return result["value"]
 
+    def insert_empty_list_state(
+        self,
+        listbox: tk.Listbox,
+        message: str,
+        ids: list[str] | None = None,
+    ) -> None:
+        listbox.insert("end", message)
+        if ids is not None:
+            ids.append("")
+        try:
+            listbox.itemconfigure(
+                "end",
+                foreground=str(APP_THEME["muted"]),
+                background=str(APP_THEME["surface_alt"]),
+            )
+        except (tk.TclError, AttributeError):
+            pass
+
     def refresh_history_panel(self) -> None:
         if not self.__dict__.get("history_listbox"):
             return
@@ -8359,6 +8857,8 @@ class OSRMapMaker(tk.Tk):
             self.history_listbox.insert("end", f"↶ {index}. {command.description}")
             if index == 1:
                 self.history_listbox.itemconfigure(index - 1, background="#d9ecff")
+        if not self.history:
+            self.insert_empty_list_state(self.history_listbox, "No undo history yet.")
         if getattr(self, "history_redo_listbox", None):
             for index, command in enumerate(self.future, start=1):
                 self.history_redo_listbox.insert(
@@ -8368,6 +8868,11 @@ class OSRMapMaker(tk.Tk):
                     self.history_redo_listbox.itemconfigure(
                         index - 1, background="#eef6fb"
                     )
+            if not self.future:
+                self.insert_empty_list_state(
+                    self.history_redo_listbox,
+                    "No redo actions.",
+                )
 
     def on_history_context_menu(self, event: tk.Event, redo: bool = False) -> str:
         listbox = self.history_redo_listbox if redo else self.history_listbox
@@ -8401,13 +8906,14 @@ class OSRMapMaker(tk.Tk):
         self.show_status("Copied to clipboard.")
 
     def project_snapshot(self) -> dict[str, Any]:
-        self.sync_campaign_from_rooms()
-        self.sync_active_map_storage()
-        return json.loads(json.dumps(self.project))
+        with self.profile_span("snapshot"):
+            self.sync_campaign_from_rooms()
+            self.sync_active_map_storage()
+            return json_clone(self.project)
 
     def commit_history(self, before: dict[str, Any], description: str) -> None:
         after = self.project_snapshot()
-        if json.dumps(before, sort_keys=True) == json.dumps(after, sort_keys=True):
+        if before == after:
             return
         entry = {
             "id": f"change_{uuid4().hex[:10]}",
@@ -8421,6 +8927,7 @@ class OSRMapMaker(tk.Tk):
         self.history = self.history[-50:]
         self.future.clear()
         self.project["meta"]["updatedAt"] = now_iso()
+        self.bump_project_revision()
         self.refresh_history_panel()
 
     def push_history(self) -> dict[str, Any]:
@@ -8456,8 +8963,13 @@ class OSRMapMaker(tk.Tk):
         self.settings["showZones"] = bool(self.zone_overlay_var.get())
         self.settings["showRuler"] = bool(self.ruler_overlay_var.get())
         self.settings["showFloorOutlines"] = bool(self.floor_outline_var.get())
+        self.settings["smoothCaveCorridors"] = bool(
+            self.cave_corridor_smooth_var.get()
+        )
         self.settings["showRoomStatus"] = bool(self.room_status_var.get())
         self.settings["showTooltips"] = bool(self.tooltip_var.get())
+        self.settings["showPerformanceMetrics"] = bool(self.performance_var.get())
+        self.performance_profiler.enabled = bool(self.performance_var.get())
         self.settings["showPrintGrid"] = bool(self.print_grid_var.get())
         self.settings["focusMode"] = (
             self.focus_mode_var.get()
@@ -8684,7 +9196,7 @@ class OSRMapMaker(tk.Tk):
             sticky="ew",
             pady=(8, 0),
         )
-        ttk.Button(buttons, text="Speichern", command=save).pack(side="right", padx=2)
+        ttk.Button(buttons, text="Save", command=save).pack(side="right", padx=2)
         ttk.Button(buttons, text="Cancel", command=dialog.destroy).pack(
             side="right", padx=2
         )
@@ -8748,12 +9260,12 @@ class OSRMapMaker(tk.Tk):
                 (
                     "Marker",
                     label,
-                    lambda item=marker: self.jump_to_grid_box(
+                    lambda item=marker, label_text=label: self.jump_to_grid_box(
                         float(item.get("x", 0)) - 2,
                         float(item.get("y", 0)) - 2,
                         4,
                         4,
-                        f"Marker: {label}",
+                        f"Marker: {label_text}",
                     ),
                 )
             )
@@ -8763,12 +9275,12 @@ class OSRMapMaker(tk.Tk):
                 (
                     "Zone",
                     label,
-                    lambda item=zone: self.jump_to_grid_box(
+                    lambda item=zone, label_text=label: self.jump_to_grid_box(
                         float(item.get("x", 0)),
                         float(item.get("y", 0)),
                         float(item.get("width", 1)),
                         float(item.get("height", 1)),
-                        f"Zone: {label}",
+                        f"Zone: {label_text}",
                     ),
                 )
             )
@@ -8881,12 +9393,11 @@ class OSRMapMaker(tk.Tk):
                 )
             )
         for frame in self.project.get("exportFrames", []):
+            frame_id = str(frame.get("id") or "")
             items.append(
                 (
                     f"Export frame: {frame.get('name') or frame.get('id')}",
-                    lambda value=frame.get("id", ""): self.open_export_dialog_for_frame(
-                        str(value)
-                    ),
+                    lambda value=frame_id: self.open_export_dialog_for_frame(value),
                 )
             )
         for profile in self.project.get("exportProfiles", []):
@@ -9786,6 +10297,7 @@ class OSRMapMaker(tk.Tk):
             return
         before = self.project_snapshot()
         self.project = create_project()
+        self.bump_project_revision()
         self.current_file = None
         self.set_selection(set())
         self.sync_vars()
@@ -9899,13 +10411,13 @@ class OSRMapMaker(tk.Tk):
         self.project["meta"]["updatedAt"] = now_iso()
         if (
             path.suffix.lower() != COMPRESSED_PROJECT_SUFFIX
-            and project_embedded_symbol_bytes(self.project)
+            and project_embedded_asset_bytes(self.project)
             >= EMBEDDED_SYMBOL_COMPRESS_THRESHOLD
         ):
             compressed = compressed_project_path(path)
             if messagebox.askyesno(
                 "Save compressed?",
-                "This project embeds many custom symbols. Save as compressed .osrmapz?",
+                "This project embeds large custom symbols or underlays. Save as compressed .osrmapz?",
                 parent=self,
             ):
                 path = compressed
@@ -9958,6 +10470,7 @@ class OSRMapMaker(tk.Tk):
             return
         before = self.project_snapshot()
         self.project = loaded
+        self.bump_project_revision()
         self.current_file = path
         self.set_selection(set())
         self.sync_vars()
@@ -9996,7 +10509,8 @@ class OSRMapMaker(tk.Tk):
             return
         command = self.history.pop()
         self.future.insert(0, command)
-        self.project = json.loads(json.dumps(command.before))
+        self.project = json_clone(command.before)
+        self.bump_project_revision()
         self.set_selection(set())
         self.sync_vars()
         self.refresh_symbol_browser()
@@ -10009,7 +10523,8 @@ class OSRMapMaker(tk.Tk):
             return
         command = self.future.pop(0)
         self.history.append(command)
-        self.project = json.loads(json.dumps(command.after))
+        self.project = json_clone(command.after)
+        self.bump_project_revision()
         self.set_selection(set())
         self.sync_vars()
         self.refresh_symbol_browser()
@@ -10052,11 +10567,10 @@ class OSRMapMaker(tk.Tk):
         warnings = self.project.get("validationWarnings", [])
         if not warnings:
             return
-        preview = "\n".join(f"- {item}" for item in warnings[:12])
-        if len(warnings) > 12:
-            preview += f"\n- ... {len(warnings) - 12} more"
         self.error_status.set(f"{len(warnings)} project warning(s)")
-        messagebox.showwarning("Project validation warnings", preview, parent=self)
+        self.validation_status_var.set(f"Warnings: {len(warnings)}")
+        self.show_status("Project has validation warnings. Open Validation for details.")
+        self.show_toast(f"{len(warnings)} validation warning(s)", "warning")
 
     def open_validation_dialog(self) -> None:
         self.sync_campaign_from_rooms()
@@ -10191,7 +10705,7 @@ class OSRMapMaker(tk.Tk):
         ttk.Button(actions, text="Jump", command=jump_to_warning_object).grid(
             row=0, column=3, sticky="e", padx=(0, 6)
         )
-        ttk.Button(actions, text="Schliessen", command=dialog.destroy).grid(
+        ttk.Button(actions, text="Close", command=dialog.destroy).grid(
             row=0, column=4, sticky="e"
         )
         self.show_status("Project validation complete.")
@@ -10311,7 +10825,7 @@ class OSRMapMaker(tk.Tk):
         ttk.Button(editor, text="Apply", command=apply_category).grid(
             row=0, column=2, sticky="e", padx=(0, 6)
         )
-        ttk.Button(editor, text="Schliessen", command=dialog.destroy).grid(
+        ttk.Button(editor, text="Close", command=dialog.destroy).grid(
             row=0, column=3, sticky="e"
         )
         table.bind("<<TreeviewSelect>>", load_selection)
@@ -10343,7 +10857,7 @@ class OSRMapMaker(tk.Tk):
                     ", ".join(asset.get("tags", [])),
                 ),
             )
-        ttk.Button(dialog, text="Schliessen", command=dialog.destroy).grid(
+        ttk.Button(dialog, text="Close", command=dialog.destroy).grid(
             row=1, column=0, sticky="e", padx=12, pady=(0, 12)
         )
 
@@ -10465,7 +10979,7 @@ class OSRMapMaker(tk.Tk):
         ttk.Button(actions, text="Apply", command=apply_to_selection).grid(
             row=0, column=1, sticky="w", padx=(0, 6)
         )
-        ttk.Button(actions, text="Schliessen", command=dialog.destroy).grid(
+        ttk.Button(actions, text="Close", command=dialog.destroy).grid(
             row=0, column=2, sticky="e"
         )
         refresh()
@@ -10566,7 +11080,7 @@ class OSRMapMaker(tk.Tk):
         ttk.Button(actions, text="Delete", command=delete_comment).grid(
             row=0, column=2, sticky="w", padx=(0, 6)
         )
-        ttk.Button(actions, text="Schliessen", command=dialog.destroy).grid(
+        ttk.Button(actions, text="Close", command=dialog.destroy).grid(
             row=0, column=3, sticky="e"
         )
         refresh()
@@ -10637,7 +11151,7 @@ class OSRMapMaker(tk.Tk):
         text.grid(row=0, column=0, sticky="nsew", padx=12, pady=12)
         text.insert("1.0", "\n".join(lines))
         text.configure(state="disabled")
-        ttk.Button(dialog, text="Schliessen", command=dialog.destroy).grid(
+        ttk.Button(dialog, text="Close", command=dialog.destroy).grid(
             row=1, column=0, sticky="e", padx=12, pady=(0, 12)
         )
 
@@ -10704,7 +11218,8 @@ class OSRMapMaker(tk.Tk):
         if self.settings.get("snapToObjects", False):
             snap_text = f"{snap_text} + edges"
         self.snap_status_var.set(f"Snap: {snap_text}")
-        self.save_status_var.set("Unsaved" if self.is_dirty() else "Saved")
+        dirty = self.is_dirty()
+        self.save_status_var.set(save_state_label(dirty, self.autosave_matches_revision()))
         warnings = self.project.get("validationWarnings", [])
         self.validation_status_var.set(
             f"Warnings: {len(warnings)}" if warnings else ""
@@ -10734,7 +11249,14 @@ class OSRMapMaker(tk.Tk):
                 preview = f" | Canvas {self.canvas_audience_var.get()}"
                 tool = self.tool_label(self.tool.get())
                 base = f"{self.active_map_name()} | {tool}{shortcut_text} | {len(self.project['objects'])} objects{selection} | Zoom {zoom_text}{preview} | {current_file}"
+        if self.performance_profiler.enabled:
+            summary = self.performance_profiler.summary(
+                ("redraw", "canvas", "overlays", "minimap", "snapshot", "autosave")
+            )
+            if summary:
+                base = f"{base} | perf {summary}"
         self.status.set(self.status_with_mouse(base))
+        self.update_window_title()
 
     def update_cursor(self) -> None:
         if self.is_panning:
@@ -10779,6 +11301,9 @@ class OSRMapMaker(tk.Tk):
         self.zone_overlay_var.set(self.settings.get("showZones", True))
         self.ruler_overlay_var.set(self.settings.get("showRuler", True))
         self.floor_outline_var.set(self.settings.get("showFloorOutlines", True))
+        self.cave_corridor_smooth_var.set(
+            self.settings.get("smoothCaveCorridors", True)
+        )
         self.room_status_var.set(self.settings.get("showRoomStatus", True))
         self.minimap_visible_var.set(self.settings.get("showMinimap", True))
         self.minimap_docked_var.set(self.settings.get("minimapDocked", False))
@@ -10789,6 +11314,8 @@ class OSRMapMaker(tk.Tk):
         self.toolbar_visible_var.set(self.settings.get("showToolbar", True))
         self.color_picker_visible_var.set(self.settings.get("showColorPicker", False))
         self.tooltip_var.set(self.settings.get("showTooltips", True))
+        self.performance_var.set(self.settings.get("showPerformanceMetrics", False))
+        self.performance_profiler.enabled = bool(self.performance_var.get())
         self.compact_mode_var.set(self.settings.get("compactMode", False))
         self.toolbar_dock_var.set(self.settings.get("toolbarDock", "floating"))
         self.focus_mode_var.set(self.settings.get("focusMode", "Off"))
@@ -10841,7 +11368,7 @@ class OSRMapMaker(tk.Tk):
         self.live_drag_label = ""
         if self.tool.get() == "measure":
             self.measure_preview = self.snap_preview_grid
-            self.redraw()
+            self.schedule_redraw(full_canvas=False)
             return
         self.update_status()
         if self.draft and self.draft.kind in {"shape_polygon", "cave_corridor"}:
@@ -10849,7 +11376,7 @@ class OSRMapMaker(tk.Tk):
             self.draft.x2 = px
             self.draft.y2 = py
             self.live_drag_label = self.draft_measure_label()
-            self.redraw()
+            self.schedule_redraw()
             return
         if self.tool.get() == "select":
             handle = self.find_handle_hit(*self.mouse_grid)
@@ -10869,9 +11396,9 @@ class OSRMapMaker(tk.Tk):
                 previous_hover != self.hover_object_id
                 or previous_snap != self.snap_preview_grid
             ):
-                self.redraw()
+                self.schedule_redraw(full_canvas=False)
         elif previous_snap != self.snap_preview_grid:
-            self.redraw()
+            self.schedule_redraw(full_canvas=False)
 
     def on_canvas_leave(self, _event: tk.Event) -> None:
         self.mouse_grid = None
@@ -10881,9 +11408,9 @@ class OSRMapMaker(tk.Tk):
         self.smart_guides = []
         if self.measure_preview is not None:
             self.measure_preview = None
-            self.redraw()
+            self.schedule_redraw(full_canvas=False)
             return
-        self.redraw()
+        self.schedule_redraw(full_canvas=False)
         self.update_status()
         self.update_cursor()
 
@@ -11033,6 +11560,7 @@ class OSRMapMaker(tk.Tk):
         self.drag_handle = None
         self.drag_originals = {}
         self.selection_box = None
+        self.clear_drag_snap_guides()
         point = self.event_to_grid(event)
         snapped = self.snap_point(point[0], point[1])
         tool = self.tool.get()
@@ -11054,6 +11582,7 @@ class OSRMapMaker(tk.Tk):
                 [snapped],
             )
             self.drag_start = (snapped[0], snapped[1], None)
+            self.prepare_drag_snap_guides()
             self.redraw()
             return
         if tool == "select":
@@ -11073,6 +11602,7 @@ class OSRMapMaker(tk.Tk):
                     self.drag_start = (point[0], point[1], json.loads(json.dumps(obj)))
                     self.drag_snapshot = self.project_snapshot()
                     self.drag_originals = {obj["id"]: json.loads(json.dumps(obj))}
+                    self.prepare_drag_snap_guides(set(self.drag_originals))
                     self.redraw()
                 return
             hit = self.find_hit(*point)
@@ -11101,6 +11631,7 @@ class OSRMapMaker(tk.Tk):
                     for obj in self.project["objects"]
                     if obj["id"] in self.selected_ids
                 }
+                self.prepare_drag_snap_guides(set(self.drag_originals))
             self.redraw()
             return
         if tool in (RECTLIKE_TYPES - {"cave_corridor"}) | DRAG_SHAPE_TOOLS:
@@ -11109,6 +11640,7 @@ class OSRMapMaker(tk.Tk):
                 tool, snapped[0], snapped[1], min_size, min_size, snapped[0], snapped[1]
             )
             self.drag_start = (snapped[0], snapped[1], None)
+            self.prepare_drag_snap_guides()
             self.redraw()
             return
         if self.is_symbol_tool(tool):
@@ -11193,13 +11725,13 @@ class OSRMapMaker(tk.Tk):
                 self.draft.width = width
                 self.draft.height = height
             self.live_drag_label = self.draft_measure_label()
-            self.redraw()
+            self.schedule_redraw()
             return
         if self.drag_mode == "select_box" and self.selection_box:
             sx, sy, _ = self.drag_start
             self.selection_box = (sx, sy, point[0], point[1])
             self.live_drag_label = self.box_measure_label(self.selection_box)
-            self.redraw()
+            self.schedule_redraw()
             return
         if self.tool.get() == "select" and self.drag_mode == "move":
             sx, sy, _ = self.drag_start
@@ -11212,7 +11744,7 @@ class OSRMapMaker(tk.Tk):
                 original = self.drag_originals.get(obj["id"])
                 if original:
                     move_object_to_delta(obj, original, dx, dy)
-            self.redraw()
+            self.schedule_redraw()
             return
         if self.tool.get() == "select" and self.drag_mode in {
             "resize",
@@ -11223,7 +11755,7 @@ class OSRMapMaker(tk.Tk):
             obj = self.selected_object()
             if obj:
                 self.live_drag_label = self.object_measure_label(obj)
-            self.redraw()
+            self.schedule_redraw()
 
     def on_release(self, _event: tk.Event) -> None:
         if self.is_panning:
@@ -11279,6 +11811,7 @@ class OSRMapMaker(tk.Tk):
         self.selection_box = None
         self.live_drag_label = ""
         self.smart_guides = []
+        self.clear_drag_snap_guides()
         self.redraw()
 
     def start_pan(self, event: tk.Event) -> None:
@@ -11940,7 +12473,7 @@ class OSRMapMaker(tk.Tk):
                 ),
             )
         )
-        self.redraw_minimap()
+        self.redraw_minimap(full=False)
 
     def bring_selected_to_front(self) -> None:
         self.reorder_selected(front=True)
@@ -11985,33 +12518,88 @@ class OSRMapMaker(tk.Tk):
         y = self.canvas.canvasy(event.y) / self.cell
         return x, y
 
-    def spatial_index_signature(self) -> str:
-        payload = [
-            (
-                obj.get("id"),
-                obj.get("layer"),
-                obj.get("locked", False),
-                bounds(obj),
-            )
-            for obj in self.project.get("objects", [])
-        ]
-        layer_state = [
-            (layer.get("id"), layer.get("visible", True), layer.get("locked", False))
-            for layer in self.project.get("layers", [])
-        ]
-        return json.dumps([payload, layer_state], sort_keys=True)
+    def bump_project_revision(self) -> None:
+        self._project_revision = int(self.__dict__.get("_project_revision", 0)) + 1
+        self._static_canvas_signature = ""
+        self._tk_static_layer_signatures = {}
+        self.clear_drag_snap_guides()
+
+    def current_object_index(self) -> ObjectIndex:
+        revision = int(self.__dict__.get("_project_revision", 0))
+        if (
+            self.__dict__.get("_object_index") is None
+            or self.__dict__.get("_object_index_revision", -1) != revision
+        ):
+            self._object_index = build_object_index(self.project.get("objects", []))
+            self._object_index_revision = revision
+        return self._object_index
+
+    def current_layer_index(self) -> LayerIndex:
+        revision = int(self.__dict__.get("_project_revision", 0))
+        if (
+            self.__dict__.get("_layer_index") is None
+            or self.__dict__.get("_layer_index_revision", -1) != revision
+        ):
+            self._layer_index = build_layer_index(self.project.get("layers", []))
+            self._layer_index_revision = revision
+        return self._layer_index
+
+    def cached_object_bounds(
+        self, obj: dict[str, Any]
+    ) -> tuple[float, float, float, float]:
+        obj_id = str(obj.get("id") or "")
+        if obj_id:
+            cached = self.current_object_index().bounds_by_id.get(obj_id)
+            if cached is not None:
+                return cached
+        return bounds(obj)
+
+    def clear_drag_snap_guides(self) -> None:
+        self._drag_snap_guides = None
+        self._drag_snap_exclude_ids = set()
+        self._drag_moving_bounds = None
+
+    def prepare_drag_snap_guides(self, exclude_ids: set[str] | None = None) -> None:
+        self._drag_snap_exclude_ids = set(exclude_ids or set())
+        self._drag_moving_bounds = (
+            union_bounds(self.drag_originals.values()) if self.drag_originals else None
+        )
+        if not self.settings.get("snapToObjects", False):
+            self._drag_snap_guides = ([], [])
+            return
+        index = self.current_object_index()
+        self._drag_snap_guides = object_alignment_guides(
+            self.project.get("objects", []),
+            self._drag_snap_exclude_ids,
+            bounds_by_id=index.bounds_by_id,
+        )
+
+    def prepared_drag_snap_guides(
+        self, exclude_ids: set[str] | None = None
+    ) -> tuple[list[float], list[float]] | None:
+        guides = self.__dict__.get("_drag_snap_guides")
+        if guides is None:
+            return None
+        if self.__dict__.get("_drag_snap_exclude_ids", set()) != set(
+            exclude_ids or set()
+        ):
+            return None
+        return guides
 
     def current_spatial_index(self) -> dict[tuple[int, int], list[dict[str, Any]]]:
-        signature = self.spatial_index_signature()
         bucket_size = self.__dict__.get("_spatial_index_bucket_size", 8.0)
+        revision = int(self.__dict__.get("_project_revision", 0))
         if (
             self.__dict__.get("_spatial_index") is None
-            or self.__dict__.get("_spatial_index_signature", "") != signature
+            or self.__dict__.get("_spatial_index_revision", -1) != revision
         ):
+            object_index = self.current_object_index()
             self._spatial_index = build_spatial_index(
-                self.project.get("objects", []), bucket_size
+                self.project.get("objects", []),
+                bucket_size,
+                bounds_by_id=object_index.bounds_by_id,
             )
-            self._spatial_index_signature = signature
+            self._spatial_index_revision = revision
         return self._spatial_index
 
     def find_hit(self, x: float, y: float) -> dict[str, Any] | None:
@@ -12021,6 +12609,7 @@ class OSRMapMaker(tk.Tk):
             y,
             index=self.current_spatial_index(),
             bucket_size=self.__dict__.get("_spatial_index_bucket_size", 8.0),
+            bounds_by_id=self.current_object_index().bounds_by_id,
             is_visible=self.is_object_visible,
             is_locked=self.is_object_locked,
         )
@@ -12029,53 +12618,32 @@ class OSRMapMaker(tk.Tk):
         for obj in reversed(self.project["objects"]):
             if obj.get("type") not in {"room", "round", "cave"}:
                 continue
-            bx, by, bw, bh = bounds(obj)
+            bx, by, bw, bh = self.cached_object_bounds(obj)
             if bx <= x <= bx + bw and by <= y <= by + bh:
                 return obj
         return None
 
     def active_layer_id(self, default: str = "symbols") -> str:
         name = self.current_layer_var.get()
-        for layer in self.project.get("layers", []):
-            if layer.get("name") == name:
-                return layer["id"]
-        return default
+        return self.current_layer_index().id_by_name.get(name, default)
 
     def layer_name(self, layer_id: str) -> str:
-        return next(
-            (
-                layer.get("name", layer_id)
-                for layer in self.project.get("layers", [])
-                if layer.get("id") == layer_id
-            ),
-            layer_id,
-        )
+        return self.current_layer_index().name_by_id.get(layer_id, layer_id)
 
     def layer_id_from_name(self, name: str) -> str:
-        return next(
-            (
-                layer["id"]
-                for layer in self.project.get("layers", [])
-                if layer.get("name") == name
-            ),
-            normalize_layer_id(name),
-        )
+        return self.current_layer_index().id_by_name.get(name, normalize_layer_id(name))
 
     def layer_state(self, layer_id: str) -> dict[str, Any]:
-        return next(
-            (
-                layer
-                for layer in self.project.get("layers", [])
-                if layer.get("id") == layer_id
-            ),
-            {"visible": True, "locked": False},
+        return self.current_layer_index().by_id.get(
+            layer_id, {"visible": True, "locked": False}
         )
 
     def is_layer_visible(self, layer_id: str) -> bool:
-        return bool(self.layer_state(layer_id).get("visible", True))
+        index = self.current_layer_index()
+        return layer_id not in index.by_id or layer_id in index.visible_ids
 
     def is_layer_locked(self, layer_id: str) -> bool:
-        return bool(self.layer_state(layer_id).get("locked", False))
+        return layer_id in self.current_layer_index().locked_ids
 
     def is_object_visible(self, obj: dict[str, Any]) -> bool:
         return self.is_layer_visible(
@@ -12102,9 +12670,8 @@ class OSRMapMaker(tk.Tk):
             return {obj["id"]}
         return {
             item["id"]
-            for item in self.project["objects"]
-            if item.get("group") == group
-            and self.is_object_visible(item)
+            for item in self.current_object_index().objects_by_group.get(str(group), [])
+            if self.is_object_visible(item)
             and not self.is_object_locked(item)
         }
 
@@ -12117,14 +12684,15 @@ class OSRMapMaker(tk.Tk):
 
     def selected_objects(self) -> list[dict[str, Any]]:
         return [
-            obj for obj in self.project["objects"] if obj["id"] in self.selected_ids
+            obj
+            for obj_id, obj in self.current_object_index().object_by_id.items()
+            if obj_id in self.selected_ids
         ]
 
     def selected_object(self) -> dict[str, Any] | None:
-        return next(
-            (obj for obj in self.project["objects"] if obj["id"] == self.selected_id),
-            None,
-        )
+        if not self.selected_id:
+            return None
+        return self.current_object_index().object_by_id.get(self.selected_id)
 
     def group_selected(self) -> None:
         if len(self.selected_ids) < 2:
@@ -12350,10 +12918,13 @@ class OSRMapMaker(tk.Tk):
         if abs(right - left) < 0.05 and abs(bottom - top) < 0.05:
             return
         selected: set[str] = set()
-        for obj in self.project["objects"]:
+        object_index = self.current_object_index()
+        for obj in object_index.object_by_id.values():
             if not self.is_object_visible(obj) or self.is_object_locked(obj):
                 continue
-            bx, by, bw, bh = bounds(obj)
+            bx, by, bw, bh = (
+                object_index.bounds_by_id.get(str(obj.get("id"))) or bounds(obj)
+            )
             if bx <= right and bx + bw >= left and by <= bottom and by + bh >= top:
                 selected.add(obj["id"])
         if selected:
@@ -12379,36 +12950,188 @@ class OSRMapMaker(tk.Tk):
         )
         return room_number_token(self.settings, number)
 
-    def redraw(self) -> None:
-        self.canvas.delete("all")
-        scale = self.zoom.get()
-        preview_project = self.project
-        preview_for_export = self.canvas_audience_var.get() == "Player"
-        if preview_for_export:
-            preview_project = json_clone(self.project)
-            preview_project["settings"]["exportAudience"] = "Player"
-        render_tk(
-            self.canvas,
-            preview_project,
-            scale,
-            self.selected_ids,
-            self.selected_id,
-            self.draft,
-            self.selection_box,
-            self.visible_grid_box(),
-            preview_for_export=preview_for_export,
+    def cancel_scheduled_redraw(self) -> None:
+        after_id = self.__dict__.get("redraw_after_id")
+        if after_id is None:
+            return
+        try:
+            self.after_cancel(after_id)
+        except tk.TclError:
+            pass
+        self.redraw_after_id = None
+        self._pending_redraw_full_canvas = False
+        self._pending_redraw_refresh_panels = False
+        self._pending_redraw_refresh_minimap = False
+
+    def schedule_redraw(
+        self,
+        *,
+        full_canvas: bool = True,
+        refresh_panels: bool = False,
+        refresh_minimap: bool = False,
+        delay_ms: int = INTERACTIVE_REDRAW_DELAY_MS,
+    ) -> None:
+        self._pending_redraw_full_canvas = (
+            self._pending_redraw_full_canvas or full_canvas
         )
-        self.draw_navigation_overlays()
-        self.draw_interaction_overlays()
-        width, height = canvas_size(self.project, scale)
-        self.canvas.configure(scrollregion=(0, 0, width, height))
+        self._pending_redraw_refresh_panels = (
+            self._pending_redraw_refresh_panels or refresh_panels
+        )
+        self._pending_redraw_refresh_minimap = (
+            self._pending_redraw_refresh_minimap
+            or refresh_minimap
+            or refresh_panels
+        )
+        if self.redraw_after_id is not None:
+            return
+        self.redraw_after_id = self.after(delay_ms, self.flush_scheduled_redraw)
+
+    def flush_scheduled_redraw(self) -> None:
+        self.redraw_after_id = None
+        full_canvas = self._pending_redraw_full_canvas
+        refresh_panels = self._pending_redraw_refresh_panels
+        refresh_minimap = self._pending_redraw_refresh_minimap
+        self._pending_redraw_full_canvas = False
+        self._pending_redraw_refresh_panels = False
+        self._pending_redraw_refresh_minimap = False
+        if full_canvas:
+            self.redraw(
+                refresh_panels=refresh_panels,
+                refresh_minimap=refresh_minimap,
+                cancel_pending=False,
+            )
+        else:
+            self.redraw_interaction_overlays()
+            self.update_status()
+
+    def tag_canvas_items_created_by(
+        self, tag: str, draw_callback: Callable[[], None]
+    ) -> None:
+        before = set(self.canvas.find_all())
+        draw_callback()
+        for item_id in set(self.canvas.find_all()) - before:
+            self.canvas.addtag_withtag(tag, item_id)
+
+    def redraw(
+        self,
+        *,
+        refresh_panels: bool = True,
+        refresh_minimap: bool = True,
+        cancel_pending: bool = True,
+    ) -> None:
+        with self.profile_span("redraw"):
+            if cancel_pending:
+                self.cancel_scheduled_redraw()
+            self.redraw_canvas()
+            if refresh_panels:
+                self.refresh_redraw_panels()
+            self.update_cursor()
+        self.update_status()
+        if refresh_minimap:
+            self.schedule_minimap_redraw()
+
+    def redraw_canvas(self) -> None:
+        with self.profile_span("canvas"):
+            for tag in (CANVAS_BASE_TAG, CANVAS_NAVIGATION_TAG, CANVAS_INTERACTION_TAG):
+                self.canvas.delete(tag)
+            scale = self.zoom.get()
+            preview_project = self.project
+            preview_for_export = self.canvas_audience_var.get() == "Player"
+            if preview_for_export:
+                preview_project = json_clone(self.project)
+                preview_project["settings"]["exportAudience"] = "Player"
+            context = render_context(preview_project)
+            static_signature = tk_static_canvas_signature(preview_project, scale, context)
+            if self._static_canvas_signature != static_signature:
+                self.canvas.delete(CANVAS_STATIC_TAG)
+                self.canvas._image_refs = []
+                self.tag_canvas_items_created_by(
+                    CANVAS_STATIC_TAG,
+                    lambda: draw_tk_static_canvas_background(
+                        self.canvas,
+                        preview_project,
+                        scale,
+                        context,
+                    ),
+                )
+                self.canvas._static_image_refs = list(
+                    getattr(self.canvas, "_image_refs", [])
+                )
+                self._static_canvas_signature = static_signature
+            self.canvas._image_refs = list(getattr(self.canvas, "_static_image_refs", []))
+            static_layer_ids = {
+                str(layer.get("id") or "")
+                for layer in preview_project.get("layers", [])
+                if layer.get("staticCache")
+                and layer.get("id") != "background"
+                and project_layer_visible(
+                    preview_project, str(layer.get("id") or ""), context
+                )
+            }
+            static_layer_signatures = {
+                layer_id: tk_static_layer_signature(
+                    preview_project, layer_id, scale, context
+                )
+                for layer_id in sorted(static_layer_ids)
+            }
+            if (
+                self.__dict__.get("_tk_static_layer_signatures", {})
+                != static_layer_signatures
+            ):
+                self.canvas.delete(CANVAS_STATIC_LAYER_TAG)
+                self.canvas._image_refs = []
+                for layer_id in sorted(static_layer_ids):
+                    self.tag_canvas_items_created_by(
+                        CANVAS_STATIC_LAYER_TAG,
+                        lambda value=layer_id: draw_tk_static_layer(
+                            self.canvas, preview_project, value, scale, context
+                        ),
+                    )
+                self.canvas._static_layer_image_refs = list(
+                    getattr(self.canvas, "_image_refs", [])
+                )
+                self._tk_static_layer_signatures = static_layer_signatures
+            self.canvas._image_refs = [
+                *list(getattr(self.canvas, "_static_image_refs", [])),
+                *list(getattr(self.canvas, "_static_layer_image_refs", [])),
+            ]
+            self.tag_canvas_items_created_by(
+                CANVAS_BASE_TAG,
+                lambda: render_tk(
+                    self.canvas,
+                    preview_project,
+                    scale,
+                    self.selected_ids,
+                    self.selected_id,
+                    self.draft,
+                    self.selection_box,
+                    self.visible_grid_box(),
+                    preview_for_export=preview_for_export,
+                    context=context,
+                    draw_static_background=False,
+                    skip_layer_ids=static_layer_ids,
+                ),
+            )
+            self.tag_canvas_items_created_by(
+                CANVAS_NAVIGATION_TAG, self.draw_navigation_overlays
+            )
+            self.redraw_interaction_overlays(delete_existing=False)
+            width, height = canvas_size(self.project, scale)
+            self.canvas.configure(scrollregion=(0, 0, width, height))
+
+    def redraw_interaction_overlays(self, delete_existing: bool = True) -> None:
+        with self.profile_span("overlays"):
+            if delete_existing:
+                self.canvas.delete(CANVAS_INTERACTION_TAG)
+            self.tag_canvas_items_created_by(
+                CANVAS_INTERACTION_TAG, self.draw_interaction_overlays
+            )
+
+    def refresh_redraw_panels(self) -> None:
         self.update_selection_panel()
         self.refresh_object_list()
         self.rebuild_navigator_panel()
         self.refresh_toolbar()
-        self.update_cursor()
-        self.update_status()
-        self.redraw_minimap()
 
     def draw_navigation_overlays(self) -> None:
         draw_tk_floor_overlay(self.canvas, self.project, self.zoom.get())
@@ -12416,6 +13139,8 @@ class OSRMapMaker(tk.Tk):
         draw_tk_export_frames(self.canvas, self.project, self.zoom.get())
         draw_tk_markers(self.canvas, self.project, self.zoom.get())
         draw_tk_print_grid(self.canvas, self.settings, self.zoom.get())
+
+    def draw_interaction_overlays(self) -> None:
         draw_tk_focus_overlay(
             self.canvas,
             self.project,
@@ -12439,23 +13164,14 @@ class OSRMapMaker(tk.Tk):
             self.mouse_grid,
             self.live_measure_points(),
         )
-
-    def draw_interaction_overlays(self) -> None:
         c = self.cell
         if self.hover_object_id and self.hover_object_id not in self.selected_ids:
-            obj = next(
-                (
-                    item
-                    for item in self.project.get("objects", [])
-                    if item.get("id") == self.hover_object_id
-                ),
-                None,
-            )
+            obj = self.current_object_index().object_by_id.get(self.hover_object_id)
             if obj and should_render_object(self.project, obj, for_export=False):
                 draw_tk_bounds(
                     self.canvas,
                     self.settings,
-                    bounds(obj),
+                    self.cached_object_bounds(obj),
                     self.zoom.get(),
                     dash=(3, 2),
                 )
@@ -12516,7 +13232,7 @@ class OSRMapMaker(tk.Tk):
     def toggle_minimap(self) -> None:
         self.settings["showMinimap"] = bool(self.minimap_visible_var.get())
         self.apply_minimap_visibility()
-        self.redraw_minimap()
+        self.redraw_minimap(full=False)
 
     def toggle_minimap_dock(self) -> None:
         self.set_minimap_docked(bool(self.minimap_docked_var.get()))
@@ -12529,7 +13245,7 @@ class OSRMapMaker(tk.Tk):
         if docked:
             self.show_dock_panel_by_title("Navigator")
         self.apply_minimap_visibility()
-        self.redraw_minimap()
+        self.redraw_minimap(full=False)
 
     def toggle_minimap_transparency(self) -> None:
         self.settings["minimapTransparent"] = bool(self.minimap_transparent_var.get())
@@ -12564,62 +13280,113 @@ class OSRMapMaker(tk.Tk):
             value = "All"
             self.minimap_layer_filter_var.set(value)
         self.settings["minimapLayerFilter"] = value
-        self.redraw_minimap()
+        self.schedule_minimap_redraw(full=True, delay_ms=0)
 
-    def redraw_minimap(self) -> None:
-        if not hasattr(self, "minimap"):
+    def cancel_scheduled_minimap_redraw(self) -> None:
+        after_id = self.__dict__.get("minimap_after_id")
+        if after_id is None:
+            return
+        try:
+            self.after_cancel(after_id)
+        except tk.TclError:
+            pass
+        self.minimap_after_id = None
+        self._pending_minimap_full = False
+
+    def schedule_minimap_redraw(
+        self, *, full: bool = True, delay_ms: int = MINIMAP_REDRAW_DELAY_MS
+    ) -> None:
+        if not self.__dict__.get("minimap_visible_var"):
             return
         if not self.minimap_visible_var.get():
             return
-        canvases = [self.minimap]
-        if hasattr(self, "navigator_minimap"):
-            canvases.append(self.navigator_minimap)
-        for canvas in canvases:
-            if canvas.winfo_ismapped():
-                self.draw_minimap_canvas(canvas)
+        self._pending_minimap_full = self._pending_minimap_full or full
+        if self.__dict__.get("minimap_after_id") is not None:
+            return
+        if delay_ms <= 0:
+            self.flush_scheduled_minimap_redraw()
+        else:
+            self.minimap_after_id = self.after(
+                delay_ms, self.flush_scheduled_minimap_redraw
+            )
 
-    def draw_minimap_canvas(self, canvas: tk.Canvas) -> None:
-        canvas.delete("all")
+    def flush_scheduled_minimap_redraw(self) -> None:
+        self.minimap_after_id = None
+        full = bool(self.__dict__.get("_pending_minimap_full", False))
+        self._pending_minimap_full = False
+        self.redraw_minimap(full=full)
+
+    def redraw_minimap(self, *, full: bool = True) -> None:
+        with self.profile_span("minimap"):
+            if not hasattr(self, "minimap"):
+                return
+            if not self.minimap_visible_var.get():
+                return
+            canvases = [self.minimap]
+            if hasattr(self, "navigator_minimap"):
+                canvases.append(self.navigator_minimap)
+            for canvas in canvases:
+                if canvas.winfo_ismapped():
+                    self.draw_minimap_canvas(canvas, full=full)
+
+    def draw_minimap_canvas(self, canvas: tk.Canvas, *, full: bool = True) -> None:
         width = max(1, canvas.winfo_width())
         height = max(1, canvas.winfo_height())
-        map_w = max(1.0, canvas_size(self.project, 1.0)[0] / self.settings["cellSize"])
-        map_h = max(1.0, canvas_size(self.project, 1.0)[1] / self.settings["cellSize"])
-        scale = min((width - 12) / map_w, (height - 12) / map_h)
-        ox = (width - map_w * scale) / 2
-        oy = (height - map_h * scale) / 2
-        canvas.create_rectangle(
-            ox,
-            oy,
-            ox + map_w * scale,
-            oy + map_h * scale,
-            fill=self.settings["backgroundColor"],
-            outline="#7fa7b5",
-        )
-        active_layer = self.layer_id_from_name(self.current_layer_var.get())
-        layer_filter = self.minimap_layer_filter_var.get()
-        for obj in self.project["objects"]:
-            if not should_render_object(self.project, obj, for_export=False):
-                continue
-            if (
-                layer_filter == "Active layer"
-                and obj.get("layer") != active_layer
-                and obj["id"] not in self.selected_ids
-            ):
-                continue
-            x, y, w, h = bounds(obj)
-            color = (
-                self.settings["selectionColor"]
-                if obj["id"] in self.selected_ids
-                else self.settings["gridColor"]
+        needs_full = full or not getattr(canvas, "_minimap_geometry", None)
+        if needs_full:
+            canvas.delete(MINIMAP_BASE_TAG)
+            canvas.delete(MINIMAP_VIEWPORT_TAG)
+            map_w = max(
+                1.0, canvas_size(self.project, 1.0)[0] / self.settings["cellSize"]
             )
+            map_h = max(
+                1.0, canvas_size(self.project, 1.0)[1] / self.settings["cellSize"]
+            )
+            scale = min((width - 12) / map_w, (height - 12) / map_h)
+            ox = (width - map_w * scale) / 2
+            oy = (height - map_h * scale) / 2
+            canvas._minimap_geometry = (ox, oy, scale)
             canvas.create_rectangle(
-                ox + x * scale,
-                oy + y * scale,
-                ox + (x + w) * scale,
-                oy + (y + h) * scale,
-                outline=color,
-                fill="",
+                ox,
+                oy,
+                ox + map_w * scale,
+                oy + map_h * scale,
+                fill=self.settings["backgroundColor"],
+                outline="#7fa7b5",
+                tags=(MINIMAP_BASE_TAG,),
             )
+            active_layer = self.layer_id_from_name(self.current_layer_var.get())
+            layer_filter = self.minimap_layer_filter_var.get()
+            context = render_context(self.project)
+            for obj in self.project["objects"]:
+                if not should_render_object(
+                    self.project, obj, for_export=False, context=context
+                ):
+                    continue
+                if (
+                    layer_filter == "Active layer"
+                    and obj.get("layer") != active_layer
+                    and obj["id"] not in self.selected_ids
+                ):
+                    continue
+                x, y, w, h = self.cached_object_bounds(obj)
+                color = (
+                    self.settings["selectionColor"]
+                    if obj["id"] in self.selected_ids
+                    else self.settings["gridColor"]
+                )
+                canvas.create_rectangle(
+                    ox + x * scale,
+                    oy + y * scale,
+                    ox + (x + w) * scale,
+                    oy + (y + h) * scale,
+                    outline=color,
+                    fill="",
+                    tags=(MINIMAP_BASE_TAG,),
+                )
+        else:
+            ox, oy, scale = canvas._minimap_geometry
+        canvas.delete(MINIMAP_VIEWPORT_TAG)
         vx, vy, vw, vh = self.visible_grid_box()
         canvas.create_rectangle(
             ox + vx * scale,
@@ -12628,6 +13395,7 @@ class OSRMapMaker(tk.Tk):
             oy + (vy + vh) * scale,
             outline="#d13f3f",
             width=2,
+            tags=(MINIMAP_VIEWPORT_TAG,),
         )
 
     def on_minimap_press(self, event: tk.Event) -> str:
@@ -12663,17 +13431,57 @@ class OSRMapMaker(tk.Tk):
             label = str(obj.get("text") or "Text").replace("\n", " ")[:32]
         elif obj.get("type") in {"room", "round", "cave"} and obj.get("roomName"):
             label = str(obj.get("roomName"))
-        bx, by, _bw, _bh = bounds(obj)
-        z_index = (
-            self.project.get("objects", []).index(obj) + 1
-            if obj in self.project.get("objects", [])
-            else 0
-        )
+        bx, by, _bw, _bh = self.cached_object_bounds(obj)
+        z_index = self.current_object_index().order_by_id.get(str(obj.get("id")), 0)
         group = f" | group {str(obj.get('group'))[-4:]}" if obj.get("group") else ""
         return f"#{z_index:03d} | {obj.get('type', 'object')} | {label} | {self.layer_name(obj.get('layer', ''))}{group} | {bx:.1f},{by:.1f}"
 
-    def refresh_object_list(self) -> None:
-        if not getattr(self, "object_listbox", None):
+    def object_list_data_signature(
+        self,
+        layer_values: list[str],
+        search: str,
+        type_filter: str,
+        layer_filter: str,
+    ) -> str:
+        return stable_cache_hash(
+            {
+                "revision": int(self.__dict__.get("_project_revision", 0)),
+                "layers": layer_values,
+                "search": search,
+                "type": type_filter,
+                "layer": layer_filter,
+            }
+        )
+
+    def sync_object_list_selection(self) -> None:
+        listbox = self.__dict__.get("object_listbox")
+        if not listbox:
+            return
+        signature = stable_cache_hash(
+            {
+                "ids": tuple(self.__dict__.get("object_list_ids", [])),
+                "selected": tuple(sorted(self.selected_ids)),
+            }
+        )
+        if self.__dict__.get("_object_list_selection_signature") == signature:
+            return
+        self._refreshing_object_list = True
+        try:
+            listbox.selection_clear(0, "end")
+            first_selected = None
+            for index, obj_id in enumerate(self.object_list_ids):
+                if obj_id in self.selected_ids:
+                    listbox.selection_set(index)
+                    if first_selected is None:
+                        first_selected = index
+            if first_selected is not None:
+                listbox.see(first_selected)
+            self._object_list_selection_signature = signature
+        finally:
+            self._refreshing_object_list = False
+
+    def refresh_object_list(self, *, force: bool = False) -> None:
+        if not self.__dict__.get("object_listbox"):
             return
         layer_values = ["All"] + [
             layer.get("name", layer["id"]) for layer in self.project.get("layers", [])
@@ -12688,11 +13496,21 @@ class OSRMapMaker(tk.Tk):
         layer_id = (
             self.layer_id_from_name(layer_filter) if layer_filter != "All" else ""
         )
+        signature = self.object_list_data_signature(
+            layer_values, search, type_filter, layer_filter
+        )
+        if (
+            not force
+            and self.__dict__.get("_object_list_signature") == signature
+        ):
+            self.sync_object_list_selection()
+            return
         self.object_list_ids = []
         self._refreshing_object_list = True
         try:
             self.object_listbox.delete(0, "end")
             last_group = ""
+            matched_count = 0
             for obj in self.project.get("objects", []):
                 if type_filter != "All" and obj.get("type") != type_filter:
                     continue
@@ -12712,12 +13530,24 @@ class OSRMapMaker(tk.Tk):
                     last_group = group_label
                 self.object_list_ids.append(obj["id"])
                 self.object_listbox.insert("end", label)
-            for index, obj_id in enumerate(self.object_list_ids):
-                if obj_id in self.selected_ids:
-                    self.object_listbox.selection_set(index)
-                    self.object_listbox.see(index)
+                matched_count += 1
+            if matched_count == 0:
+                filtered = bool(search or type_filter != "All" or layer_filter != "All")
+                message = (
+                    "No objects match the current filter."
+                    if filtered
+                    else "No objects on this map yet."
+                )
+                self.insert_empty_list_state(
+                    self.object_listbox,
+                    message,
+                    self.object_list_ids,
+                )
+            self._object_list_signature = signature
+            self._object_list_selection_signature = ""
         finally:
             self._refreshing_object_list = False
+        self.sync_object_list_selection()
 
     def on_object_list_select(self, _event: tk.Event | None = None) -> None:
         if getattr(self, "_refreshing_object_list", False) or not self.object_listbox:
@@ -12822,14 +13652,12 @@ class OSRMapMaker(tk.Tk):
         obj = self.selected_object()
         if not obj and self.object_listbox and self.object_listbox.curselection():
             obj_id = self.object_list_ids[self.object_listbox.curselection()[0]]
-            obj = next(
-                (item for item in self.project["objects"] if item["id"] == obj_id), None
-            )
+            obj = self.current_object_index().object_by_id.get(obj_id)
             if obj:
                 self.set_selection({obj_id}, primary=obj_id)
         if not obj:
             return
-        bx, by, bw, bh = bounds(obj)
+        bx, by, bw, bh = self.cached_object_bounds(obj)
         self.jump_to_grid(bx + bw / 2, by + bh / 2)
         self.redraw()
 
@@ -13077,7 +13905,12 @@ class OSRMapMaker(tk.Tk):
                 "end", background="#e8f4f8", foreground="#17384a"
             )
 
+        def add_empty(message: str) -> None:
+            self.nav_list_items.append(("header", message))
+            self.insert_empty_list_state(self.navigator_listbox, message)
+
         add_header("Views")
+        section_count = 0
         for view in self.project.get("views", []):
             self.nav_list_items.append(("view", view["id"]))
             self.navigator_listbox.insert(
@@ -13085,7 +13918,11 @@ class OSRMapMaker(tk.Tk):
                 f"View | {view['name']} | {view['x']:.1f},{view['y']:.1f} @ {view['zoom']:.2f}",
             )
             self.color_nav_list_row("end", view.get("color", ""))
+            section_count += 1
+        if section_count == 0:
+            add_empty("No saved views.")
         add_header("Markers")
+        section_count = 0
         for marker in self.project.get("markers", []):
             self.nav_list_items.append(("marker", marker["id"]))
             self.navigator_listbox.insert(
@@ -13093,7 +13930,11 @@ class OSRMapMaker(tk.Tk):
                 f"Marker | {marker['name']} | {marker['x']:.1f},{marker['y']:.1f}",
             )
             self.color_nav_list_row("end", marker.get("color", ""))
+            section_count += 1
+        if section_count == 0:
+            add_empty("No markers.")
         add_header("Zones")
+        section_count = 0
         for zone in self.project.get("zones", []):
             self.nav_list_items.append(("zone", zone["id"]))
             parent = next(
@@ -13115,7 +13956,11 @@ class OSRMapMaker(tk.Tk):
                 f"Zone | {prefix}{zone['name']} | {zone['width']:.1f} x {zone['height']:.1f}{scale}",
             )
             self.color_nav_list_row("end", zone.get("color", ""))
+            section_count += 1
+        if section_count == 0:
+            add_empty("No zones.")
         add_header("Export Frames")
+        section_count = 0
         for frame in self.project.get("exportFrames", []):
             self.nav_list_items.append(("frame", frame["id"]))
             preset = str(frame.get("preset") or "Custom")
@@ -13124,10 +13969,14 @@ class OSRMapMaker(tk.Tk):
                 f"Export | {frame['name']} | {preset} | {frame['width']:.1f} x {frame['height']:.1f}",
             )
             self.color_nav_list_row("end", frame.get("color", ""))
+            section_count += 1
+        if section_count == 0:
+            add_empty("No export frames.")
         links = [
             obj for obj in self.project.get("objects", []) if obj.get("targetMapId")
         ]
         add_header("Floor Links")
+        section_count = 0
         for obj in links:
             self.nav_list_items.append(("link", obj["id"]))
             target = next(
@@ -13142,6 +13991,9 @@ class OSRMapMaker(tk.Tk):
             self.navigator_listbox.insert(
                 "end", f"Link | {self.object_label(obj)} -> {target_name}"
             )
+            section_count += 1
+        if section_count == 0:
+            add_empty("No floor links.")
         if selected_item and selected_item in self.nav_list_items:
             index = self.nav_list_items.index(selected_item)
             self.navigator_listbox.selection_set(index)
@@ -13609,6 +14461,8 @@ class OSRMapMaker(tk.Tk):
             fields += ["width"]
         if obj["type"] in FLOOR_TYPES:
             fields += ["rotation", "wallThickness", "wallType"]
+            if obj["type"] == "cave_corridor":
+                fields += ["smoothBoundary"]
         if obj["type"] in {"room", "round", "cave"}:
             fields += [
                 "roomNumber",
@@ -13838,7 +14692,14 @@ class OSRMapMaker(tk.Tk):
                 lambda _e, f=field, v=var: self.change_selected(f, v.get()),
             )
             return
-        if field in {"export", "playerVisible", "curve", "shadow", "outline"}:
+        if field in {
+            "export",
+            "playerVisible",
+            "curve",
+            "shadow",
+            "outline",
+            "smoothBoundary",
+        }:
             var = tk.BooleanVar(value=bool(value))
             check = ttk.Checkbutton(
                 self.selection_frame,
@@ -14019,7 +14880,7 @@ class OSRMapMaker(tk.Tk):
         ttk.Button(buttons, text="Cancel", command=dialog.destroy).grid(
             row=0, column=0, padx=(0, 6)
         )
-        ttk.Button(buttons, text="Anwenden", command=apply_editor).grid(row=0, column=1)
+        ttk.Button(buttons, text="Apply", command=apply_editor).grid(row=0, column=1)
         editor.focus_set()
 
     def _common_selection_value(
@@ -14546,7 +15407,7 @@ class OSRMapMaker(tk.Tk):
         ttk.Button(actions, text="Cancel", command=dialog.destroy).grid(
             row=0, column=1, sticky="e", padx=(0, 4)
         )
-        ttk.Button(actions, text="Anwenden", command=accept).grid(
+        ttk.Button(actions, text="Apply", command=accept).grid(
             row=0, column=2, sticky="e"
         )
         dialog.bind("<Return>", lambda _event: accept())
@@ -15102,7 +15963,7 @@ class OSRMapMaker(tk.Tk):
         ttk.Button(actions, text="Cancel", command=dialog.destroy).grid(
             row=0, column=1, sticky="e", padx=2
         )
-        ttk.Button(actions, text="Speichern", command=save).grid(
+        ttk.Button(actions, text="Save", command=save).grid(
             row=0, column=2, sticky="e", padx=2
         )
 
@@ -15222,7 +16083,7 @@ class OSRMapMaker(tk.Tk):
         ttk.Button(actions, text="Jump", command=jump).grid(
             row=0, column=1, sticky="e", padx=(0, 6)
         )
-        ttk.Button(actions, text="Schliessen", command=dialog.destroy).grid(
+        ttk.Button(actions, text="Close", command=dialog.destroy).grid(
             row=0, column=2, sticky="e"
         )
         tree.bind("<Double-Button-1>", lambda _event: jump())
@@ -15401,7 +16262,7 @@ class OSRMapMaker(tk.Tk):
         ttk.Button(actions, text="Cancel", command=dialog.destroy).grid(
             row=0, column=2, sticky="e", padx=2
         )
-        ttk.Button(actions, text="Speichern", command=save).grid(
+        ttk.Button(actions, text="Save", command=save).grid(
             row=0, column=3, sticky="e", padx=2
         )
 
@@ -15543,8 +16404,14 @@ class OSRMapMaker(tk.Tk):
             x = round(x / step) * step
             y = round(y / step) * step
         if self.settings.get("snapToObjects", False):
+            exclude = exclude_ids or set()
             x, y, guides = snap_point_to_object_guides(
-                x, y, self.project["objects"], exclude_ids or set()
+                x,
+                y,
+                self.project["objects"],
+                exclude,
+                guides=self.prepared_drag_snap_guides(exclude),
+                bounds_by_id=self.current_object_index().bounds_by_id,
             )
             self.smart_guides = guides
         else:
@@ -15555,10 +16422,18 @@ class OSRMapMaker(tk.Tk):
         self.smart_guides = []
         if not self.settings.get("snapToObjects", False) or not self.drag_originals:
             return dx, dy
-        moving_bounds = union_bounds(self.drag_originals.values())
-        guides_x, guides_y = object_alignment_guides(
-            self.project["objects"], set(self.drag_originals)
+        exclude_ids = set(self.drag_originals)
+        moving_bounds = self.__dict__.get("_drag_moving_bounds") or union_bounds(
+            self.drag_originals.values()
         )
+        prepared_guides = self.prepared_drag_snap_guides(exclude_ids)
+        if prepared_guides is None:
+            prepared_guides = object_alignment_guides(
+                self.project["objects"],
+                exclude_ids,
+                bounds_by_id=self.current_object_index().bounds_by_id,
+            )
+        guides_x, guides_y = prepared_guides
         if moving_bounds:
             left, top, width, height = moving_bounds
             dx, guide_x = snap_delta_axis(
@@ -15637,8 +16512,10 @@ class OSRMapMaker(tk.Tk):
         if len(points) < 3:
             self.show_status("A polygon needs at least three points.")
             return False
+        project = self.__dict__.get("project", {})
+        settings = project.get("settings", {}) if isinstance(project, dict) else {}
         obj = (
-            cave_corridor_from_points(points)
+            cave_corridor_from_points(points, settings.get("smoothCaveCorridors", True))
             if self.draft.kind == "cave_corridor"
             else self.shape_from_draft(self.draft)
         )
@@ -15927,7 +16804,7 @@ class OSRMapMaker(tk.Tk):
         ttk.Button(buttons, text="Cancel", command=dialog.destroy).pack(
             side="right", padx=2
         )
-        ttk.Button(buttons, text="Anwenden", command=apply).pack(side="right", padx=2)
+        ttk.Button(buttons, text="Apply", command=apply).pack(side="right", padx=2)
 
     def add_connection_notes(self) -> None:
         before = self.project_snapshot()
@@ -16278,7 +17155,7 @@ class OSRMapMaker(tk.Tk):
                 rooms, k=min(len(rooms), rng.randint(2, min(5, len(rooms))))
             )
             points = [object_center(room) for room in route_rooms]
-            for start, end in zip(points, points[1:]):
+            for start, end in zip(points, points[1:], strict=False):
                 patrol = shape("line", start[0], start[1], 0, 0, end[0], end[1])
                 patrol["lineStyle"] = "dash"
                 patrol["arrow"] = "end"
@@ -16495,7 +17372,7 @@ class OSRMapMaker(tk.Tk):
         ttk.Button(actions, text="Cancel", command=dialog.destroy).grid(
             row=0, column=1, sticky="e", padx=(0, 4)
         )
-        ttk.Button(actions, text="Exportieren", command=run_export).grid(
+        ttk.Button(actions, text="Export", command=run_export).grid(
             row=0, column=2, sticky="e"
         )
         refresh_preview()
@@ -16532,8 +17409,9 @@ class OSRMapMaker(tk.Tk):
             return
         scale = int(self.export_scale.get())
         cell = self.settings["cellSize"] * scale
-        width = max(1, int(math.ceil(legend["width"] * cell)))
-        height = max(1, int(math.ceil(legend["height"] * cell)))
+        layout = legend_layout(self.project, legend)
+        width = max(1, int(math.ceil(layout.width * cell)))
+        height = max(1, int(math.ceil(layout.height * cell)))
         image = Image.new("RGBA", (width, height), (0, 0, 0, 0))
         draw = ImageDraw.Draw(image)
         draw._target_image = image
@@ -16994,6 +17872,7 @@ class OSRMapMaker(tk.Tk):
         profile_combo.bind("<<ComboboxSelected>>", apply_profile)
         apply_profile()
         preview_after_id: list[str | None] = [None]
+        preview_cache: OrderedDict[str, Any] = OrderedDict()
 
         def set_preview_zoom(value: float) -> None:
             preview_zoom_var.set(max(0.25, min(3.0, float(value))))
@@ -17007,15 +17886,42 @@ class OSRMapMaker(tk.Tk):
                 dialog.after_cancel(preview_after_id[0])
             preview_after_id[0] = dialog.after(180, update_preview)
 
+        def preview_cache_key(opts: dict[str, Any]) -> str:
+            return stable_cache_hash(
+                {
+                    "revision": int(self.__dict__.get("_project_revision", 0)),
+                    "selected": sorted(self.selected_ids),
+                    "format": opts.get("format"),
+                    "transparent": bool(opts.get("transparent", False)),
+                    "includeLegend": bool(opts.get("include_legend", True)),
+                    "exportGrid": bool(opts.get("export_grid", True)),
+                    "audience": opts.get("audience"),
+                    "scope": opts.get("scope"),
+                    "frame": opts.get("frame_id", ""),
+                    "margin": int(opts.get("print_margin_cells", 0)),
+                    "titleArea": bool(opts.get("title_area", False)),
+                }
+            )
+
+        def render_preview_image(opts: dict[str, Any]):
+            key = preview_cache_key(opts)
+            cached = cache_get(preview_cache, key)
+            if cached is not None:
+                return image_copy_or_none(cached)
+            image = self.render_image(scale=1, options=opts)
+            cache_put(preview_cache, key, image.copy(), 8)
+            return image
+
         def update_preview(*_args: Any) -> None:
             preview_after_id[0] = None
             jpeg_quality_label_var.set(str(int(jpeg_quality_var.get())))
             webp_quality_label_var.set(str(int(webp_quality_var.get())))
-            warning_var.set("\n".join(self.export_dialog_warnings(options())))
+            opts = options()
+            warning_var.set("\n".join(self.export_dialog_warnings(opts)))
             preview_zoom_label_var.set(f"{int(round(preview_zoom_var.get() * 100))}%")
             preview_canvas.delete("all")
             try:
-                image = self.render_image(scale=1, options=options())
+                image = render_preview_image(opts)
             except Exception as exc:
                 preview_canvas.create_text(
                     12,
@@ -17136,7 +18042,7 @@ class OSRMapMaker(tk.Tk):
         ttk.Button(actions, text="Cancel", command=dialog.destroy).grid(
             row=0, column=0, sticky="ew", padx=(0, 4)
         )
-        ttk.Button(actions, text="Speichern", command=save).grid(
+        ttk.Button(actions, text="Save", command=save).grid(
             row=0, column=1, sticky="ew"
         )
         update_preview()
@@ -18268,52 +19174,120 @@ def gm_booklet_markdown(project: dict[str, Any], template: str = "full") -> str:
     return "\n".join(lines)
 
 
-def project_layer_visible(project: dict[str, Any], layer_id: str) -> bool:
-    return bool(
-        next(
-            (
-                layer.get("visible", True)
-                for layer in project.get("layers", [])
-                if layer.get("id") == layer_id
-            ),
-            True,
+_LAYER_INDEX_CACHE: OrderedDict[str, LayerIndex] = OrderedDict()
+
+
+def build_layer_index(layers: list[dict[str, Any]]) -> LayerIndex:
+    by_id: dict[str, dict[str, Any]] = {}
+    id_by_name: dict[str, str] = {}
+    name_by_id: dict[str, str] = {}
+    visible_ids: set[str] = set()
+    locked_ids: set[str] = set()
+    opacity_by_id: dict[str, float] = {}
+    for layer in layers:
+        layer_id = str(layer.get("id") or "")
+        if not layer_id:
+            continue
+        by_id[layer_id] = layer
+        name = str(layer.get("name") or layer_id)
+        id_by_name[name] = layer_id
+        name_by_id[layer_id] = name
+        if layer.get("visible", True):
+            visible_ids.add(layer_id)
+        if layer.get("locked", False):
+            locked_ids.add(layer_id)
+        opacity_by_id[layer_id] = max(
+            0.0, min(1.0, coerce_float(layer.get("opacity"), 1.0))
         )
+    return LayerIndex(
+        by_id=by_id,
+        id_by_name=id_by_name,
+        name_by_id=name_by_id,
+        visible_ids=visible_ids,
+        locked_ids=locked_ids,
+        opacity_by_id=opacity_by_id,
     )
 
 
-def project_layer_opacity(project: dict[str, Any], layer_id: str) -> float:
-    return max(
-        0.0,
-        min(
-            1.0,
-            coerce_float(
-                next(
-                    (
-                        layer.get("opacity", 1.0)
-                        for layer in project.get("layers", [])
-                        if layer.get("id") == layer_id
-                    ),
-                    1.0,
-                ),
-                1.0,
-            ),
+def project_layer_index(project: dict[str, Any]) -> LayerIndex:
+    key = stable_cache_hash(project.get("layers", []))
+    cached = cache_get(_LAYER_INDEX_CACHE, key)
+    if cached is not None:
+        return cached
+    index = build_layer_index(project.get("layers", []))
+    return cache_put(_LAYER_INDEX_CACHE, key, index, LAYER_INDEX_CACHE_LIMIT)
+
+
+def layer_context_maps(
+    project: dict[str, Any],
+) -> tuple[set[str], dict[str, float]]:
+    index = project_layer_index(project)
+    return set(index.visible_ids), dict(index.opacity_by_id)
+
+
+def render_context(project: dict[str, Any]) -> RenderContext:
+    visible, opacity = layer_context_maps(project)
+    export_audience = str(project["settings"].get("exportAudience", "GM"))
+    return RenderContext(
+        visible_layer_ids=visible,
+        layer_opacity_by_id=opacity,
+        hidden_player_room_ids=(
+            hidden_player_room_ids(project) if export_audience == "Player" else set()
         ),
+        show_legend=bool(project["settings"].get("showLegend", True)),
+        export_audience=export_audience,
     )
+
+
+def project_layer_visible(
+    project: dict[str, Any], layer_id: str, context: RenderContext | None = None
+) -> bool:
+    if context is not None:
+        return layer_id not in context.layer_opacity_by_id or layer_id in context.visible_layer_ids
+    index = project_layer_index(project)
+    return layer_id not in index.by_id or layer_id in index.visible_ids
+
+
+def project_layer_opacity(
+    project: dict[str, Any], layer_id: str, context: RenderContext | None = None
+) -> float:
+    if context is not None:
+        return context.layer_opacity_by_id.get(layer_id, 1.0)
+    return project_layer_index(project).opacity_by_id.get(layer_id, 1.0)
 
 
 def should_render_object(
-    project: dict[str, Any], obj: dict[str, Any], for_export: bool
+    project: dict[str, Any],
+    obj: dict[str, Any],
+    for_export: bool,
+    context: RenderContext | None = None,
 ) -> bool:
     if not project_layer_visible(
-        project, obj.get("layer", normalize_layer_id(None, obj.get("type")))
+        project,
+        obj.get("layer", normalize_layer_id(None, obj.get("type"))),
+        context,
     ):
         return False
-    if obj.get("type") == "legend" and not project["settings"].get("showLegend", True):
+    show_legend = (
+        context.show_legend
+        if context is not None
+        else bool(project["settings"].get("showLegend", True))
+    )
+    if obj.get("type") == "legend" and not show_legend:
         return False
     if for_export and obj.get("type") == "text" and not obj.get("export", True):
         return False
-    if for_export and project["settings"].get("exportAudience") == "Player":
-        hidden_rooms = hidden_player_room_ids(project)
+    export_audience = (
+        context.export_audience
+        if context is not None
+        else str(project["settings"].get("exportAudience", "GM"))
+    )
+    if for_export and export_audience == "Player":
+        hidden_rooms = (
+            context.hidden_player_room_ids
+            if context is not None
+            else hidden_player_room_ids(project)
+        )
         if obj.get("type") == "text" and obj.get("textRole") == "note":
             return False
         if obj.get("type") in {"room", "round", "cave"} and not obj.get(
@@ -18348,7 +19322,10 @@ def vtt_wall_segments_for_object(
             (x * cell, (y + h) * cell),
         ]
     return [
-        (x1, y1, x2, y2) for (x1, y1), (x2, y2) in zip(points, points[1:] + points[:1])
+        (x1, y1, x2, y2)
+        for (x1, y1), (x2, y2) in zip(
+            points, points[1:] + points[:1], strict=True
+        )
     ]
 
 
@@ -19067,6 +20044,72 @@ def legend_entries(
     return entries
 
 
+def legend_auto_columns(
+    width: float, entries: list[tuple[str, str]], scale: float
+) -> int:
+    if not entries:
+        return 1
+    longest_label = max((len(label) for _kind, label in entries), default=8)
+    estimated_label_width = longest_label * 0.34 * scale + 1.65
+    min_column_width = max(3.4 * scale, min(7.2 * scale, estimated_label_width))
+    max_columns_by_width = max(1, int(width // min_column_width))
+    if width >= 40:
+        target_rows = 3
+    elif width >= 24:
+        target_rows = 4
+    else:
+        target_rows = 6
+    columns_for_entries = max(1, math.ceil(len(entries) / target_rows))
+    return max(1, min(max_columns_by_width, columns_for_entries))
+
+
+def legend_layout(project: dict[str, Any], legend: dict[str, Any]) -> LegendLayout:
+    entries = legend_entries(project, legend)
+    scale = max(0.5, coerce_float(legend.get("scale"), 1.0))
+    width = max(6.0, coerce_float(legend.get("width"), 8.0))
+    columns = legend_auto_columns(width, entries, scale)
+    rows = max(1, math.ceil(len(entries) / columns))
+    entry_width = max(3.0 * scale, (width - 1.3) / columns)
+    entry_height = max(0.75, 1.15 * scale)
+    title_height = max(1.6, 1.7 * scale)
+    bottom_padding = max(0.55, 0.65 * scale)
+    required_height = title_height + rows * entry_height + bottom_padding
+    height = max(coerce_float(legend.get("height"), 5.0), required_height)
+    return LegendLayout(
+        entries=entries,
+        columns=columns,
+        rows=rows,
+        width=width,
+        height=height,
+        entry_width=entry_width,
+        entry_height=entry_height,
+        scale=scale,
+    )
+
+
+def legend_bounds(
+    project: dict[str, Any], legend: dict[str, Any]
+) -> tuple[float, float, float, float]:
+    layout = legend_layout(project, legend)
+    return (
+        coerce_float(legend.get("x"), 0.0),
+        coerce_float(legend.get("y"), 0.0),
+        layout.width,
+        layout.height,
+    )
+
+
+def legend_entry_position(
+    layout: LegendLayout, legend_x: float, legend_y: float, cell: float, index: int
+) -> tuple[float, float]:
+    col = index % layout.columns
+    row = index // layout.columns
+    return (
+        legend_x + cell * 0.65 + col * layout.entry_width * cell,
+        legend_y + cell * 1.8 + row * layout.entry_height * cell,
+    )
+
+
 def safe_symbol_key(value: str) -> str:
     cleaned = safe_name(value).replace("-", "_")
     return f"custom_{cleaned}"
@@ -19094,14 +20137,16 @@ def load_custom_symbol_image(
     info = custom_symbol_variant_info(project, kind, variant)
     if not info:
         return None
-    path = Path(info.get("path", ""))
+    path_value = str(info.get("path") or "")
+    path = Path(path_value)
     source_type = str(info.get("sourceType", "png"))
-    if path.exists():
+    if path_value and path.exists():
         return cached_custom_symbol_image(
             str(path),
             source_type,
             int(size),
             round(float(rotation), 2),
+            path_cache_token(path),
         )
     embedded = str(info.get("embeddedData") or "")
     if embedded:
@@ -19114,9 +20159,26 @@ def load_custom_symbol_image(
     return None
 
 
+def custom_symbol_source_cache_token(
+    project: dict[str, Any], kind: str, variant: str = ""
+) -> Any:
+    info = custom_symbol_variant_info(project, kind, variant)
+    if not info:
+        return ""
+    path_value = str(info.get("path") or "")
+    path = Path(path_value)
+    source_type = str(info.get("sourceType", "png"))
+    if path_value and path.exists():
+        return ("path", source_type, path_cache_token(path))
+    embedded = str(info.get("embeddedData") or "")
+    if embedded:
+        return ("embedded", source_type, hashlib.sha1(embedded.encode("utf-8")).hexdigest())
+    return ""
+
+
 @lru_cache(maxsize=128)
 def cached_custom_symbol_image(
-    path_value: str, source_type: str, size: int, rotation: float
+    path_value: str, source_type: str, size: int, rotation: float, _source_token: Any
 ):
     path = Path(path_value)
     try:
@@ -19380,7 +20442,50 @@ def shape_polygon_points(
     )
 
 
+def floor_boundary_is_smooth(obj: dict[str, Any]) -> bool:
+    if obj.get("type") == "cave_corridor":
+        return parse_bool_text(obj.get("smoothBoundary", True))
+    return obj.get("type") in {"round", "cave"}
+
+
+def floor_boundary_linejoin(obj: dict[str, Any]) -> str:
+    if obj.get("type") == "cave_corridor" and not floor_boundary_is_smooth(obj):
+        return "miter"
+    return "round"
+
+
+def pillow_floor_boundary_line_options(obj: dict[str, Any]) -> dict[str, str]:
+    return {"joint": "curve"} if floor_boundary_linejoin(obj) == "round" else {}
+
+
+def floor_geometry_cache_key(obj: dict[str, Any], cell: float, *parts: Any) -> str:
+    return stable_cache_hash(
+        {
+            "cell": round(float(cell), 5),
+            "object": obj,
+            "parts": parts,
+        }
+    )
+
+
 def floor_polygon_points(obj: dict[str, Any], cell: float) -> list[tuple[float, float]]:
+    key = floor_geometry_cache_key(obj, cell, "polygon")
+    cached = cache_get(_FLOOR_POLYGON_POINTS_CACHE, key)
+    if cached is not None:
+        return list(cached)
+    points = compute_floor_polygon_points(obj, cell)
+    cache_put(
+        _FLOOR_POLYGON_POINTS_CACHE,
+        key,
+        tuple(points),
+        FLOOR_GEOMETRY_CACHE_LIMIT,
+    )
+    return points
+
+
+def compute_floor_polygon_points(
+    obj: dict[str, Any], cell: float
+) -> list[tuple[float, float]]:
     obj_type = obj.get("type")
     if obj_type == "diagonal_corridor":
         thickness = max(3, int(obj.get("width", 1) * cell))
@@ -19469,6 +20574,10 @@ def tuple_points_bounds(
 def expanded_floor_polygon_points(
     obj: dict[str, Any], cell: float, expand: float
 ) -> list[tuple[float, float]]:
+    key = floor_geometry_cache_key(obj, cell, "expanded", round(float(expand), 5))
+    cached = cache_get(_EXPANDED_FLOOR_POLYGON_POINTS_CACHE, key)
+    if cached is not None:
+        return list(cached)
     obj_type = obj.get("type")
     x, y = obj["x"] * cell, obj["y"] * cell
     width, height = obj["width"] * cell, obj["height"] * cell
@@ -19482,7 +20591,14 @@ def expanded_floor_polygon_points(
         points = rect_polygon_points(
             x - expand, y - expand, width + expand * 2, height + expand * 2
         )
-    return rotate_points_if_needed(points, center, rotation)
+    result = rotate_points_if_needed(points, center, rotation)
+    cache_put(
+        _EXPANDED_FLOOR_POLYGON_POINTS_CACHE,
+        key,
+        tuple(result),
+        FLOOR_GEOMETRY_CACHE_LIMIT,
+    )
+    return result
 
 
 def flatten_points(points: list[tuple[float, float]]) -> list[float]:
@@ -19577,17 +20693,38 @@ def is_polygon_boundary_grid_segment(
 def floor_grid_segments(
     obj: dict[str, Any], cell: float, include_boundary: bool = True
 ) -> list[tuple[float, float, float, float]]:
+    key = floor_geometry_cache_key(
+        obj, cell, "grid", "boundary" if include_boundary else "inner"
+    )
+    cached = cache_get(_FLOOR_GRID_SEGMENTS_CACHE, key)
+    if cached is not None:
+        return list(cached)
     if obj.get("type") in {"room", "corridor"} and not has_floor_rotation(obj):
-        return rectlike_local_grid_segments(obj, cell, include_boundary)
+        segments = rectlike_local_grid_segments(obj, cell, include_boundary)
+        cache_put(
+            _FLOOR_GRID_SEGMENTS_CACHE,
+            key,
+            tuple(segments),
+            FLOOR_GEOMETRY_CACHE_LIMIT,
+        )
+        return segments
     polygon = floor_polygon_points(obj, cell)
     segments = orthogonal_grid_segments(polygon, cell)
     if include_boundary:
-        return segments
-    return [
+        result = segments
+    else:
+        result = [
         segment
         for segment in segments
         if not is_polygon_boundary_grid_segment(segment, polygon)
-    ]
+        ]
+    cache_put(
+        _FLOOR_GRID_SEGMENTS_CACHE,
+        key,
+        tuple(result),
+        FLOOR_GEOMETRY_CACHE_LIMIT,
+    )
+    return result
 
 
 def rectlike_local_grid_segments(
@@ -20105,14 +21242,18 @@ def union_bounds(objects: Any) -> tuple[float, float, float, float] | None:
 
 
 def object_alignment_guides(
-    objects: list[dict[str, Any]], exclude_ids: set[str]
+    objects: list[dict[str, Any]],
+    exclude_ids: set[str],
+    bounds_by_id: dict[str, tuple[float, float, float, float]] | None = None,
 ) -> tuple[list[float], list[float]]:
     guides_x: list[float] = []
     guides_y: list[float] = []
     for obj in objects:
-        if obj["id"] in exclude_ids:
+        obj_id = str(obj.get("id") or "")
+        if obj_id in exclude_ids:
             continue
-        x, y, w, h = bounds(obj)
+        box = bounds_by_id.get(obj_id) if bounds_by_id is not None else None
+        x, y, w, h = box if box is not None else bounds(obj)
         guides_x.extend([x, x + w / 2, x + w])
         guides_y.extend([y, y + h / 2, y + h])
     return guides_x, guides_y
@@ -20136,9 +21277,18 @@ def snap_delta_axis(
 
 
 def snap_point_to_object_guides(
-    x: float, y: float, objects: list[dict[str, Any]], exclude_ids: set[str]
+    x: float,
+    y: float,
+    objects: list[dict[str, Any]],
+    exclude_ids: set[str],
+    guides: tuple[list[float], list[float]] | None = None,
+    bounds_by_id: dict[str, tuple[float, float, float, float]] | None = None,
 ) -> tuple[float, float, list[tuple[str, float]]]:
-    guides_x, guides_y = object_alignment_guides(objects, exclude_ids)
+    guides_x, guides_y = (
+        guides
+        if guides is not None
+        else object_alignment_guides(objects, exclude_ids, bounds_by_id=bounds_by_id)
+    )
     active_guides: list[tuple[str, float]] = []
     for guide in guides_x:
         if abs(x - guide) <= OBJECT_SNAP_TOLERANCE:
@@ -20624,8 +21774,9 @@ def svg_for_floor_outline(
         ]
     if obj_type in {"cave", "cave_corridor"}:
         points = floor_polygon_points(obj, cell)
+        linejoin = floor_boundary_linejoin(obj)
         return [
-            f'<polyline points="{svg_points(points + [points[0]])}" fill="none" stroke="{ink}" stroke-width="{max(1, wall * 2)}" stroke-linejoin="round"/>'
+            f'<polyline points="{svg_points(points + [points[0]])}" fill="none" stroke="{ink}" stroke-width="{max(1, wall * 2)}" stroke-linejoin="{linejoin}"/>'
         ]
     return [
         f'<rect x="{x - wall:.2f}" y="{y - wall:.2f}" width="{width + wall * 2:.2f}" height="{height + wall * 2:.2f}" fill="{ink}"/>'
@@ -20646,7 +21797,7 @@ def svg_for_floor_fill(
             f'<polygon points="{svg_points(floor_polygon_points(obj, cell))}" fill="{floor}"{stroke}/>'
         ]
     if has_floor_rotation(obj):
-        smooth = ' stroke-linejoin="round"' if obj_type in {"round", "cave", "cave_corridor"} else ""
+        smooth = ' stroke-linejoin="round"' if floor_boundary_is_smooth(obj) else ""
         return [
             f'<polygon points="{svg_points(floor_polygon_points(obj, cell))}" fill="{floor}"{stroke}{smooth}/>'
         ]
@@ -20657,8 +21808,13 @@ def svg_for_floor_fill(
             f'<ellipse cx="{x + width / 2:.2f}" cy="{y + height / 2:.2f}" rx="{width / 2:.2f}" ry="{height / 2:.2f}" fill="{floor}"{stroke}/>'
         ]
     if obj_type in {"cave", "cave_corridor"}:
+        linejoin = (
+            ' stroke-linejoin="round"'
+            if stroke and floor_boundary_is_smooth(obj)
+            else ""
+        )
         return [
-            f'<polygon points="{svg_points(floor_polygon_points(obj, cell))}" fill="{floor}"{stroke}/>'
+            f'<polygon points="{svg_points(floor_polygon_points(obj, cell))}" fill="{floor}"{stroke}{linejoin}/>'
         ]
     return [
         f'<rect x="{x:.2f}" y="{y:.2f}" width="{width:.2f}" height="{height:.2f}" fill="{floor}"{stroke}/>'
@@ -20679,8 +21835,9 @@ def svg_for_floor_boundary_mask(
         ]
     if has_floor_rotation(obj):
         points = floor_polygon_points(obj, cell)
+        linejoin = floor_boundary_linejoin(obj)
         return [
-            f'<polyline points="{svg_points(points + [points[0]])}" fill="none" stroke="{floor}" stroke-width="{width}" stroke-linejoin="round"/>'
+            f'<polyline points="{svg_points(points + [points[0]])}" fill="none" stroke="{floor}" stroke-width="{width}" stroke-linejoin="{linejoin}"/>'
         ]
     x, y = obj["x"] * cell, obj["y"] * cell
     rect_width, rect_height = obj["width"] * cell, obj["height"] * cell
@@ -20690,8 +21847,9 @@ def svg_for_floor_boundary_mask(
         ]
     if obj_type in {"cave", "cave_corridor"}:
         points = floor_polygon_points(obj, cell)
+        linejoin = floor_boundary_linejoin(obj)
         return [
-            f'<polyline points="{svg_points(points + [points[0]])}" fill="none" stroke="{floor}" stroke-width="{width}" stroke-linejoin="round"/>'
+            f'<polyline points="{svg_points(points + [points[0]])}" fill="none" stroke="{floor}" stroke-width="{width}" stroke-linejoin="{linejoin}"/>'
         ]
     return [
         f'<rect x="{x:.2f}" y="{y:.2f}" width="{rect_width:.2f}" height="{rect_height:.2f}" fill="none" stroke="{floor}" stroke-width="{width}"/>'
@@ -20842,26 +22000,17 @@ def svg_for_legend_object(
 ) -> list[str]:
     settings = project["settings"]
     cell = settings["cellSize"] * scale
+    layout = legend_layout(project, obj)
     x, y = obj["x"] * cell, obj["y"] * cell
-    width, height = obj["width"] * cell, obj["height"] * cell
+    width, height = layout.width * cell, layout.height * cell
     ink = settings.get("legendColor", settings["gridColor"])
     floor = settings["floorColor"]
-    legend_scale = float(obj.get("scale", 1.0))
     parts = [
         f'<rect x="{x:.2f}" y="{y:.2f}" width="{width:.2f}" height="{height:.2f}" fill="{floor}" stroke="{ink}" stroke-width="{max(1, scale * 2)}"/>',
-        f'<text x="{x + cell * 0.65:.2f}" y="{y + cell * 0.8:.2f}" fill="{ink}" font-size="{max(12, int(cell * legend_scale * 1.1))}" font-family="Arial" font-weight="bold" dominant-baseline="middle">LEGEND</text>',
+        f'<text x="{x + cell * 0.65:.2f}" y="{y + cell * 0.8:.2f}" fill="{ink}" font-size="{max(12, int(cell * layout.scale * 1.1))}" font-family="Arial" font-weight="bold" dominant-baseline="middle">LEGEND</text>',
     ]
-    entries = legend_entries(project, obj)
-    columns = max(1, int(obj.get("columns", 4)))
-    entry_w = max(cell * 4, (width - cell) / columns)
-    entry_h = cell * 1.15 * legend_scale
-    for index, (kind, label) in enumerate(entries):
-        col = index % columns
-        row = index // columns
-        ex = x + cell * 0.65 + col * entry_w
-        ey = y + cell * 1.8 + row * entry_h
-        if ey > y + height - cell * 0.4:
-            break
+    for index, (kind, label) in enumerate(layout.entries):
+        ex, ey = legend_entry_position(layout, x, y, cell, index)
         if kind == "cell":
             parts.append(
                 f'<rect x="{ex:.2f}" y="{ey - cell * 0.35:.2f}" width="{cell * 0.7:.2f}" height="{cell * 0.7:.2f}" fill="{floor}" stroke="{ink}" stroke-width="{max(1, scale)}"/>'
@@ -20914,7 +22063,7 @@ def svg_for_legend_object(
                 )
             )
         parts.append(
-            f'<text x="{ex + cell * 1.1:.2f}" y="{ey:.2f}" fill="{ink}" font-size="{max(7, int(cell * 0.55 * legend_scale))}" font-family="Arial" font-weight="bold" dominant-baseline="middle">{escape_xml(label)}</text>'
+            f'<text x="{ex + cell * 1.1:.2f}" y="{ey:.2f}" fill="{ink}" font-size="{max(7, int(cell * 0.55 * layout.scale))}" font-family="Arial" font-weight="bold" dominant-baseline="middle">{escape_xml(label)}</text>'
         )
     return parts
 
@@ -21721,23 +22870,156 @@ def svg_points(points: list[tuple[float, float]]) -> str:
     return " ".join(f"{x:.2f},{y:.2f}" for x, y in points)
 
 
+_CANVAS_SIZE_CACHE: OrderedDict[str, tuple[float, float]] = OrderedDict()
+_FLOOR_POLYGON_POINTS_CACHE: OrderedDict[str, tuple[tuple[float, float], ...]] = (
+    OrderedDict()
+)
+_FLOOR_GRID_SEGMENTS_CACHE: OrderedDict[
+    str, tuple[tuple[float, float, float, float], ...]
+] = OrderedDict()
+_EXPANDED_FLOOR_POLYGON_POINTS_CACHE: OrderedDict[
+    str, tuple[tuple[float, float], ...]
+] = OrderedDict()
+_UNDERLAY_SOURCE_IMAGE_CACHE: OrderedDict[str, Any] = OrderedDict()
+_UNDERLAY_TRANSFORM_IMAGE_CACHE: OrderedDict[str, Any] = OrderedDict()
+_TK_UNDERLAY_PHOTO_CACHE: OrderedDict[str, Any] = OrderedDict()
+_STYLED_CUSTOM_SYMBOL_IMAGE_CACHE: OrderedDict[str, Any] = OrderedDict()
+_TK_SYMBOL_PHOTO_CACHE: OrderedDict[str, Any] = OrderedDict()
+
+
+def stable_cache_hash(value: Any) -> str:
+    return hashlib.sha1(
+        json.dumps(value, sort_keys=True, default=str).encode("utf-8")
+    ).hexdigest()
+
+
+def cache_get(cache: OrderedDict[str, Any], key: str):
+    if key not in cache:
+        return None
+    value = cache.pop(key)
+    cache[key] = value
+    return value
+
+
+def cache_put(cache: OrderedDict[str, Any], key: str, value: Any, limit: int) -> Any:
+    if key in cache:
+        cache.pop(key)
+    elif len(cache) >= limit:
+        cache.popitem(last=False)
+    cache[key] = value
+    return value
+
+
+def path_cache_token(path: Path) -> tuple[str, int, int] | tuple[str, str]:
+    try:
+        stat = path.stat()
+        return str(path.resolve()), int(stat.st_mtime_ns), int(stat.st_size)
+    except OSError:
+        return str(path), "missing"
+
+
+def image_copy_or_none(image):
+    return image.copy() if image is not None and hasattr(image, "copy") else image
+
+
+def performance_cache_stats() -> dict[str, int]:
+    return {
+        "canvas_size": len(_CANVAS_SIZE_CACHE),
+        "floor_polygons": len(_FLOOR_POLYGON_POINTS_CACHE),
+        "floor_grid_segments": len(_FLOOR_GRID_SEGMENTS_CACHE),
+        "floor_expanded_polygons": len(_EXPANDED_FLOOR_POLYGON_POINTS_CACHE),
+        "underlay_sources": len(_UNDERLAY_SOURCE_IMAGE_CACHE),
+        "underlay_transforms": len(_UNDERLAY_TRANSFORM_IMAGE_CACHE),
+        "tk_underlay_photos": len(_TK_UNDERLAY_PHOTO_CACHE),
+        "styled_custom_symbols": len(_STYLED_CUSTOM_SYMBOL_IMAGE_CACHE),
+        "tk_symbol_photos": len(_TK_SYMBOL_PHOTO_CACHE),
+        "layer_indices": len(_LAYER_INDEX_CACHE),
+    }
+
+
+def clear_performance_caches() -> None:
+    for cache in (
+        _CANVAS_SIZE_CACHE,
+        _FLOOR_POLYGON_POINTS_CACHE,
+        _FLOOR_GRID_SEGMENTS_CACHE,
+        _EXPANDED_FLOOR_POLYGON_POINTS_CACHE,
+        _UNDERLAY_SOURCE_IMAGE_CACHE,
+        _UNDERLAY_TRANSFORM_IMAGE_CACHE,
+        _TK_UNDERLAY_PHOTO_CACHE,
+        _STYLED_CUSTOM_SYMBOL_IMAGE_CACHE,
+        _TK_SYMBOL_PHOTO_CACHE,
+        _LAYER_INDEX_CACHE,
+    ):
+        cache.clear()
+    cached_custom_symbol_image.cache_clear()
+    cached_embedded_custom_symbol_image.cache_clear()
+
+
+def canvas_size_cache_key(
+    project: dict[str, Any], scale: float, include_legend: bool
+) -> str:
+    settings = project["settings"]
+    context = render_context(project)
+    visible_objects = []
+    for obj in project.get("objects", []):
+        if obj.get("type") == "legend" and not include_legend:
+            continue
+        if should_render_object(project, obj, for_export=False, context=context):
+            visible_objects.append(obj)
+    payload = {
+        "scale": round(float(scale), 5),
+        "includeLegend": include_legend,
+        "settings": {
+            key: settings.get(key)
+            for key in (
+                "width",
+                "height",
+                "cellSize",
+                "showLegend",
+                "cellScale",
+                "cellScaleUnit",
+            )
+        },
+        "layers": [
+            {
+                "id": layer.get("id"),
+                "visible": layer.get("visible", True),
+            }
+            for layer in project.get("layers", [])
+        ],
+        "customSymbols": project.get("customSymbols", {}),
+        "legendCategories": project.get("legendCategories", {}),
+        "objects": visible_objects,
+    }
+    return stable_cache_hash(payload)
+
+
 def canvas_size(
     project: dict[str, Any], scale: float = 1.0, include_legend: bool | None = None
 ) -> tuple[float, float]:
     settings = project["settings"]
     if include_legend is None:
         include_legend = settings.get("showLegend", True)
+    key = canvas_size_cache_key(project, scale, bool(include_legend))
+    cached = cache_get(_CANVAS_SIZE_CACHE, key)
+    if cached is not None:
+        return cached
     max_x = float(settings["width"])
     max_y = float(settings["height"])
+    context = render_context(project)
     for obj in project.get("objects", []):
         if obj.get("type") == "legend" and not include_legend:
             continue
-        if not should_render_object(project, obj, for_export=False):
+        if not should_render_object(project, obj, for_export=False, context=context):
             continue
-        x, y, w, h = bounds(obj)
+        x, y, w, h = (
+            legend_bounds(project, obj) if obj.get("type") == "legend" else bounds(obj)
+        )
         max_x = max(max_x, x + w + 1)
         max_y = max(max_y, y + h + 1)
-    return max_x * settings["cellSize"] * scale, max_y * settings["cellSize"] * scale
+    result = max_x * settings["cellSize"] * scale, max_y * settings["cellSize"] * scale
+    cache_put(_CANVAS_SIZE_CACHE, key, result, CANVAS_SIZE_CACHE_LIMIT)
+    return result
 
 
 def bounds(obj: dict[str, Any]) -> tuple[float, float, float, float]:
@@ -21767,6 +23049,8 @@ def bounds(obj: dict[str, Any]) -> tuple[float, float, float, float]:
             abs(x2 - x1) + thickness,
             abs(y2 - y1) + thickness,
         )
+    if obj["type"] == "legend":
+        return obj["x"], obj["y"], obj["width"], obj["height"]
     if obj["type"] in RECTLIKE_TYPES and has_floor_rotation(obj):
         return tuple_points_bounds(floor_polygon_points(obj, 1.0))
     if obj["type"] == "shape":
@@ -21805,13 +23089,46 @@ def spatial_index_cell(value: float, bucket_size: float) -> int:
     return int(math.floor(value / max(0.01, bucket_size)))
 
 
+def build_object_index(objects: list[dict[str, Any]]) -> ObjectIndex:
+    object_by_id: dict[str, dict[str, Any]] = {}
+    bounds_by_id: dict[str, tuple[float, float, float, float]] = {}
+    objects_by_layer: dict[str, list[dict[str, Any]]] = {}
+    objects_by_group: dict[str, list[dict[str, Any]]] = {}
+    order_by_id: dict[str, int] = {}
+    for order, obj in enumerate(objects, start=1):
+        obj_id = str(obj.get("id") or "")
+        if obj_id:
+            object_by_id[obj_id] = obj
+            order_by_id[obj_id] = order
+            try:
+                bounds_by_id[obj_id] = bounds(obj)
+            except Exception:
+                pass
+        layer_id = str(obj.get("layer") or normalize_layer_id(None, obj.get("type")))
+        objects_by_layer.setdefault(layer_id, []).append(obj)
+        group = obj.get("group")
+        if group:
+            objects_by_group.setdefault(str(group), []).append(obj)
+    return ObjectIndex(
+        object_by_id=object_by_id,
+        bounds_by_id=bounds_by_id,
+        objects_by_layer=objects_by_layer,
+        objects_by_group=objects_by_group,
+        order_by_id=order_by_id,
+    )
+
+
 def build_spatial_index(
-    objects: list[dict[str, Any]], bucket_size: float = 8.0
+    objects: list[dict[str, Any]],
+    bucket_size: float = 8.0,
+    bounds_by_id: dict[str, tuple[float, float, float, float]] | None = None,
 ) -> dict[tuple[int, int], list[dict[str, Any]]]:
     index: dict[tuple[int, int], list[dict[str, Any]]] = {}
     for obj in objects:
         try:
-            left, top, width, height = bounds(obj)
+            obj_id = str(obj.get("id") or "")
+            cached = bounds_by_id.get(obj_id) if bounds_by_id is not None else None
+            left, top, width, height = cached if cached is not None else bounds(obj)
         except Exception:
             continue
         x1 = spatial_index_cell(left, bucket_size)
@@ -21841,6 +23158,7 @@ def topmost_hit_object(
     tolerance: float = 0.35,
     index: dict[tuple[int, int], list[dict[str, Any]]] | None = None,
     bucket_size: float = 8.0,
+    bounds_by_id: dict[str, tuple[float, float, float, float]] | None = None,
     is_visible=None,
     is_locked=None,
 ) -> dict[str, Any] | None:
@@ -21866,7 +23184,9 @@ def topmost_hit_object(
             continue
         if is_locked is not None and is_locked(obj):
             continue
-        bx, by, bw, bh = bounds(obj)
+        obj_id = str(obj.get("id") or "")
+        cached = bounds_by_id.get(obj_id) if bounds_by_id is not None else None
+        bx, by, bw, bh = cached if cached is not None else bounds(obj)
         if (
             bx - tolerance <= x <= bx + bw + tolerance
             and by - tolerance <= y <= by + bh + tolerance
@@ -21906,6 +23226,141 @@ def project_static_cache_signature(
     return hashlib.sha1(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()
 
 
+def tk_static_canvas_signature(
+    project: dict[str, Any], zoom: float, context: RenderContext | None = None
+) -> str:
+    settings = project.get("settings", {})
+    underlay_state = [
+        {
+            "id": underlay.get("id"),
+            "path": underlay.get("path"),
+            "embeddedData": bool(underlay.get("embeddedData")),
+            "x": underlay.get("x"),
+            "y": underlay.get("y"),
+            "width": underlay.get("width"),
+            "height": underlay.get("height"),
+            "rotation": underlay.get("rotation"),
+            "opacity": underlay.get("opacity"),
+            "visible": underlay.get("visible", True),
+        }
+        for underlay in project.get("underlays", [])
+    ]
+    payload = {
+        "zoom": round(float(zoom), 4),
+        "canvasSize": canvas_size(project, zoom),
+        "backgroundVisible": project_layer_visible(
+            project, "background", context or render_context(project)
+        ),
+        "settings": {
+            key: settings.get(key)
+            for key in (
+                "width",
+                "height",
+                "cellSize",
+                "backgroundColor",
+                "gridColor",
+                "showMainGrid",
+                "showSubGrid",
+                "snapStep",
+                "showCoordinates",
+                "mapMode",
+                "hexOrientation",
+                "showHexCoordinates",
+                "hexCoordinateStyle",
+                "underlayVisible",
+                "underlayOpacity",
+            )
+        },
+        "underlays": underlay_state,
+    }
+    return hashlib.sha1(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()
+
+
+def tk_static_layer_signature(
+    project: dict[str, Any],
+    layer_id: str,
+    zoom: float,
+    context: RenderContext | None = None,
+) -> str:
+    settings = project.get("settings", {})
+    layer_objects = [
+        obj
+        for obj in project.get("objects", [])
+        if obj.get("layer", normalize_layer_id(None, obj.get("type"))) == layer_id
+        and should_render_object(project, obj, for_export=False, context=context)
+    ]
+    payload = {
+        "layer": layer_id,
+        "zoom": round(float(zoom), 4),
+        "objects": layer_objects,
+        "layerOpacity": project_layer_opacity(project, layer_id, context),
+        "settings": {
+            key: settings.get(key)
+            for key in (
+                "cellSize",
+                "floorColor",
+                "gridColor",
+                "textColor",
+                "legendColor",
+                "floorOutlineColor",
+                "showFloorOutlines",
+                "showRoomStatus",
+                "roomStatusGmOnly",
+                "styleTemplate",
+                "mapMode",
+                "hexOrientation",
+            )
+        },
+    }
+    return hashlib.sha1(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()
+
+
+def draw_tk_static_canvas_background(
+    canvas: tk.Canvas,
+    project: dict[str, Any],
+    zoom: float,
+    context: RenderContext | None = None,
+) -> None:
+    settings = project["settings"]
+    width, height = canvas_size(project, zoom)
+    if project_layer_visible(project, "background", context):
+        canvas.create_rectangle(
+            0, 0, width, height, fill=settings["backgroundColor"], outline=""
+        )
+        draw_tk_grid(canvas, settings, zoom)
+        draw_tk_underlays(canvas, project, zoom)
+    else:
+        canvas.create_rectangle(0, 0, width, height, fill="#f9fcfd", outline="")
+    draw_tk_workspace_bounds(canvas, settings, zoom)
+
+
+def draw_tk_static_layer(
+    canvas: tk.Canvas,
+    project: dict[str, Any],
+    layer_id: str,
+    zoom: float,
+    context: RenderContext | None = None,
+) -> None:
+    layer_project = {**project}
+    layer_project["objects"] = [
+        obj
+        for obj in project.get("objects", [])
+        if obj.get("layer", normalize_layer_id(None, obj.get("type"))) == layer_id
+    ]
+    render_tk(
+        canvas,
+        layer_project,
+        zoom,
+        set(),
+        None,
+        None,
+        None,
+        preview_for_export=False,
+        context=context or render_context(project),
+        draw_static_background=False,
+    )
+
+
 def render_tk(
     canvas: tk.Canvas,
     project: dict[str, Any],
@@ -21916,22 +23371,23 @@ def render_tk(
     selection_box: tuple[float, float, float, float] | None,
     viewport: tuple[float, float, float, float] | None = None,
     preview_for_export: bool = False,
+    context: RenderContext | None = None,
+    draw_static_background: bool = True,
+    skip_layer_ids: set[str] | None = None,
 ) -> None:
     settings = project["settings"]
-    width, height = canvas_size(project, zoom)
-    if project_layer_visible(project, "background"):
-        canvas.create_rectangle(
-            0, 0, width, height, fill=settings["backgroundColor"], outline=""
-        )
-        draw_tk_grid(canvas, settings, zoom)
-        draw_tk_underlays(canvas, project, zoom)
-    else:
-        canvas.create_rectangle(0, 0, width, height, fill="#f9fcfd", outline="")
-    draw_tk_workspace_bounds(canvas, settings, zoom)
-    canvas._image_refs = []
+    context = context or render_context(project)
+    if draw_static_background:
+        canvas._image_refs = []
+        draw_tk_static_canvas_background(canvas, project, zoom, context)
+    skip_layer_ids = skip_layer_ids or set()
     renderable_objects = []
     for obj in project["objects"]:
-        if not should_render_object(project, obj, for_export=preview_for_export):
+        if obj.get("layer", normalize_layer_id(None, obj.get("type"))) in skip_layer_ids:
+            continue
+        if not should_render_object(
+            project, obj, for_export=preview_for_export, context=context
+        ):
             continue
         if (
             viewport
@@ -22036,7 +23492,9 @@ def render_tk(
         obj
         for obj in project["objects"]
         if obj["id"] in selected_ids
-        and should_render_object(project, obj, for_export=preview_for_export)
+        and should_render_object(
+            project, obj, for_export=preview_for_export, context=context
+        )
     ]
     for obj in selected_objects:
         draw_tk_selection(
@@ -22178,18 +23636,106 @@ def draw_tk_hex_grid(canvas: tk.Canvas, settings: dict[str, Any], zoom: float) -
         draw_tk_coordinates(canvas, settings, zoom)
 
 
+def underlay_source_cache_key(underlay: dict[str, Any]) -> str:
+    if underlay.get("embeddedData"):
+        return "embedded:" + hashlib.sha1(
+            str(underlay.get("embeddedData") or "").encode("utf-8")
+        ).hexdigest()
+    path = Path(str(underlay.get("path") or ""))
+    return "path:" + stable_cache_hash(path_cache_token(path))
+
+
+def transformed_underlay_cache_key(
+    underlay: dict[str, Any], width: int, height: int, opacity: float
+) -> str:
+    return stable_cache_hash(
+        {
+            "source": underlay_source_cache_key(underlay),
+            "width": int(width),
+            "height": int(height),
+            "rotation": round(float(underlay.get("rotation", 0) or 0), 3),
+            "opacity": round(float(opacity), 4),
+        }
+    )
+
+
 def load_underlay_image(underlay: dict[str, Any]):
     if Image is None:
         return None
+    key = underlay_source_cache_key(underlay)
+    cached = cache_get(_UNDERLAY_SOURCE_IMAGE_CACHE, key)
+    if cached is not None:
+        return image_copy_or_none(cached)
     try:
         if underlay.get("embeddedData"):
-            return Image.open(io.BytesIO(base64.b64decode(underlay["embeddedData"]))).convert("RGBA")
+            image = Image.open(
+                io.BytesIO(base64.b64decode(underlay["embeddedData"]))
+            ).convert("RGBA")
+            cache_put(
+                _UNDERLAY_SOURCE_IMAGE_CACHE,
+                key,
+                image.copy(),
+                UNDERLAY_IMAGE_CACHE_LIMIT,
+            )
+            return image
         path = str(underlay.get("path") or "")
         if path and Path(path).exists():
-            return Image.open(path).convert("RGBA")
+            image = Image.open(path).convert("RGBA")
+            cache_put(
+                _UNDERLAY_SOURCE_IMAGE_CACHE,
+                key,
+                image.copy(),
+                UNDERLAY_IMAGE_CACHE_LIMIT,
+            )
+            return image
     except Exception:
         return None
     return None
+
+
+def transformed_underlay_image(
+    underlay: dict[str, Any], width: int, height: int, opacity: float
+):
+    if Image is None:
+        return None
+    key = transformed_underlay_cache_key(underlay, width, height, opacity)
+    cached = cache_get(_UNDERLAY_TRANSFORM_IMAGE_CACHE, key)
+    if cached is not None:
+        return image_copy_or_none(cached)
+    image = load_underlay_image(underlay)
+    if image is None:
+        return None
+    image = image.resize((max(1, int(width)), max(1, int(height))))
+    if underlay.get("rotation"):
+        image = image.rotate(
+            -float(underlay.get("rotation", 0)),
+            resample=Image.Resampling.BICUBIC,
+            expand=True,
+        )
+    image = image_with_opacity(image, opacity)
+    cache_put(
+        _UNDERLAY_TRANSFORM_IMAGE_CACHE,
+        key,
+        image.copy(),
+        UNDERLAY_IMAGE_CACHE_LIMIT,
+    )
+    return image
+
+
+def tk_underlay_photo_image(
+    underlay: dict[str, Any], width: int, height: int, opacity: float
+):
+    if ImageTk is None:
+        return None
+    key = "tk:" + transformed_underlay_cache_key(underlay, width, height, opacity)
+    cached = cache_get(_TK_UNDERLAY_PHOTO_CACHE, key)
+    if cached is not None:
+        return cached
+    image = transformed_underlay_image(underlay, width, height, opacity)
+    if image is None:
+        return None
+    photo = ImageTk.PhotoImage(image)
+    return cache_put(_TK_UNDERLAY_PHOTO_CACHE, key, photo, UNDERLAY_IMAGE_CACHE_LIMIT)
 
 
 def draw_tk_underlays(canvas: tk.Canvas, project: dict[str, Any], zoom: float) -> None:
@@ -22204,8 +23750,13 @@ def draw_tk_underlays(canvas: tk.Canvas, project: dict[str, Any], zoom: float) -
         y = underlay["y"] * c
         w = max(1, int(underlay["width"] * c))
         h = max(1, int(underlay["height"] * c))
-        image = load_underlay_image(underlay)
-        if image is None or Image is None:
+        photo = tk_underlay_photo_image(
+            underlay,
+            w,
+            h,
+            underlay.get("opacity", settings.get("underlayOpacity", 0.45)),
+        )
+        if photo is None:
             canvas.create_rectangle(
                 x, y, x + w, y + h, outline=settings["gridColor"], dash=(5, 4)
             )
@@ -22215,15 +23766,6 @@ def draw_tk_underlays(canvas: tk.Canvas, project: dict[str, Any], zoom: float) -
                 text=underlay.get("name", "Underlay"),
                 fill=settings["gridColor"],
             )
-            continue
-        image = image.resize((w, h))
-        if underlay.get("rotation"):
-            image = image.rotate(-float(underlay.get("rotation", 0)), expand=True)
-        image = image_with_opacity(
-            image, underlay.get("opacity", settings.get("underlayOpacity", 0.45))
-        )
-        photo = ImageTk.PhotoImage(image) if ImageTk is not None else None
-        if photo is None:
             continue
         canvas.create_image(x, y, image=photo, anchor="nw")
         refs = getattr(canvas, "_image_refs", [])
@@ -22962,7 +24504,83 @@ def draw_tk_rotation_indicator(
         fill=ink,
         width=max(1, int(cell * 0.08)),
         arrow="last",
+        )
+
+
+def tk_builtin_symbol_photo_image(
+    project: dict[str, Any],
+    obj: dict[str, Any],
+    cell: float,
+    settings: dict[str, Any],
+):
+    if Image is None or ImageDraw is None or ImageTk is None:
+        return None
+    kind = effective_symbol_kind(project, obj)
+    rotation = float(obj.get("rotation", 0)) % 360
+    size_px = max(8, int(obj.get("size", 1) * cell))
+    side = max(16, int(size_px * 2.7))
+    scale = max(1, int(cell / settings["cellSize"]))
+    key = stable_cache_hash(
+        {
+            "type": "builtin",
+            "kind": kind,
+            "size": size_px,
+            "side": side,
+            "scale": scale,
+            "rotation": round(rotation, 2),
+            "shadow": bool(obj.get("shadow")),
+            "outline": bool(obj.get("outline")),
+            "ink": symbol_ink(settings, obj),
+            "outlineColor": symbol_outline_color(settings, obj),
+            "shadowColor": symbol_shadow_color(settings, obj),
+            "floorColor": settings["floorColor"],
+            "opacity": round(symbol_opacity(obj), 4),
+        }
     )
+    cached = cache_get(_TK_SYMBOL_PHOTO_CACHE, key)
+    if cached is not None:
+        return cached
+    image = Image.new("RGBA", (side, side), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(image)
+    center = side / 2
+    if obj.get("shadow"):
+        offset = max(1, int(size_px * 0.08))
+        draw_pillow_symbol(
+            draw,
+            kind,
+            center + offset,
+            center + offset,
+            size_px,
+            symbol_shadow_color(settings, obj),
+            settings["floorColor"],
+            scale,
+        )
+    if obj.get("outline"):
+        draw_pillow_symbol(
+            draw,
+            kind,
+            center,
+            center,
+            size_px * 1.12,
+            symbol_outline_color(settings, obj),
+            settings["floorColor"],
+            scale,
+        )
+    draw_pillow_symbol(
+        draw,
+        kind,
+        center,
+        center,
+        size_px,
+        symbol_ink(settings, obj),
+        settings["floorColor"],
+        scale,
+    )
+    if abs(rotation) >= 0.01:
+        image = image.rotate(-rotation, resample=Image.Resampling.BICUBIC, expand=True)
+    image = image_with_opacity(image, symbol_opacity(obj))
+    photo = ImageTk.PhotoImage(image)
+    return cache_put(_TK_SYMBOL_PHOTO_CACHE, key, photo, TK_SYMBOL_IMAGE_CACHE_LIMIT)
 
 
 def draw_tk_text(
@@ -23009,6 +24627,19 @@ def draw_tk_text(
 def styled_custom_symbol_image(image, obj: dict[str, Any], settings: dict[str, Any]):
     if Image is None or ImageDraw is None:
         return image
+    key = stable_cache_hash(
+        {
+            "image": (id(image), image.size, image.mode),
+            "shadow": bool(obj.get("shadow")),
+            "outline": bool(obj.get("outline")),
+            "outlineColor": symbol_outline_color(settings, obj),
+            "opacity": round(symbol_opacity(obj), 4),
+            "floorColor": settings.get("floorColor", WHITE),
+        }
+    )
+    cached = cache_get(_STYLED_CUSTOM_SYMBOL_IMAGE_CACHE, key)
+    if cached is not None:
+        return image_copy_or_none(cached)
     padding = max(2, int(max(image.width, image.height) * 0.14))
     side_w = image.width + padding * 2
     side_h = image.height + padding * 2
@@ -23027,7 +24658,54 @@ def styled_custom_symbol_image(image, obj: dict[str, Any], settings: dict[str, A
             width=max(1, int(max(image.width, image.height) * 0.05)),
         )
     result.alpha_composite(image_with_opacity(image, symbol_opacity(obj)), (left, top))
+    cache_put(
+        _STYLED_CUSTOM_SYMBOL_IMAGE_CACHE,
+        key,
+        result.copy(),
+        TK_SYMBOL_IMAGE_CACHE_LIMIT,
+    )
     return result
+
+
+def tk_custom_symbol_photo_image(
+    project: dict[str, Any],
+    obj: dict[str, Any],
+    cell: float,
+    settings: dict[str, Any],
+):
+    if ImageTk is None:
+        return None
+    size_px = max(8, int(obj.get("size", 1) * cell))
+    variant = str(obj.get("variant", ""))
+    key = stable_cache_hash(
+        {
+            "type": "custom",
+            "source": custom_symbol_source_cache_token(project, obj["kind"], variant),
+            "kind": obj["kind"],
+            "size": size_px,
+            "rotation": round(float(obj.get("rotation", 0)), 2),
+            "variant": variant,
+            "shadow": bool(obj.get("shadow")),
+            "outline": bool(obj.get("outline")),
+            "outlineColor": symbol_outline_color(settings, obj),
+            "opacity": round(symbol_opacity(obj), 4),
+            "floorColor": settings.get("floorColor", WHITE),
+        }
+    )
+    cached = cache_get(_TK_SYMBOL_PHOTO_CACHE, key)
+    if cached is not None:
+        return cached
+    image = load_custom_symbol_image(
+        project,
+        obj["kind"],
+        size_px,
+        float(obj.get("rotation", 0)),
+        variant,
+    )
+    if image is None:
+        return None
+    photo = ImageTk.PhotoImage(styled_custom_symbol_image(image, obj, settings))
+    return cache_put(_TK_SYMBOL_PHOTO_CACHE, key, photo, TK_SYMBOL_IMAGE_CACHE_LIMIT)
 
 
 def draw_tk_custom_symbol(
@@ -23037,16 +24715,10 @@ def draw_tk_custom_symbol(
     cell: float,
     settings: dict[str, Any],
 ) -> None:
-    image = load_custom_symbol_image(
-        project,
-        obj["kind"],
-        max(8, int(obj.get("size", 1) * cell)),
-        float(obj.get("rotation", 0)),
-        str(obj.get("variant", "")),
-    )
     x = obj["x"] * cell
     y = obj["y"] * cell
-    if image is None:
+    photo = tk_custom_symbol_photo_image(project, obj, cell, settings)
+    if photo is None:
         label = symbol_label(project, obj["kind"])[:2].upper()
         ink = symbol_ink(settings, obj)
         if obj.get("shadow"):
@@ -23082,12 +24754,6 @@ def draw_tk_custom_symbol(
             x, y, text=label, fill=ink, font=("Arial", max(8, int(cell * 0.6)), "bold")
         )
         return
-    try:
-        from PIL import ImageTk
-    except ImportError:
-        return
-    image = styled_custom_symbol_image(image, obj, settings)
-    photo = ImageTk.PhotoImage(image)
     canvas.create_image(x, y, image=photo)
     refs = getattr(canvas, "_image_refs", [])
     refs.append(photo)
@@ -23100,7 +24766,7 @@ def draw_tk_builtin_symbol_rotated(
     obj: dict[str, Any],
     cell: float,
     settings: dict[str, Any],
-) -> None:
+    ) -> None:
     x, y, size = obj["x"] * cell, obj["y"] * cell, obj.get("size", 1) * cell
     kind = effective_symbol_kind(project, obj)
     rotation = float(obj.get("rotation", 0)) % 360
@@ -23140,52 +24806,9 @@ def draw_tk_builtin_symbol_rotated(
             settings["floorColor"],
         )
         return
-    size_px = max(8, int(obj.get("size", 1) * cell))
-    side = max(16, int(size_px * 2.7))
-    image = Image.new("RGBA", (side, side), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(image)
-    center = side / 2
-    scale = max(1, int(cell / settings["cellSize"]))
-    if obj.get("shadow"):
-        offset = max(1, int(size_px * 0.08))
-        draw_pillow_symbol(
-            draw,
-            kind,
-            center + offset,
-            center + offset,
-            size_px,
-            symbol_shadow_color(settings, obj),
-            settings["floorColor"],
-            scale,
-        )
-    if obj.get("outline"):
-        draw_pillow_symbol(
-            draw,
-            kind,
-            center,
-            center,
-            size_px * 1.12,
-            symbol_outline_color(settings, obj),
-            settings["floorColor"],
-            scale,
-        )
-    draw_pillow_symbol(
-        draw,
-        kind,
-        center,
-        center,
-        size_px,
-        symbol_ink(settings, obj),
-        settings["floorColor"],
-        scale,
-    )
-    image = image.rotate(-rotation, resample=Image.Resampling.BICUBIC, expand=True)
-    image = image_with_opacity(image, symbol_opacity(obj))
-    try:
-        from PIL import ImageTk
-    except ImportError:
+    photo = tk_builtin_symbol_photo_image(project, obj, cell, settings)
+    if photo is None:
         return
-    photo = ImageTk.PhotoImage(image)
     canvas.create_image(obj["x"] * cell, obj["y"] * cell, image=photo)
     refs = getattr(canvas, "_image_refs", [])
     refs.append(photo)
@@ -23197,13 +24820,14 @@ def draw_tk_legend_object(
 ) -> None:
     settings = project["settings"]
     c = settings["cellSize"] * zoom
+    layout = legend_layout(project, obj)
     x, y = obj["x"] * c, obj["y"] * c
-    width, height = obj["width"] * c, obj["height"] * c
+    width, height = layout.width * c, layout.height * c
     ink = settings.get("legendColor", settings["gridColor"])
     canvas.create_rectangle(
         x, y, x + width, y + height, fill=settings["floorColor"], outline=ink, width=2
     )
-    title_size = max(10, int(c * obj.get("scale", 1.0) * 1.1))
+    title_size = max(10, int(c * layout.scale * 1.1))
     canvas.create_text(
         x + c * 0.65,
         y + c * 0.8,
@@ -23212,17 +24836,8 @@ def draw_tk_legend_object(
         fill=ink,
         font=("Arial", title_size, "bold"),
     )
-    entries = legend_entries(project, obj)
-    columns = max(1, int(obj.get("columns", 4)))
-    entry_w = max(c * 4, (width - c) / columns)
-    entry_h = c * 1.15 * obj.get("scale", 1.0)
-    for index, (kind, label) in enumerate(entries):
-        col = index % columns
-        row = index // columns
-        ex = x + c * 0.65 + col * entry_w
-        ey = y + c * 1.8 + row * entry_h
-        if ey > y + height - c * 0.4:
-            break
+    for index, (kind, label) in enumerate(layout.entries):
+        ex, ey = legend_entry_position(layout, x, y, c, index)
         if kind == "cell":
             canvas.create_rectangle(
                 ex,
@@ -23265,7 +24880,7 @@ def draw_tk_legend_object(
             text=label,
             anchor="w",
             fill=ink,
-            font=("Arial", max(7, int(c * 0.55 * obj.get("scale", 1.0))), "bold"),
+            font=("Arial", max(7, int(c * 0.55 * layout.scale)), "bold"),
         )
 
 
@@ -23326,7 +24941,7 @@ def draw_tk_floor_outline(
             flatten_points(expanded_floor_polygon_points(obj, c, wall)),
             fill=ink,
             outline="",
-            smooth=obj_type in {"round", "cave", "cave_corridor"},
+            smooth=floor_boundary_is_smooth(obj),
         )
     elif obj_type == "round":
         canvas.create_oval(
@@ -23338,7 +24953,7 @@ def draw_tk_floor_outline(
             flatten_points(points + [points[0]]),
             fill=ink,
             width=max(2, int(wall * 2)),
-            smooth=True,
+            smooth=floor_boundary_is_smooth(obj),
         )
     else:
         canvas.create_rectangle(
@@ -23371,7 +24986,7 @@ def draw_tk_floor_fill(
             fill=floor,
             outline=outline,
             width=width,
-            smooth=obj_type in {"round", "cave", "cave_corridor"},
+            smooth=floor_boundary_is_smooth(obj),
         )
     elif obj_type == "round":
         canvas.create_oval(
@@ -23383,7 +24998,7 @@ def draw_tk_floor_fill(
             fill=floor,
             outline=outline,
             width=width,
-            smooth=True,
+            smooth=floor_boundary_is_smooth(obj),
         )
     else:
         canvas.create_rectangle(
@@ -23415,7 +25030,7 @@ def draw_tk_floor_boundary_mask(
             flatten_points(points + [points[0]]),
             fill=floor,
             width=width,
-            smooth=obj_type in {"round", "cave", "cave_corridor"},
+            smooth=floor_boundary_is_smooth(obj),
         )
     elif obj_type == "round":
         canvas.create_oval(x, y, x + w, y + h, fill="", outline=floor, width=width)
@@ -23425,7 +25040,7 @@ def draw_tk_floor_boundary_mask(
             flatten_points(points + [points[0]]),
             fill=floor,
             width=width,
-            smooth=True,
+            smooth=floor_boundary_is_smooth(obj),
         )
     else:
         canvas.create_rectangle(
@@ -23502,15 +25117,13 @@ def draw_tk_rectlike(
             stipple=stipple,
         )
     elif obj_type in {"cave", "cave_corridor"}:
-        points = cave_points(
-            obj["x"], obj["y"], obj["width"], obj["height"], obj.get("seed", 1), c
-        )
+        points = floor_polygon_points(obj, c)
         canvas.create_polygon(
             points,
             fill=settings["floorColor"],
             outline=settings["gridColor"],
             width=2,
-            smooth=True,
+            smooth=floor_boundary_is_smooth(obj),
             stipple=stipple,
         )
     else:
@@ -24310,64 +25923,11 @@ def draw_tk_door(
 
 
 def draw_tk_legend(canvas: tk.Canvas, project: dict[str, Any], zoom: float) -> None:
-    settings = project["settings"]
-    c = settings["cellSize"] * zoom
-    x, y = c * 2, settings["height"] * c + c
-    width, height = settings["width"] * c - c * 4, c * 5
-    canvas.create_rectangle(
-        x,
-        y,
-        x + width,
-        y + height,
-        fill=settings["floorColor"],
-        outline=settings["gridColor"],
-        width=2,
+    legend = next(
+        (obj for obj in project.get("objects", []) if obj.get("type") == "legend"),
+        legend_obj(project["settings"]),
     )
-    canvas.create_text(
-        x + c * 1.2,
-        y + c * 1.55,
-        text="LEGEND",
-        anchor="w",
-        fill=settings["gridColor"],
-        font=("Arial", max(12, int(c * 1.4)), "bold"),
-    )
-    used = []
-    for obj in project["objects"]:
-        if obj.get("type") == "symbol" and obj.get("kind") not in used:
-            used.append(obj["kind"])
-    entries = [("cell", cell_scale_label(settings))] + [
-        (kind, SYMBOL_LABELS[kind]) for kind in used if kind in SYMBOL_LABELS
-    ]
-    for index, (kind, label) in enumerate(entries[:12]):
-        col, row = index % 4, index // 4
-        ex, ey = x + c * 14 + col * c * 13, y + c * 1.35 + row * c * 1.55
-        if kind == "cell":
-            canvas.create_rectangle(
-                ex,
-                ey - c * 0.5,
-                ex + c,
-                ey + c * 0.5,
-                fill=settings["floorColor"],
-                outline=settings["gridColor"],
-            )
-        else:
-            draw_tk_symbol(
-                canvas,
-                kind,
-                ex + c * 0.5,
-                ey,
-                c * 0.9,
-                settings["gridColor"],
-                settings["floorColor"],
-            )
-        canvas.create_text(
-            ex + c * 1.6,
-            ey,
-            text=label,
-            anchor="w",
-            fill=settings["gridColor"],
-            font=("Arial", max(7, int(c * 0.78)), "bold"),
-        )
+    draw_tk_legend_object(canvas, project, legend, zoom)
 
 
 _STATIC_LAYER_IMAGE_CACHE: dict[str, Any] = {}
@@ -24425,13 +25985,14 @@ def render_pillow(
     include_legend: bool | None = None,
 ) -> None:
     settings = project["settings"]
-    if project_layer_visible(project, "background"):
+    context = render_context(project)
+    if project_layer_visible(project, "background", context):
         if settings.get("exportGrid", True):
             draw_pillow_grid(draw, settings, scale)
         draw_pillow_underlays(draw, project, scale)
     renderable_objects = []
     for obj in project["objects"]:
-        if not should_render_object(project, obj, for_export=True):
+        if not should_render_object(project, obj, for_export=True, context=context):
             continue
         if obj.get("type") == "legend" and include_legend is False:
             continue
@@ -24442,14 +26003,14 @@ def render_pillow(
         for layer in project.get("layers", [])
         if layer.get("staticCache")
         and layer.get("id") != "background"
-        and project_layer_visible(project, str(layer.get("id") or ""))
+        and project_layer_visible(project, str(layer.get("id") or ""), context)
     }
     if target is not None and static_layer_ids and Image is not None:
         for layer_id in sorted(static_layer_ids):
             cached = render_static_layer_image(project, str(layer_id), scale, include_legend)
             if cached is None:
                 continue
-            opacity = project_layer_opacity(project, str(layer_id))
+            opacity = project_layer_opacity(project, str(layer_id), context)
             if opacity < 0.999:
                 cached = image_with_opacity(cached, opacity)
             composite_overlay_onto_draw(draw, cached)
@@ -24460,14 +26021,14 @@ def render_pillow(
             not in static_layer_ids
         ]
     if any(
-        project_layer_opacity(project, layer.get("id", "")) < 0.999
+        project_layer_opacity(project, layer.get("id", ""), context) < 0.999
         for layer in project.get("layers", [])
     ):
         if target is not None and Image is not None and ImageDraw is not None:
             for layer in project.get("layers", []):
                 layer_id = layer.get("id")
                 if layer_id == "background" or not project_layer_visible(
-                    project, layer_id
+                    project, layer_id, context
                 ):
                     continue
                 layer_objects = [
@@ -24491,7 +26052,7 @@ def render_pillow(
                     if obj.get("type") not in FLOOR_TYPES:
                         draw_pillow_object(overlay_draw, project, settings, obj, scale)
                 overlay = image_with_opacity(
-                    overlay, project_layer_opacity(project, layer_id)
+                    overlay, project_layer_opacity(project, layer_id, context)
                 )
                 composite_overlay_onto_draw(draw, overlay)
             return
@@ -24585,7 +26146,12 @@ def draw_pillow_underlays(draw, project: dict[str, Any], scale: int) -> None:
         y = int(underlay["y"] * cell)
         w = max(1, int(underlay["width"] * cell))
         h = max(1, int(underlay["height"] * cell))
-        image = load_underlay_image(underlay)
+        image = transformed_underlay_image(
+            underlay,
+            w,
+            h,
+            underlay.get("opacity", settings.get("underlayOpacity", 0.45)),
+        )
         if image is None:
             fallback = Image.new("RGBA", (w, h), (0, 0, 0, 0))
             fallback_draw = ImageDraw.Draw(fallback)
@@ -24593,13 +26159,6 @@ def draw_pillow_underlays(draw, project: dict[str, Any], scale: int) -> None:
                 (0, 0, w - 1, h - 1), outline=settings["gridColor"], width=max(1, scale)
             )
             image = fallback
-        else:
-            image = image.resize((w, h))
-            if underlay.get("rotation"):
-                image = image.rotate(-float(underlay.get("rotation", 0)), expand=True)
-        image = image_with_opacity(
-            image, underlay.get("opacity", settings.get("underlayOpacity", 0.45))
-        )
         target.alpha_composite(image, (x, y))
 
 
@@ -24668,7 +26227,12 @@ def draw_pillow_floor_outline(
         draw.ellipse((x - wall, y - wall, x + w + wall, y + h + wall), fill=ink)
     elif obj_type in {"cave", "cave_corridor"}:
         points = floor_polygon_points(obj, cell)
-        draw.line(points + [points[0]], fill=ink, width=max(1, wall * 2), joint="curve")
+        draw.line(
+            points + [points[0]],
+            fill=ink,
+            width=max(1, wall * 2),
+            **pillow_floor_boundary_line_options(obj),
+        )
     else:
         draw.rectangle((x - wall, y - wall, x + w + wall, y + h + wall), fill=ink)
 
@@ -24685,7 +26249,12 @@ def draw_pillow_floor_fill(
         points = floor_polygon_points(obj, cell)
         draw.polygon(points, fill=floor)
         if mask_boundary:
-            draw.line(points + [points[0]], fill=floor, width=mask_width, joint="curve")
+            draw.line(
+                points + [points[0]],
+                fill=floor,
+                width=mask_width,
+                **pillow_floor_boundary_line_options(obj),
+            )
         return
     x, y = obj["x"] * cell, obj["y"] * cell
     w, h = obj["width"] * cell, obj["height"] * cell
@@ -24693,7 +26262,12 @@ def draw_pillow_floor_fill(
         points = floor_polygon_points(obj, cell)
         draw.polygon(points, fill=floor)
         if mask_boundary:
-            draw.line(points + [points[0]], fill=floor, width=mask_width, joint="curve")
+            draw.line(
+                points + [points[0]],
+                fill=floor,
+                width=mask_width,
+                **pillow_floor_boundary_line_options(obj),
+            )
     elif obj_type == "round":
         draw.ellipse(
             (x, y, x + w, y + h),
@@ -24705,7 +26279,12 @@ def draw_pillow_floor_fill(
         points = floor_polygon_points(obj, cell)
         draw.polygon(points, fill=floor)
         if mask_boundary:
-            draw.line(points + [points[0]], fill=floor, width=mask_width, joint="curve")
+            draw.line(
+                points + [points[0]],
+                fill=floor,
+                width=mask_width,
+                **pillow_floor_boundary_line_options(obj),
+            )
     else:
         draw.rectangle(
             (x, y, x + w, y + h),
@@ -24743,12 +26322,22 @@ def draw_pillow_floor_boundary_mask(
     w, h = obj["width"] * cell, obj["height"] * cell
     if has_floor_rotation(obj):
         points = floor_polygon_points(obj, cell)
-        draw.line(points + [points[0]], fill=floor, width=width, joint="curve")
+        draw.line(
+            points + [points[0]],
+            fill=floor,
+            width=width,
+            **pillow_floor_boundary_line_options(obj),
+        )
     elif obj_type == "round":
         draw.ellipse((x, y, x + w, y + h), outline=floor, width=width)
     elif obj_type in {"cave", "cave_corridor"}:
         points = floor_polygon_points(obj, cell)
-        draw.line(points + [points[0]], fill=floor, width=width, joint="curve")
+        draw.line(
+            points + [points[0]],
+            fill=floor,
+            width=width,
+            **pillow_floor_boundary_line_options(obj),
+        )
     else:
         draw.rectangle((x, y, x + w, y + h), outline=floor, width=width)
 
@@ -24797,16 +26386,14 @@ def draw_pillow_object(
                 (x, y, x + w, y + h), fill=floor, outline=ink, width=max(1, scale * 2)
             )
         elif obj["type"] in {"cave", "cave_corridor"}:
-            points = cave_points(
-                obj["x"],
-                obj["y"],
-                obj["width"],
-                obj["height"],
-                obj.get("seed", 1),
-                cell,
-            )
+            points = floor_polygon_points(obj, cell)
             draw.polygon(points, fill=floor)
-            draw.line(points + [points[0]], fill=ink, width=max(1, scale * 2))
+            draw.line(
+                points + [points[0]],
+                fill=ink,
+                width=max(1, scale * 2),
+                **pillow_floor_boundary_line_options(obj),
+            )
         else:
             draw.rectangle(
                 (x, y, x + w, y + h), fill=floor, outline=ink, width=max(1, scale)
@@ -24847,7 +26434,7 @@ def draw_pillow_styled_line(
 ) -> None:
     if len(points) < 2:
         return
-    segments = list(zip(points, points[1:]))
+    segments = list(zip(points, points[1:], strict=False))
     if closed:
         segments.append((points[-1], points[0]))
     if style == "solid":
@@ -25157,8 +26744,9 @@ def draw_pillow_legend_object(
 ) -> None:
     settings = project["settings"]
     cell = settings["cellSize"] * scale
+    layout = legend_layout(project, obj)
     x, y = obj["x"] * cell, obj["y"] * cell
-    width, height = obj["width"] * cell, obj["height"] * cell
+    width, height = layout.width * cell, layout.height * cell
     ink, floor = (
         settings.get("legendColor", settings["gridColor"]),
         settings["floorColor"],
@@ -25170,20 +26758,11 @@ def draw_pillow_legend_object(
         (x + cell * 0.65, y + cell * 0.8),
         "LEGEND",
         fill=ink,
-        font=get_font(max(12, int(cell * obj.get("scale", 1.0) * 1.1))),
+        font=get_font(max(12, int(cell * layout.scale * 1.1))),
         anchor="lm",
     )
-    entries = legend_entries(project, obj)
-    columns = max(1, int(obj.get("columns", 4)))
-    entry_w = max(cell * 4, (width - cell) / columns)
-    entry_h = cell * 1.15 * obj.get("scale", 1.0)
-    for index, (kind, label) in enumerate(entries):
-        col = index % columns
-        row = index // columns
-        ex = x + cell * 0.65 + col * entry_w
-        ey = y + cell * 1.8 + row * entry_h
-        if ey > y + height - cell * 0.4:
-            break
+    for index, (kind, label) in enumerate(layout.entries):
+        ex, ey = legend_entry_position(layout, x, y, cell, index)
         if kind == "cell":
             draw.rectangle(
                 (ex, ey - cell * 0.35, ex + cell * 0.7, ey + cell * 0.35),
@@ -25221,7 +26800,7 @@ def draw_pillow_legend_object(
             (ex + cell * 1.1, ey),
             label,
             fill=ink,
-            font=get_font(max(7, int(cell * 0.55 * obj.get("scale", 1.0)))),
+            font=get_font(max(7, int(cell * 0.55 * layout.scale))),
             anchor="lm",
         )
 
@@ -25836,49 +27415,11 @@ def draw_pillow_door(
 
 
 def draw_pillow_legend(draw, project: dict[str, Any], scale: int) -> None:
-    settings = project["settings"]
-    cell = settings["cellSize"] * scale
-    x, y = cell * 2, settings["height"] * cell + cell
-    width, height = settings["width"] * cell - cell * 4, cell * 5
-    ink, floor = settings["gridColor"], settings["floorColor"]
-    draw.rectangle(
-        (x, y, x + width, y + height), fill=floor, outline=ink, width=max(1, scale * 2)
+    legend = next(
+        (obj for obj in project.get("objects", []) if obj.get("type") == "legend"),
+        legend_obj(project["settings"]),
     )
-    draw.text(
-        (x + cell * 1.2, y + cell * 1.45),
-        "LEGEND",
-        fill=ink,
-        font=get_font(max(12, int(cell * 1.35))),
-        anchor="lm",
-    )
-    used = []
-    for obj in project["objects"]:
-        if obj.get("type") == "symbol" and obj.get("kind") not in used:
-            used.append(obj["kind"])
-    entries = [("cell", cell_scale_label(settings))] + [
-        (kind, SYMBOL_LABELS[kind]) for kind in used if kind in SYMBOL_LABELS
-    ]
-    for index, (kind, label) in enumerate(entries[:12]):
-        col, row = index % 4, index // 4
-        ex, ey = x + cell * 14 + col * cell * 13, y + cell * 1.35 + row * cell * 1.55
-        if kind == "cell":
-            draw.rectangle(
-                (ex, ey - cell * 0.5, ex + cell, ey + cell * 0.5),
-                fill=floor,
-                outline=ink,
-                width=max(1, scale),
-            )
-        else:
-            draw_pillow_symbol(
-                draw, kind, ex + cell * 0.5, ey, cell * 0.9, ink, floor, scale
-            )
-        draw.text(
-            (ex + cell * 1.6, ey),
-            label,
-            fill=ink,
-            font=get_font(max(7, int(cell * 0.72))),
-            anchor="lm",
-        )
+    draw_pillow_legend_object(draw, project, legend, scale)
 
 
 def cave_points(
