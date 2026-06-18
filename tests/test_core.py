@@ -389,6 +389,34 @@ class ProjectModelTests(unittest.TestCase):
             [(10, 10), (50, 10), (40, 30), (10, 40)],
         )
 
+    def test_polygon_room_preserves_free_points_and_campaign_fields(self) -> None:
+        room = app.validate_object(
+            app.polygon_room_from_points([(1, 1), (5, 1), (4, 3), (1, 4)]),
+            1,
+        )
+
+        self.assertEqual(room["type"], "room")
+        self.assertEqual(room["layer"], "rooms")
+        self.assertEqual(room["roomStatus"], "undiscovered")
+        self.assertEqual(len(room["points"]), 4)
+        self.assertEqual((room["x"], room["y"], room["width"], room["height"]), (1, 1, 4, 3))
+        self.assertEqual(
+            app.floor_polygon_points(room, 10),
+            [(10, 10), (50, 10), (40, 30), (10, 40)],
+        )
+        self.assertFalse(app.floor_boundary_is_smooth(room))
+
+    def test_polygon_room_hit_testing_uses_polygon_interior(self) -> None:
+        project = app.create_project()
+        room = app.validate_object(
+            app.polygon_room_from_points([(1, 1), (5, 1), (1, 5)]),
+            1,
+        )
+        project["objects"].append(room)
+
+        self.assertEqual(app.topmost_hit_object(project, 2, 2)["id"], room["id"])
+        self.assertIsNone(app.topmost_hit_object(project, 4.5, 4.5))
+
     def test_cave_corridor_can_disable_smoothed_boundary(self) -> None:
         tunnel = app.validate_object(
             app.cave_corridor_from_points(
@@ -1311,6 +1339,18 @@ class ProjectModelTests(unittest.TestCase):
             any('x1="36.00" y1="18.00" x2="36.00" y2="72.00"' in part for part in parts)
         )
 
+    def test_svg_polygon_room_uses_floor_polygon(self) -> None:
+        project = app.create_project()
+        room = app.validate_object(
+            app.polygon_room_from_points([(1, 1), (5, 1), (3, 4)]),
+            1,
+        )
+
+        parts = app.svg_for_object(project, room, 1)
+
+        self.assertTrue(any(part.startswith("<polygon") for part in parts))
+        self.assertFalse(any(part.startswith("<rect") for part in parts))
+
     def test_render_tk_room_status_overlay_can_be_hidden(self) -> None:
         class RecordingCanvas:
             def __init__(self) -> None:
@@ -1835,6 +1875,49 @@ class ProjectModelTests(unittest.TestCase):
         self.assertIsNone(maker.draft)
         self.assertEqual(added[0]["type"], "cave_corridor")
         self.assertEqual(len(added[0]["points"]), 4)
+
+    def test_enter_closes_polygon_room_draft_without_preview_point(self) -> None:
+        maker = app.OSRMapMaker.__new__(app.OSRMapMaker)
+        added: list[dict[str, object]] = []
+        maker.draft = app.Draft(
+            "room_polygon",
+            1,
+            1,
+            3,
+            3,
+            8,
+            8,
+            [(1, 1), (4, 1), (4, 4), (1, 4)],
+        )
+        maker.drag_start = (1, 1, None)
+        maker.add_object = lambda obj: added.append(obj)
+        maker.show_status = lambda _message: None
+
+        result = app.OSRMapMaker.handle_return_key(maker, object())
+
+        self.assertEqual(result, "break")
+        self.assertIsNone(maker.draft)
+        self.assertEqual(added[0]["type"], "room")
+        self.assertEqual(added[0]["layer"], "rooms")
+        self.assertEqual(len(added[0]["points"]), 4)
+        self.assertNotIn({"x": 8, "y": 8}, added[0]["points"])
+
+    def test_polygon_room_clicking_first_point_closes_draft(self) -> None:
+        maker = app.OSRMapMaker.__new__(app.OSRMapMaker)
+        added: list[dict[str, object]] = []
+        maker.draft = None
+        maker.drag_start = None
+        maker.polygon_close_tolerance = lambda: 0.2
+        maker.add_object = lambda obj: added.append(obj)
+        maker.show_status = lambda _message: None
+        maker.redraw = lambda: None
+
+        for point in [(1, 1), (4, 1), (4, 4), (1, 1)]:
+            app.OSRMapMaker.handle_polygon_click(maker, point, "room_polygon")
+
+        self.assertIsNone(maker.draft)
+        self.assertEqual(added[0]["type"], "room")
+        self.assertEqual(len(added[0]["points"]), 3)
 
     def test_nudge_selection_moves_unlocked_objects_only(self) -> None:
         maker = app.OSRMapMaker.__new__(app.OSRMapMaker)

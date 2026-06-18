@@ -180,6 +180,7 @@ The built-in basic tools are:
 | --- | --- | --- |
 | `v` | Select | Select, move, resize, rotate, edit, and inspect objects |
 | `r` | Room | Draw rectangular room/floor areas |
+| - | Free Room | Place polygon room points; press Enter or click the first point to close |
 | `c` | Corridor | Draw straight or diagonal corridors |
 | `j` | Cave Tunnel | Draw natural point-by-point cave corridors |
 | `o` | Round | Draw rounded room areas |
@@ -202,6 +203,7 @@ Room-like objects are floor objects. They participate in floor merging, internal
 outline cleanup, grid rendering, campaign room data, fog masks, and VTT exports.
 
 - Rooms are rectangular.
+- Free rooms are polygon rooms placed point by point and closed with `Enter` or by clicking the first point.
 - Corridors are rectangular when dragged horizontally or vertically.
 - Diagonal corridors are created when the corridor drag is diagonal.
 - Cave tunnels are natural corridor shapes placed point by point.
@@ -731,6 +733,7 @@ Default shortcuts:
 | --- | --- |
 | `v` | Select tool |
 | `r` | Room tool |
+| - | Free room tool |
 | `c` | Corridor tool |
 | `j` | Cave tunnel tool |
 | `o` | Round tool |

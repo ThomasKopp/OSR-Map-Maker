@@ -53,6 +53,7 @@ SHAPE_TOOLS = {
     "brush",
 }
 DRAG_SHAPE_TOOLS = SHAPE_TOOLS - {"shape_polygon"}
+POLYGON_DRAFT_TOOLS = {"shape_polygon", "cave_corridor", "room_polygon"}
 BOX_SHAPES = {"rectangle", "circle", "polygon"}
 LINE_SHAPES = {"line"}
 SHAPE_KINDS = BOX_SHAPES | LINE_SHAPES
@@ -440,6 +441,7 @@ RANDOM_ROOM_CONTENTS = (
 DEFAULT_SHORTCUTS = {
     "select_tool": "v",
     "room_tool": "r",
+    "room_polygon_tool": "",
     "corridor_tool": "c",
     "cave_corridor_tool": "j",
     "round_tool": "o",
@@ -468,6 +470,7 @@ SHORTCUT_PRESETS = {
     "Drawing": {
         "select_tool": "v",
         "room_tool": "r",
+        "room_polygon_tool": "",
         "corridor_tool": "c",
         "cave_corridor_tool": "j",
         "round_tool": "o",
@@ -484,6 +487,7 @@ SHORTCUT_PRESETS = {
     "VTT Workflow": {
         "select_tool": "v",
         "room_tool": "r",
+        "room_polygon_tool": "",
         "corridor_tool": "c",
         "cave_corridor_tool": "j",
         "round_tool": "o",
@@ -503,6 +507,7 @@ SHORTCUT_PRESETS = {
     "Laptop": {
         "select_tool": "a",
         "room_tool": "s",
+        "room_polygon_tool": "",
         "corridor_tool": "d",
         "cave_corridor_tool": "j",
         "round_tool": "f",
@@ -594,6 +599,7 @@ DEFAULT_EXPORT_PROFILES = [
 TOOL_ACTIONS = {
     "select": "select_tool",
     "room": "room_tool",
+    "room_polygon": "room_polygon_tool",
     "corridor": "corridor_tool",
     "cave_corridor": "cave_corridor_tool",
     "round": "round_tool",
@@ -610,6 +616,7 @@ TOOL_ACTIONS = {
 TOOL_DESCRIPTIONS = {
     "select": "Select, move, and edit objects",
     "room": "Rechteckigen Raum ziehen",
+    "room_polygon": "Freien Polygonraum punktweise zeichnen; Startpunkt oder Enter schliesst",
     "corridor": "Geraden oder diagonalen Korridor ziehen",
     "cave_corridor": "Naturtunnel punktweise zeichnen; Startpunkt oder Enter schliesst",
     "round": "Runden Raum ziehen",
@@ -626,6 +633,7 @@ TOOL_DESCRIPTIONS = {
 CURSOR_BY_TOOL = {
     "select": "arrow",
     "room": "crosshair",
+    "room_polygon": "crosshair",
     "corridor": "crosshair",
     "cave_corridor": "crosshair",
     "round": "crosshair",
@@ -1337,6 +1345,7 @@ SYMBOL_GROUP_ICONS = {
 BASIC_TOOLS = [
     ("select", "↖", "Select"),
     ("room", "□", "Room"),
+    ("room_polygon", "⬠", "Free Room"),
     ("corridor", "▭", "Corridor"),
     ("cave_corridor", "≈", "Cave Tunnel"),
     ("round", "○", "Round"),
@@ -1355,7 +1364,7 @@ BASIC_TOOLS = [
 BASIC_TOOL_IDS = {tool for tool, _icon, _label in BASIC_TOOLS}
 BASIC_TOOL_GROUPS = [
     ("Basic", ("select",)),
-    ("Rooms", ("room", "corridor", "cave_corridor", "round", "cave")),
+    ("Rooms", ("room", "room_polygon", "corridor", "cave_corridor", "round", "cave")),
     (
         "Shapes",
         (
@@ -1850,6 +1859,25 @@ def cave_corridor_from_points(
         "smoothBoundary": bool(smooth_boundary),
         "layer": "corridors",
     }
+
+
+def polygon_room_from_points(points: list[tuple[float, float]]) -> dict[str, Any]:
+    point_dicts = [{"x": x, "y": y} for x, y in points]
+    x, y, width, height = bounds_from_points(point_dicts)
+    obj = {
+        "id": object_id(),
+        "type": "room",
+        "x": x,
+        "y": y,
+        "width": width,
+        "height": height,
+        "points": point_dicts,
+        "wallType": "standard",
+        "wallThickness": 0.16,
+        "layer": "rooms",
+    }
+    obj.update(campaign_room_fields())
+    return obj
 
 
 def diagonal_corridor(x: float, y: float, x2: float, y2: float) -> dict[str, Any]:
@@ -3708,6 +3736,20 @@ def bounds_from_points(
     return left, top, max(0.25, right - left), max(0.25, bottom - top)
 
 
+def is_polygon_room(obj: dict[str, Any]) -> bool:
+    return obj.get("type") == "room" and len(validate_shape_points(obj.get("points"))) >= 3
+
+
+def is_editable_polygon(obj: dict[str, Any] | None) -> bool:
+    if not obj:
+        return False
+    return (
+        obj.get("type") == "shape"
+        and obj.get("kind") == "polygon"
+        and len(validate_shape_points(obj.get("points"))) >= 3
+    ) or is_polygon_room(obj)
+
+
 def validate_object(obj: Any, index: int) -> dict[str, Any]:
     if not isinstance(obj, dict) or not obj.get("type"):
         raise ValueError(f"Object {index} is invalid.")
@@ -3729,6 +3771,15 @@ def validate_object(obj: Any, index: int) -> dict[str, Any]:
             clean["wallType"] = default_wall
         if obj_type in {"cave", "cave_corridor"}:
             clean["seed"] = int(clean.get("seed") or 1)
+        if obj_type == "room":
+            points = validate_shape_points(clean.get("points"))
+            if len(points) >= 3:
+                clean["points"] = points
+                clean["x"], clean["y"], clean["width"], clean["height"] = (
+                    bounds_from_points(points)
+                )
+            else:
+                clean.pop("points", None)
         if obj_type == "cave_corridor":
             clean["smoothBoundary"] = parse_bool_text(
                 clean.get("smoothBoundary", True)
@@ -7361,7 +7412,14 @@ class OSRMapMaker(tk.Tk):
             ttk.Button(
                 bar, text="Text color", command=lambda: self.pick_color("textColor")
             ).grid(row=0, column=column, sticky="w", padx=(0, 8))
-        elif active in {"room", "round", "cave", "corridor", "cave_corridor"}:
+        elif active in {
+            "room",
+            "room_polygon",
+            "round",
+            "cave",
+            "corridor",
+            "cave_corridor",
+        }:
             ttk.Button(
                 bar, text="Floor color", command=lambda: self.pick_color("floorColor")
             ).grid(row=0, column=column, sticky="w", padx=(0, 8))
@@ -8422,7 +8480,7 @@ class OSRMapMaker(tk.Tk):
     def select_tool(self, value: str) -> None:
         if (
             self.draft
-            and self.draft.kind in {"shape_polygon", "cave_corridor"}
+            and self.draft.kind in POLYGON_DRAFT_TOOLS
             and value != self.draft.kind
         ):
             self.draft = None
@@ -8462,6 +8520,8 @@ class OSRMapMaker(tk.Tk):
     def tool_mode_hint(self, tool: str) -> str:
         if tool == "select":
             return "Select, move, resize"
+        if tool == "room_polygon":
+            return "Punkte setzen, am Startpunkt oder mit Enter schliessen"
         if tool == "shape_polygon":
             return "Punkte setzen, am Startpunkt schliessen"
         if tool == "cave_corridor":
@@ -8593,7 +8653,7 @@ class OSRMapMaker(tk.Tk):
         )
 
     def handle_return_key(self, _event: tk.Event) -> str | None:
-        if self.draft and self.draft.kind in {"shape_polygon", "cave_corridor"}:
+        if self.draft and self.draft.kind in POLYGON_DRAFT_TOOLS:
             self.close_polygon_draft()
             return "break"
         return None
@@ -9085,6 +9145,7 @@ class OSRMapMaker(tk.Tk):
         labels = {
             "select_tool": "Select tool",
             "room_tool": "Room tool",
+            "room_polygon_tool": "Free room tool",
             "corridor_tool": "Corridor tool",
             "round_tool": "Round tool",
             "cave_tool": "Cave tool",
@@ -11371,7 +11432,7 @@ class OSRMapMaker(tk.Tk):
             self.schedule_redraw(full_canvas=False)
             return
         self.update_status()
-        if self.draft and self.draft.kind in {"shape_polygon", "cave_corridor"}:
+        if self.draft and self.draft.kind in POLYGON_DRAFT_TOOLS:
             px, py = self.snap_preview_grid
             self.draft.x2 = px
             self.draft.y2 = py
@@ -11564,7 +11625,7 @@ class OSRMapMaker(tk.Tk):
         point = self.event_to_grid(event)
         snapped = self.snap_point(point[0], point[1])
         tool = self.tool.get()
-        if tool in {"shape_polygon", "cave_corridor"}:
+        if tool in POLYGON_DRAFT_TOOLS:
             self.handle_polygon_click(snapped, tool)
             return
         if tool == "measure":
@@ -11763,7 +11824,7 @@ class OSRMapMaker(tk.Tk):
             return
         if self.draft:
             draft = self.draft
-            if draft.kind in {"shape_polygon", "cave_corridor"}:
+            if draft.kind in POLYGON_DRAFT_TOOLS:
                 return
             if draft.kind in SHAPE_TOOLS:
                 obj = self.shape_from_draft(draft)
@@ -12332,7 +12393,7 @@ class OSRMapMaker(tk.Tk):
 
     def selected_polygon(self) -> dict[str, Any] | None:
         obj = self.selected_object()
-        if obj and obj.get("type") == "shape" and obj.get("kind") == "polygon":
+        if is_editable_polygon(obj):
             return obj
         return None
 
@@ -12620,6 +12681,10 @@ class OSRMapMaker(tk.Tk):
                 continue
             bx, by, bw, bh = self.cached_object_bounds(obj)
             if bx <= x <= bx + bw and by <= y <= by + bh:
+                if is_polygon_room(obj) and not point_in_polygon(
+                    x, y, floor_polygon_points(obj, 1.0)
+                ):
+                    continue
                 return obj
         return None
 
@@ -12854,6 +12919,7 @@ class OSRMapMaker(tk.Tk):
             obj
             for obj in self.selected_objects()
             if obj.get("type") in {"room", "corridor"}
+            and not is_polygon_room(obj)
             and not self.is_object_locked(obj)
         ]
         if len(selected) < 2:
@@ -13858,7 +13924,7 @@ class OSRMapMaker(tk.Tk):
         if not self.draft:
             return ""
         draft = self.draft
-        if draft.kind == "cave_corridor":
+        if draft.kind in POLYGON_DRAFT_TOOLS:
             return f"{len(draft.points or [])} points"
         if (
             draft.kind in {"corridor", "shape_line"}
@@ -14435,7 +14501,7 @@ class OSRMapMaker(tk.Tk):
             )
             action_row.columnconfigure(index, weight=1)
         fields_start = row + 3
-        if obj.get("type") == "shape" and obj.get("kind") == "polygon":
+        if is_editable_polygon(obj):
             point_row = ttk.Frame(self.selection_frame)
             point_row.grid(
                 row=fields_start, column=0, columnspan=2, sticky="ew", pady=(0, 4)
@@ -15752,6 +15818,7 @@ class OSRMapMaker(tk.Tk):
         if obj.get(field) == new_value:
             return True
         before = self.project_snapshot()
+        original = json_clone(obj)
         if field == "rotation" and obj.get("type") == "shape":
             old_rotation = float(obj.get("rotation", 0)) % 360
             target_rotation = float(new_value) % 360
@@ -15778,6 +15845,17 @@ class OSRMapMaker(tk.Tk):
             ] = str(new_value)
         if field in {"width", "height", "size", "scale"}:
             obj[field] = max(0.25, float(obj[field]))
+        if is_polygon_room(original) and field in {"x", "y"}:
+            dx = float(obj.get("x", 0)) - float(original.get("x", 0))
+            dy = float(obj.get("y", 0)) - float(original.get("y", 0))
+            obj["points"] = [
+                {"x": point["x"] + dx, "y": point["y"] + dy}
+                for point in validate_shape_points(original.get("points"))
+            ]
+            refresh_polygon_bounds(obj)
+        if is_polygon_room(original) and field in {"width", "height"}:
+            obj["points"] = scale_polygon_points(original, obj)
+            refresh_polygon_bounds(obj)
         if field == "rotation":
             obj[field] = float(obj[field]) % 360
         if field == "opacity":
@@ -16463,9 +16541,12 @@ class OSRMapMaker(tk.Tk):
     def handle_polygon_click(
         self, point: tuple[float, float], kind: str = "shape_polygon"
     ) -> None:
-        if kind not in {"shape_polygon", "cave_corridor"}:
+        if kind not in POLYGON_DRAFT_TOOLS:
             kind = "shape_polygon"
-        label = "Cave tunnel" if kind == "cave_corridor" else "Polygon"
+        label = {
+            "cave_corridor": "Cave tunnel",
+            "room_polygon": "Free room",
+        }.get(kind, "Polygon")
         if not self.draft or self.draft.kind != kind:
             self.draft = Draft(
                 kind,
@@ -16506,7 +16587,7 @@ class OSRMapMaker(tk.Tk):
         self.redraw()
 
     def close_polygon_draft(self) -> bool:
-        if not self.draft or self.draft.kind not in {"shape_polygon", "cave_corridor"}:
+        if not self.draft or self.draft.kind not in POLYGON_DRAFT_TOOLS:
             return False
         points = list(self.draft.points or [])
         if len(points) < 3:
@@ -16514,17 +16595,24 @@ class OSRMapMaker(tk.Tk):
             return False
         project = self.__dict__.get("project", {})
         settings = project.get("settings", {}) if isinstance(project, dict) else {}
-        obj = (
-            cave_corridor_from_points(points, settings.get("smoothCaveCorridors", True))
-            if self.draft.kind == "cave_corridor"
-            else self.shape_from_draft(self.draft)
-        )
+        if self.draft.kind == "cave_corridor":
+            obj = cave_corridor_from_points(
+                points, settings.get("smoothCaveCorridors", True)
+            )
+        elif self.draft.kind == "room_polygon":
+            obj = polygon_room_from_points(points)
+        else:
+            obj = self.shape_from_draft(self.draft)
         self.draft = None
         self.drag_start = None
         self.add_object(obj)
-        self.show_status(
-            "Cave tunnel closed." if obj.get("type") == "cave_corridor" else "Polygon closed."
-        )
+        message = {
+            "cave_corridor": "Cave tunnel closed.",
+            "room_polygon": "Free room closed.",
+        }.get(str(obj.get("type")), "Polygon closed.")
+        if obj.get("type") == "room" and obj.get("points"):
+            message = "Free room closed."
+        self.show_status(message)
         return True
 
     def polygon_close_tolerance(self) -> float:
@@ -16572,8 +16660,7 @@ class OSRMapMaker(tk.Tk):
             return
         if (
             self.drag_mode == "polygon_point"
-            and original.get("type") == "shape"
-            and original.get("kind") == "polygon"
+            and is_editable_polygon(original)
             and self.drag_handle.startswith("point:")
         ):
             index = int(self.drag_handle.split(":", 1)[1])
@@ -18227,7 +18314,7 @@ def export_project_for_frame(
 
 
 def default_layer_for_tool(tool: str, is_symbol: bool = False) -> str:
-    if tool in {"room", "round", "cave"}:
+    if tool in {"room", "room_polygon", "round", "cave"}:
         return "rooms"
     if tool in {"corridor", "cave_corridor"}:
         return "corridors"
@@ -18240,6 +18327,21 @@ def default_layer_for_tool(tool: str, is_symbol: bool = False) -> str:
     if is_symbol:
         return "symbols"
     return "symbols"
+
+
+def draft_polygon_points(
+    draft: Draft, include_preview: bool = False
+) -> list[tuple[float, float]]:
+    points = list(draft.points or [])
+    if include_preview and draft.x2 is not None and draft.y2 is not None:
+        preview = (draft.x2, draft.y2)
+        if (
+            not points
+            or math.hypot(preview[0] - points[-1][0], preview[1] - points[-1][1])
+            > 0.000001
+        ):
+            points.append(preview)
+    return points
 
 
 def shape_from_draft_data(
@@ -18261,15 +18363,7 @@ def shape_from_draft_data(
     if draft.kind == "shape_line":
         return shape("line", draft.x, draft.y, 0, 0, draft.x2, draft.y2)
     if draft.kind == "shape_polygon":
-        points = list(draft.points or [])
-        if include_preview and draft.x2 is not None and draft.y2 is not None:
-            preview = (draft.x2, draft.y2)
-            if (
-                not points
-                or math.hypot(preview[0] - points[-1][0], preview[1] - points[-1][1])
-                > 0.000001
-            ):
-                points.append(preview)
+        points = draft_polygon_points(draft, include_preview)
         obj = shape(
             "polygon", draft.x, draft.y, max(0.25, draft.width), max(0.25, draft.height)
         )
@@ -20003,6 +20097,22 @@ def polygon_area(points: list[tuple[float, float]]) -> float:
     return abs(area) / 2
 
 
+def point_in_polygon(x: float, y: float, points: list[tuple[float, float]]) -> bool:
+    if len(points) < 3:
+        return False
+    inside = False
+    previous_x, previous_y = points[-1]
+    for current_x, current_y in points:
+        if (current_y > y) != (previous_y > y):
+            slope_x = (previous_x - current_x) * (y - current_y) / (
+                previous_y - current_y
+            ) + current_x
+            if x <= slope_x:
+                inside = not inside
+        previous_x, previous_y = current_x, current_y
+    return inside
+
+
 def measurement_summary(
     points: list[tuple[float, float]], settings: dict[str, Any]
 ) -> str:
@@ -20443,15 +20553,15 @@ def shape_polygon_points(
 
 
 def floor_boundary_is_smooth(obj: dict[str, Any]) -> bool:
+    if is_polygon_room(obj):
+        return False
     if obj.get("type") == "cave_corridor":
         return parse_bool_text(obj.get("smoothBoundary", True))
     return obj.get("type") in {"round", "cave"}
 
 
 def floor_boundary_linejoin(obj: dict[str, Any]) -> str:
-    if obj.get("type") == "cave_corridor" and not floor_boundary_is_smooth(obj):
-        return "miter"
-    return "round"
+    return "round" if floor_boundary_is_smooth(obj) else "miter"
 
 
 def pillow_floor_boundary_line_options(obj: dict[str, Any]) -> dict[str, str]:
@@ -20504,7 +20614,7 @@ def compute_floor_polygon_points(
         return rotate_points_if_needed(
             ellipse_polygon_points(x, y, width, height), center, rotation
         )
-    if obj_type == "cave_corridor":
+    if obj_type in {"room", "cave_corridor"}:
         points = validate_shape_points(obj.get("points"))
         if len(points) >= 3:
             return rotate_points_if_needed(
@@ -20699,7 +20809,11 @@ def floor_grid_segments(
     cached = cache_get(_FLOOR_GRID_SEGMENTS_CACHE, key)
     if cached is not None:
         return list(cached)
-    if obj.get("type") in {"room", "corridor"} and not has_floor_rotation(obj):
+    if (
+        obj.get("type") in {"room", "corridor"}
+        and not is_polygon_room(obj)
+        and not has_floor_rotation(obj)
+    ):
         segments = rectlike_local_grid_segments(obj, cell, include_boundary)
         cache_put(
             _FLOOR_GRID_SEGMENTS_CACHE,
@@ -20773,11 +20887,7 @@ def move_object_to_delta(
     if obj.get("type") == "shape" and obj.get("kind") == "line":
         obj["x2"] = original["x2"] + dx
         obj["y2"] = original["y2"] + dy
-    if (
-        obj.get("type") == "shape"
-        and obj.get("kind") == "polygon"
-        and original.get("points")
-    ):
+    if is_editable_polygon(original) and original.get("points"):
         obj["points"] = [
             {"x": point["x"] + dx, "y": point["y"] + dy}
             for point in validate_shape_points(original.get("points"))
@@ -20793,11 +20903,7 @@ def translate_object(obj: dict[str, Any], dx: float, dy: float) -> None:
     if obj.get("type") == "shape" and obj.get("kind") == "line":
         obj["x2"] = obj.get("x2", 0) + dx
         obj["y2"] = obj.get("y2", 0) + dy
-    if (
-        obj.get("type") == "shape"
-        and obj.get("kind") == "polygon"
-        and obj.get("points")
-    ):
+    if is_editable_polygon(obj) and obj.get("points"):
         obj["points"] = [
             {"x": point["x"] + dx, "y": point["y"] + dy}
             for point in validate_shape_points(obj.get("points"))
@@ -20897,7 +21003,7 @@ def rotated_rectlike_handle_point(
 
 
 def selection_handles(obj: dict[str, Any]) -> list[tuple[str, float, float]]:
-    if obj["type"] == "shape" and obj.get("kind") == "polygon" and obj.get("points"):
+    if is_editable_polygon(obj):
         points = validate_shape_points(obj.get("points"))
         handles: list[tuple[str, float, float]] = [
             (f"point:{index}", point["x"], point["y"])
@@ -21000,11 +21106,7 @@ def resize_rectlike_object(
     obj["y"] = top
     obj["width"] = max(min_size, right - left)
     obj["height"] = max(min_size, bottom - top)
-    if (
-        obj.get("type") == "shape"
-        and obj.get("kind") == "polygon"
-        and original.get("points")
-    ):
+    if is_editable_polygon(original) and original.get("points"):
         obj["points"] = scale_polygon_points(original, obj)
 
 
@@ -21045,6 +21147,15 @@ def transform_object_about_pivot(
         return rotate_point(sx, sy, px, py, rotation)
 
     obj_type = obj.get("type")
+    if is_polygon_room(obj):
+        points = [
+            transform_point(point["x"], point["y"])
+            for point in validate_shape_points(obj.get("points"))
+        ]
+        obj["points"] = [{"x": x, "y": y} for x, y in points]
+        refresh_polygon_bounds(obj)
+        obj["rotation"] = 0.0
+        return
     if obj_type == "shape" and obj.get("kind") == "polygon":
         points = [
             transform_point(point["x"], point["y"])
@@ -21152,7 +21263,9 @@ def floor_rect_exact_merge_groups(objects: list[dict[str, Any]]) -> list[list[st
     rects = [
         obj
         for obj in objects
-        if obj.get("type") in {"room", "corridor"} and not has_floor_rotation(obj)
+        if obj.get("type") in {"room", "corridor"}
+        and not is_polygon_room(obj)
+        and not has_floor_rotation(obj)
     ]
     groups: list[list[str]] = []
     visited: set[str] = set()
@@ -21199,6 +21312,7 @@ def shared_exact_floor_edges(
         obj
         for obj in objects
         if obj.get("floorMergeGroup") and obj.get("type") in {"room", "corridor"}
+        and not is_polygon_room(obj)
         and not has_floor_rotation(obj)
     ]
     edges: list[tuple[float, float, float, float, float]] = []
@@ -21762,6 +21876,12 @@ def svg_for_floor_outline(
         return [
             f'<polygon points="{svg_points(corridor_polygon_points(x1, y1, x2, y2, outline))}" fill="{ink}"/>'
         ]
+    if is_polygon_room(obj):
+        points = floor_polygon_points(obj, cell)
+        linejoin = floor_boundary_linejoin(obj)
+        return [
+            f'<polyline points="{svg_points(points + [points[0]])}" fill="none" stroke="{ink}" stroke-width="{max(1, wall * 2)}" stroke-linejoin="{linejoin}"/>'
+        ]
     if has_floor_rotation(obj) and obj_type in {"room", "corridor", "round"}:
         return [
             f'<polygon points="{svg_points(expanded_floor_polygon_points(obj, cell, wall))}" fill="{ink}"/>'
@@ -21795,6 +21915,15 @@ def svg_for_floor_fill(
     if obj_type == "diagonal_corridor":
         return [
             f'<polygon points="{svg_points(floor_polygon_points(obj, cell))}" fill="{floor}"{stroke}/>'
+        ]
+    if is_polygon_room(obj):
+        linejoin = (
+            f' stroke-linejoin="{floor_boundary_linejoin(obj)}"'
+            if stroke
+            else ""
+        )
+        return [
+            f'<polygon points="{svg_points(floor_polygon_points(obj, cell))}" fill="{floor}"{stroke}{linejoin}/>'
         ]
     if has_floor_rotation(obj):
         smooth = ' stroke-linejoin="round"' if floor_boundary_is_smooth(obj) else ""
@@ -21832,6 +21961,12 @@ def svg_for_floor_boundary_mask(
     if obj_type == "diagonal_corridor":
         return [
             f'<polygon points="{svg_points(floor_polygon_points(obj, cell))}" fill="none" stroke="{floor}" stroke-width="{width}" stroke-linejoin="round"/>'
+        ]
+    if is_polygon_room(obj):
+        points = floor_polygon_points(obj, cell)
+        linejoin = floor_boundary_linejoin(obj)
+        return [
+            f'<polyline points="{svg_points(points + [points[0]])}" fill="none" stroke="{floor}" stroke-width="{width}" stroke-linejoin="{linejoin}"/>'
         ]
     if has_floor_rotation(obj):
         points = floor_polygon_points(obj, cell)
@@ -23051,6 +23186,10 @@ def bounds(obj: dict[str, Any]) -> tuple[float, float, float, float]:
         )
     if obj["type"] == "legend":
         return obj["x"], obj["y"], obj["width"], obj["height"]
+    if is_polygon_room(obj):
+        if has_floor_rotation(obj):
+            return tuple_points_bounds(floor_polygon_points(obj, 1.0))
+        return bounds_from_points(validate_shape_points(obj.get("points")))
     if obj["type"] in RECTLIKE_TYPES and has_floor_rotation(obj):
         return tuple_points_bounds(floor_polygon_points(obj, 1.0))
     if obj["type"] == "shape":
@@ -23191,6 +23330,10 @@ def topmost_hit_object(
             bx - tolerance <= x <= bx + bw + tolerance
             and by - tolerance <= y <= by + bh + tolerance
         ):
+            if is_polygon_room(obj) and not point_in_polygon(
+                x, y, floor_polygon_points(obj, 1.0)
+            ):
+                continue
             return obj
     return None
 
@@ -23420,10 +23563,27 @@ def render_tk(
             continue
         draw_tk_object(canvas, project, settings, obj, zoom)
     if draft:
-        if draft.kind == "cave_corridor":
-            points = list(draft.points or [])
+        if draft.kind in {"cave_corridor", "room_polygon"}:
+            points = draft_polygon_points(draft, include_preview=True)
             c = settings["cellSize"] * zoom
             color = settings.get("selectionColor", SELECT)
+            if draft.kind == "room_polygon":
+                if len(points) >= 3:
+                    preview_room = polygon_room_from_points(points)
+                    preview_room["id"] = "draft_room_polygon"
+                    draw_tk_floor_objects(
+                        canvas,
+                        settings,
+                        [preview_room],
+                        zoom,
+                    )
+                elif len(points) >= 2:
+                    canvas.create_line(
+                        flatten_points([(gx * c, gy * c) for gx, gy in points]),
+                        fill=color,
+                        width=max(2, int(c * 0.08)),
+                        dash=(5, 3),
+                    )
             radius = max(3, min(8, c * 0.2))
             for index, (gx, gy) in enumerate(points):
                 px, py = gx * c, gy * c
@@ -24187,7 +24347,15 @@ def draw_tk_room_status(
             continue
         x, y, w, h = bounds(room)
         width = max(2, int(c * 0.12))
-        if has_floor_rotation(room) and room.get("type") in {"room", "round"}:
+        if is_polygon_room(room):
+            points = floor_polygon_points(room, c)
+            canvas.create_line(
+                flatten_points(points + [points[0]]),
+                fill=color,
+                width=width,
+                smooth=False,
+            )
+        elif has_floor_rotation(room) and room.get("type") in {"room", "round"}:
             inset = width / c
             local = {
                 **room,
@@ -24244,7 +24412,15 @@ def draw_tk_selection(
 ) -> None:
     c = settings["cellSize"] * zoom
     selection_color = "#5aa7d6" if multi_select else settings.get("selectionColor", SELECT)
-    if obj.get("type") in RECTLIKE_TYPES and has_floor_rotation(obj):
+    if is_polygon_room(obj):
+        points = floor_polygon_points(obj, c)
+        canvas.create_line(
+            flatten_points(points + [points[0]]),
+            fill=selection_color,
+            width=2,
+            dash=(3, 2) if multi_select else (6, 4),
+        )
+    elif obj.get("type") in RECTLIKE_TYPES and has_floor_rotation(obj):
         points = floor_polygon_points(obj, c)
         canvas.create_line(
             flatten_points(points + [points[0]]),
@@ -24934,6 +25110,15 @@ def draw_tk_floor_outline(
             outline="",
         )
         return
+    if is_polygon_room(obj):
+        points = floor_polygon_points(obj, c)
+        canvas.create_line(
+            flatten_points(points + [points[0]]),
+            fill=ink,
+            width=max(2, int(wall * 2)),
+            smooth=False,
+        )
+        return
     x, y = obj["x"] * c, obj["y"] * c
     w, h = obj["width"] * c, obj["height"] * c
     if has_floor_rotation(obj) and obj_type in {"room", "corridor", "round"}:
@@ -24978,6 +25163,16 @@ def draw_tk_floor_fill(
             width=width,
         )
         return
+    if is_polygon_room(obj):
+        canvas.create_polygon(
+            flatten_points(floor_polygon_points(obj, c)),
+            fill=floor,
+            outline=outline,
+            width=width,
+            smooth=False,
+        )
+        draw_tk_texture_fill(canvas, settings, obj, zoom)
+        return
     x, y = obj["x"] * c, obj["y"] * c
     w, h = obj["width"] * c, obj["height"] * c
     if has_floor_rotation(obj):
@@ -25020,6 +25215,15 @@ def draw_tk_floor_boundary_mask(
             fill="",
             outline=floor,
             width=width,
+        )
+        return
+    if is_polygon_room(obj):
+        points = floor_polygon_points(obj, c)
+        canvas.create_line(
+            flatten_points(points + [points[0]]),
+            fill=floor,
+            width=width,
+            smooth=False,
         )
         return
     x, y = obj["x"] * c, obj["y"] * c
@@ -25116,6 +25320,19 @@ def draw_tk_rectlike(
             width=2,
             stipple=stipple,
         )
+    elif is_polygon_room(obj):
+        points = floor_polygon_points(obj, c)
+        canvas.create_polygon(
+            flatten_points(points),
+            fill=settings["floorColor"],
+            outline=settings["gridColor"],
+            width=2,
+            smooth=False,
+            stipple=stipple,
+        )
+        for gx1, gy1, gx2, gy2 in floor_grid_segments(obj, c):
+            canvas.create_line(gx1, gy1, gx2, gy2, fill=settings["gridColor"])
+        return
     elif obj_type in {"cave", "cave_corridor"}:
         points = floor_polygon_points(obj, c)
         canvas.create_polygon(
@@ -26219,6 +26436,15 @@ def draw_pillow_floor_outline(
         )
         draw.polygon(corridor_polygon_points(x1, y1, x2, y2, outline), fill=ink)
         return
+    if is_polygon_room(obj):
+        points = floor_polygon_points(obj, cell)
+        draw.line(
+            points + [points[0]],
+            fill=ink,
+            width=max(1, wall * 2),
+            **pillow_floor_boundary_line_options(obj),
+        )
+        return
     x, y = obj["x"] * cell, obj["y"] * cell
     w, h = obj["width"] * cell, obj["height"] * cell
     if has_floor_rotation(obj) and obj_type in {"room", "corridor", "round"}:
@@ -26255,6 +26481,18 @@ def draw_pillow_floor_fill(
                 width=mask_width,
                 **pillow_floor_boundary_line_options(obj),
             )
+        return
+    if is_polygon_room(obj):
+        points = floor_polygon_points(obj, cell)
+        draw.polygon(points, fill=floor)
+        if mask_boundary:
+            draw.line(
+                points + [points[0]],
+                fill=floor,
+                width=mask_width,
+                **pillow_floor_boundary_line_options(obj),
+            )
+        draw_pillow_texture_fill(draw, settings, obj, scale)
         return
     x, y = obj["x"] * cell, obj["y"] * cell
     w, h = obj["width"] * cell, obj["height"] * cell
@@ -26317,6 +26555,15 @@ def draw_pillow_floor_boundary_mask(
     if obj_type == "diagonal_corridor":
         points = floor_polygon_points(obj, cell)
         draw.line(points + [points[0]], fill=floor, width=width, joint="curve")
+        return
+    if is_polygon_room(obj):
+        points = floor_polygon_points(obj, cell)
+        draw.line(
+            points + [points[0]],
+            fill=floor,
+            width=width,
+            **pillow_floor_boundary_line_options(obj),
+        )
         return
     x, y = obj["x"] * cell, obj["y"] * cell
     w, h = obj["width"] * cell, obj["height"] * cell
@@ -26385,6 +26632,18 @@ def draw_pillow_object(
             draw.ellipse(
                 (x, y, x + w, y + h), fill=floor, outline=ink, width=max(1, scale * 2)
             )
+        elif is_polygon_room(obj):
+            points = floor_polygon_points(obj, cell)
+            draw.polygon(points, fill=floor)
+            draw.line(
+                points + [points[0]],
+                fill=ink,
+                width=max(1, scale * 2),
+                **pillow_floor_boundary_line_options(obj),
+            )
+            for gx1, gy1, gx2, gy2 in floor_grid_segments(obj, cell):
+                draw.line((gx1, gy1, gx2, gy2), fill=ink, width=max(1, scale))
+            return
         elif obj["type"] in {"cave", "cave_corridor"}:
             points = floor_polygon_points(obj, cell)
             draw.polygon(points, fill=floor)
