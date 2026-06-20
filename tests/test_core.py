@@ -366,6 +366,72 @@ class ProjectModelTests(unittest.TestCase):
         edges = app.shared_exact_floor_edges([left, right])
         self.assertEqual(edges[0][:4], (4, 0, 4, 4))
 
+    def test_merge_selected_floors_creates_single_polygon_room(self) -> None:
+        maker = app.OSRMapMaker.__new__(app.OSRMapMaker)
+        maker.project = app.create_project()
+        maker.project["objects"] = []
+        room = app.validate_object(app.rect("room", 0, 0, 4, 4), 1)
+        corridor = app.validate_object(app.rect("corridor", 4, 1, 2, 1), 2)
+        maker.project["objects"].extend([room, corridor])
+        maker.selected_ids = {room["id"], corridor["id"]}
+        maker.selected_id = room["id"]
+        maker.history = []
+        maker.future = []
+        maker.project_snapshot = lambda: copy.deepcopy(maker.project)
+        maker.commit_history = lambda before, description: None
+        maker.redraw = lambda: None
+        maker.show_status = lambda message: None
+
+        app.OSRMapMaker.merge_selected_floors(maker)
+
+        self.assertEqual(len(maker.project["objects"]), 1)
+        merged = maker.project["objects"][0]
+        self.assertEqual(merged["type"], "room")
+        self.assertGreater(len(merged["points"]), 4)
+        self.assertEqual(maker.selected_ids, {merged["id"]})
+
+    def test_merge_floor_object_supports_normal_and_cave_corridors(self) -> None:
+        corridor = app.validate_object(app.rect("corridor", 0, 0, 2, 1), 1)
+        tunnel = app.validate_object(
+            app.cave_corridor_from_points([(2, 0), (4, 0), (4, 1), (2, 1)]),
+            2,
+        )
+
+        merged = app.merged_floor_object([corridor, tunnel])
+
+        self.assertIsNotNone(merged)
+        assert merged is not None
+        self.assertEqual(merged["type"], "cave_corridor")
+        self.assertEqual(merged["layer"], "corridors")
+        self.assertEqual(merged["wallType"], "natural")
+        self.assertTrue(merged["smoothBoundary"])
+        self.assertGreaterEqual(len(merged["points"]), 4)
+
+    def test_group_and_ungroup_selection_handles_floor_mix(self) -> None:
+        maker = app.OSRMapMaker.__new__(app.OSRMapMaker)
+        maker.project = app.create_project()
+        maker.project["objects"] = []
+        room = app.validate_object(app.rect("room", 0, 0, 2, 2), 1)
+        tunnel = app.validate_object(app.rect("cave_corridor", 2, 0, 2, 1), 2)
+        maker.project["objects"].extend([room, tunnel])
+        maker.selected_ids = {room["id"], tunnel["id"]}
+        maker.selected_id = room["id"]
+        maker.history = []
+        maker.future = []
+        maker.project_snapshot = lambda: copy.deepcopy(maker.project)
+        maker.commit_history = lambda before, description: None
+        maker.redraw = lambda: None
+
+        app.OSRMapMaker.group_selected(maker)
+
+        groups = {obj.get("group") for obj in maker.project["objects"]}
+        self.assertEqual(len(groups), 1)
+        self.assertNotIn(None, groups)
+
+        app.OSRMapMaker.ungroup_selected(maker)
+
+        self.assertFalse(any("group" in obj for obj in maker.project["objects"]))
+
     def test_cave_corridor_validates_as_corridor_floor_without_room_fields(self) -> None:
         tunnel = app.validate_object(app.rect("cave_corridor", 1, 2, 5, 1), 1)
 

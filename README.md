@@ -277,6 +277,7 @@ Common selection actions:
 Multi-selection supports:
 
 - Group and ungroup.
+- Merge connected floor objects into one room/corridor floor.
 - Batch layer changes.
 - Batch export/player-visible changes.
 - Align left, center, right, top, middle, or bottom.
@@ -751,6 +752,8 @@ Default shortcuts:
 | `Ctrl+V` | Paste at cursor |
 | `Ctrl+]` | Bring forward |
 | `Ctrl+[` | Send backward |
+| `Ctrl+G` | Group selection |
+| `Ctrl+U` | Ungroup selection |
 | `Ctrl+L` | Toggle lock |
 | `Ctrl+K` | Command palette |
 | `Ctrl+0` | Fit map |

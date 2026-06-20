@@ -4683,6 +4683,7 @@ class OSRMapMaker(tk.Tk):
         edit_menu.add_command(
             label="Transform Selection", command=self.open_group_transform_dialog
         )
+        edit_menu.add_command(label="Merge Floors", command=self.merge_selected_floors)
         edit_menu.add_command(
             label="Merge Exact Floor Edges", command=self.merge_exact_floor_edges
         )
@@ -11526,6 +11527,21 @@ class OSRMapMaker(tk.Tk):
             command=self.toggle_selected_lock,
             state="normal" if has_selection else "disabled",
         )
+        menu.add_command(
+            label="Group",
+            command=self.group_selected,
+            state="normal" if len(self.selected_ids) > 1 else "disabled",
+        )
+        menu.add_command(
+            label="Ungroup",
+            command=self.ungroup_selected,
+            state="normal" if has_selection else "disabled",
+        )
+        menu.add_command(
+            label="Merge floors",
+            command=self.merge_selected_floors,
+            state="normal" if self.can_merge_selected_floors() else "disabled",
+        )
         layer_menu = tk.Menu(menu, tearoff=0)
         for layer in self.project.get("layers", []):
             if layer["id"] == "background":
@@ -12759,6 +12775,16 @@ class OSRMapMaker(tk.Tk):
             return None
         return self.current_object_index().object_by_id.get(self.selected_id)
 
+    def selected_floor_objects(self) -> list[dict[str, Any]]:
+        return [
+            obj
+            for obj in self.selected_objects()
+            if obj.get("type") in FLOOR_TYPES and not self.is_object_locked(obj)
+        ]
+
+    def can_merge_selected_floors(self) -> bool:
+        return len(self.selected_floor_objects()) >= 2
+
     def group_selected(self) -> None:
         if len(self.selected_ids) < 2:
             return
@@ -12793,6 +12819,29 @@ class OSRMapMaker(tk.Tk):
             )
             self.commit_history(before, "Ungroup selection")
             self.redraw()
+
+    def merge_selected_floors(self) -> None:
+        selected = self.selected_floor_objects()
+        if len(selected) < 2:
+            self.show_status("Select at least two unlocked floor objects to merge.")
+            return
+        result = merged_floor_object(selected)
+        if result is None:
+            self.show_status(
+                "Merge needs connected or overlapping rooms/corridors/caves."
+            )
+            return
+        before = self.project_snapshot()
+        selected_ids = {obj["id"] for obj in selected}
+        self.project["objects"] = [
+            obj for obj in self.project["objects"] if obj["id"] not in selected_ids
+        ]
+        result = validate_object(result, len(self.project["objects"]) + 1)
+        self.project["objects"].append(result)
+        self.set_selection({result["id"]}, primary=result["id"])
+        self.commit_history(before, "Merge floors")
+        self.redraw()
+        self.show_status(f"Merged {len(selected)} floor object(s).")
 
     def transform_selection(
         self,
@@ -12915,6 +12964,9 @@ class OSRMapMaker(tk.Tk):
         self.show_status(f"Merged {len(groups)} floor group(s).")
 
     def boolean_floor_selection(self, operation: str) -> None:
+        if operation == "union":
+            self.merge_selected_floors()
+            return
         selected = [
             obj
             for obj in self.selected_objects()
@@ -14395,7 +14447,13 @@ class OSRMapMaker(tk.Tk):
             ttk.Button(
                 self.selection_frame, text="Ungroup", command=self.ungroup_selected
             ).grid(row=row + 1, column=1, sticky="ew", pady=2)
-            row += 2
+            ttk.Button(
+                self.selection_frame,
+                text="Merge floors",
+                command=self.merge_selected_floors,
+                state="normal" if self.can_merge_selected_floors() else "disabled",
+            ).grid(row=row + 2, column=0, columnspan=2, sticky="ew", pady=2)
+            row += 3
             ttk.Separator(self.selection_frame).grid(
                 row=row, column=0, columnspan=2, sticky="ew", pady=(6, 4)
             )
@@ -20088,13 +20146,17 @@ def path_length(points: list[tuple[float, float]]) -> float:
 
 
 def polygon_area(points: list[tuple[float, float]]) -> float:
+    return abs(signed_polygon_area(points))
+
+
+def signed_polygon_area(points: list[tuple[float, float]]) -> float:
     if len(points) < 3:
         return 0.0
     area = 0.0
     for index, (x1, y1) in enumerate(points):
         x2, y2 = points[(index + 1) % len(points)]
         area += x1 * y2 - x2 * y1
-    return abs(area) / 2
+    return area / 2
 
 
 def point_in_polygon(x: float, y: float, points: list[tuple[float, float]]) -> bool:
@@ -21257,6 +21319,327 @@ def transform_objects_about_pivot(
         except ValueError:
             pass
     return transformed
+
+
+def simplify_collinear_polygon(
+    points: list[tuple[float, float]], eps: float = 0.000001
+) -> list[tuple[float, float]]:
+    cleaned: list[tuple[float, float]] = []
+    for point in points:
+        if not cleaned or math.hypot(point[0] - cleaned[-1][0], point[1] - cleaned[-1][1]) > eps:
+            cleaned.append(point)
+    if len(cleaned) > 1 and math.hypot(
+        cleaned[0][0] - cleaned[-1][0], cleaned[0][1] - cleaned[-1][1]
+    ) <= eps:
+        cleaned.pop()
+    if len(cleaned) < 4:
+        return cleaned
+    changed = True
+    while changed and len(cleaned) >= 4:
+        changed = False
+        result: list[tuple[float, float]] = []
+        count = len(cleaned)
+        for index, current in enumerate(cleaned):
+            previous = cleaned[index - 1]
+            next_point = cleaned[(index + 1) % count]
+            ax, ay = current[0] - previous[0], current[1] - previous[1]
+            bx, by = next_point[0] - current[0], next_point[1] - current[1]
+            cross = ax * by - ay * bx
+            if abs(cross) <= eps:
+                changed = True
+                continue
+            result.append(current)
+        cleaned = result
+    return cleaned
+
+
+def point_segment_distance(
+    px: float,
+    py: float,
+    ax: float,
+    ay: float,
+    bx: float,
+    by: float,
+) -> float:
+    dx, dy = bx - ax, by - ay
+    length_sq = dx * dx + dy * dy
+    if length_sq <= 0.0000000001:
+        return math.hypot(px - ax, py - ay)
+    t = max(0.0, min(1.0, ((px - ax) * dx + (py - ay) * dy) / length_sq))
+    return math.hypot(px - (ax + dx * t), py - (ay + dy * t))
+
+
+def point_in_or_near_polygon(
+    x: float, y: float, points: list[tuple[float, float]], tolerance: float
+) -> bool:
+    if point_in_polygon(x, y, points):
+        return True
+    if tolerance <= 0:
+        return False
+    return any(
+        point_segment_distance(
+            x,
+            y,
+            points[index][0],
+            points[index][1],
+            points[(index + 1) % len(points)][0],
+            points[(index + 1) % len(points)][1],
+        )
+        <= tolerance
+        for index in range(len(points))
+    )
+
+
+def shapely_merged_polygon_points(
+    polygons: list[list[tuple[float, float]]],
+) -> list[tuple[float, float]] | None:
+    try:
+        from shapely.geometry import Polygon
+        from shapely.ops import unary_union
+    except Exception:
+        return None
+    geometries = []
+    for points in polygons:
+        points = simplify_collinear_polygon(points)
+        if len(points) < 3 or polygon_area(points) <= 0.000001:
+            continue
+        try:
+            geometry = Polygon(points)
+            if not geometry.is_valid:
+                geometry = geometry.buffer(0)
+            if not geometry.is_empty and geometry.area > 0.000001:
+                geometries.append(geometry)
+        except Exception:
+            continue
+    if len(geometries) < 2:
+        return None
+    try:
+        merged = unary_union(geometries)
+    except Exception:
+        return None
+    if merged.is_empty:
+        return None
+    if merged.geom_type == "Polygon":
+        candidates = [merged]
+    elif merged.geom_type == "MultiPolygon":
+        candidates = list(merged.geoms)
+    else:
+        candidates = [
+            geom for geom in getattr(merged, "geoms", []) if geom.geom_type == "Polygon"
+        ]
+    if len(candidates) != 1:
+        return None
+    polygon = candidates[0]
+    try:
+        simplified = polygon.simplify(0.01, preserve_topology=True)
+        if simplified.geom_type == "Polygon" and simplified.area > 0.000001:
+            polygon = simplified
+    except Exception:
+        pass
+    points = [(float(x), float(y)) for x, y in list(polygon.exterior.coords)[:-1]]
+    return simplify_collinear_polygon(points)
+
+
+def merge_raster_step(points: list[tuple[float, float]]) -> float:
+    _left, _top, width, height = tuple_points_bounds(points)
+    area = max(0.000001, width * height)
+    return max(0.0625, math.sqrt(area / 160000))
+
+
+def direction_index(start: tuple[int, int], end: tuple[int, int]) -> int:
+    dx, dy = end[0] - start[0], end[1] - start[1]
+    if abs(dx) >= abs(dy):
+        return 0 if dx > 0 else 2
+    return 1 if dy > 0 else 3
+
+
+def choose_boundary_edge(
+    previous: tuple[tuple[int, int], tuple[int, int]],
+    candidates: list[tuple[tuple[int, int], tuple[int, int]]],
+) -> tuple[tuple[int, int], tuple[int, int]]:
+    previous_dir = direction_index(previous[0], previous[1])
+    turn_order = {1: 0, 0: 1, 3: 2, 2: 3}
+
+    def score(edge: tuple[tuple[int, int], tuple[int, int]]) -> tuple[int, int, int]:
+        candidate_dir = direction_index(edge[0], edge[1])
+        delta = (candidate_dir - previous_dir) % 4
+        return turn_order.get(delta, 4), edge[1][0], edge[1][1]
+
+    return min(candidates, key=score)
+
+
+def raster_boundary_cycles(
+    filled: set[tuple[int, int]],
+) -> list[list[tuple[int, int]]]:
+    edges: set[tuple[tuple[int, int], tuple[int, int]]] = set()
+    for gx, gy in filled:
+        if (gx, gy - 1) not in filled:
+            edges.add(((gx, gy), (gx + 1, gy)))
+        if (gx + 1, gy) not in filled:
+            edges.add(((gx + 1, gy), (gx + 1, gy + 1)))
+        if (gx, gy + 1) not in filled:
+            edges.add(((gx + 1, gy + 1), (gx, gy + 1)))
+        if (gx - 1, gy) not in filled:
+            edges.add(((gx, gy + 1), (gx, gy)))
+    outgoing: dict[tuple[int, int], list[tuple[tuple[int, int], tuple[int, int]]]] = {}
+    for edge in edges:
+        outgoing.setdefault(edge[0], []).append(edge)
+    unused = set(edges)
+    cycles: list[list[tuple[int, int]]] = []
+    while unused:
+        edge = next(iter(unused))
+        start = edge[0]
+        cycle: list[tuple[int, int]] = []
+        for _guard in range(len(edges) + 1):
+            if edge not in unused:
+                break
+            unused.remove(edge)
+            cycle.append(edge[0])
+            end = edge[1]
+            if end == start:
+                if len(cycle) >= 3:
+                    cycles.append(cycle)
+                break
+            candidates = [candidate for candidate in outgoing.get(end, []) if candidate in unused]
+            if not candidates:
+                break
+            edge = choose_boundary_edge(edge, candidates)
+    return cycles
+
+
+def cycle_centroid(points: list[tuple[float, float]]) -> tuple[float, float]:
+    if not points:
+        return 0.0, 0.0
+    return (
+        sum(point[0] for point in points) / len(points),
+        sum(point[1] for point in points) / len(points),
+    )
+
+
+def raster_merged_polygon_points(
+    polygons: list[list[tuple[float, float]]],
+) -> list[tuple[float, float]] | None:
+    all_points = [point for polygon in polygons for point in polygon]
+    if not all_points:
+        return None
+    left, top, width, height = tuple_points_bounds(all_points)
+    step = merge_raster_step(all_points)
+    cols = max(1, int(math.ceil(width / step)) + 2)
+    rows = max(1, int(math.ceil(height / step)) + 2)
+    filled: set[tuple[int, int]] = set()
+    polygon_infos = [
+        (points, tuple_points_bounds(points))
+        for points in polygons
+        if len(points) >= 3 and polygon_area(points) > 0.000001
+    ]
+    for points, (px, py, pw, ph) in polygon_infos:
+        gx_start = max(0, int(math.floor((px - left) / step)) - 1)
+        gx_end = min(cols - 1, int(math.ceil((px + pw - left) / step)) + 1)
+        gy_start = max(0, int(math.floor((py - top) / step)) - 1)
+        gy_end = min(rows - 1, int(math.ceil((py + ph - top) / step)) + 1)
+        for gy in range(gy_start, gy_end + 1):
+            cy = top + (gy + 0.5) * step
+            for gx in range(gx_start, gx_end + 1):
+                cx = left + (gx + 0.5) * step
+                if point_in_or_near_polygon(cx, cy, points, step * 0.15):
+                    filled.add((gx, gy))
+    if not filled:
+        return None
+    rings: list[list[tuple[float, float]]] = []
+    for cycle in raster_boundary_cycles(filled):
+        points = simplify_collinear_polygon(
+            [(left + gx * step, top + gy * step) for gx, gy in cycle],
+            eps=step * 0.01,
+        )
+        if len(points) >= 3 and polygon_area(points) > step * step:
+            rings.append(points)
+    if not rings:
+        return None
+    outer_rings: list[list[tuple[float, float]]] = []
+    for ring in rings:
+        cx, cy = cycle_centroid(ring)
+        inside_other = any(
+            other is not ring
+            and abs(signed_polygon_area(other)) > abs(signed_polygon_area(ring))
+            and point_in_polygon(cx, cy, other)
+            for other in rings
+        )
+        if not inside_other:
+            outer_rings.append(ring)
+    if len(outer_rings) != 1:
+        return None
+    return outer_rings[0]
+
+
+def merged_floor_polygon_points(
+    objects: list[dict[str, Any]],
+) -> list[tuple[float, float]] | None:
+    polygons = [
+        floor_polygon_points(obj, 1.0)
+        for obj in objects
+        if obj.get("type") in FLOOR_TYPES
+    ]
+    polygons = [
+        simplify_collinear_polygon(points)
+        for points in polygons
+        if len(points) >= 3 and polygon_area(points) > 0.000001
+    ]
+    if len(polygons) < 2:
+        return None
+    return shapely_merged_polygon_points(polygons) or raster_merged_polygon_points(polygons)
+
+
+def merged_floor_wall_type(objects: list[dict[str, Any]]) -> str:
+    if any(obj.get("type") in {"cave", "cave_corridor"} for obj in objects):
+        return "natural"
+    for obj in objects:
+        wall_type = str(obj.get("wallType") or "")
+        if wall_type in WALL_TYPES:
+            return wall_type
+    return "standard"
+
+
+def merged_floor_layer(objects: list[dict[str, Any]], has_room: bool) -> str:
+    layers = {str(obj.get("layer")) for obj in objects if obj.get("layer")}
+    if len(layers) == 1:
+        return next(iter(layers))
+    return "rooms" if has_room else "corridors"
+
+
+def merged_floor_object(objects: list[dict[str, Any]]) -> dict[str, Any] | None:
+    floors = [obj for obj in objects if obj.get("type") in FLOOR_TYPES]
+    if len(floors) < 2:
+        return None
+    points = merged_floor_polygon_points(floors)
+    if not points or len(points) < 3:
+        return None
+    has_room = any(obj.get("type") in {"room", "round", "cave"} for obj in floors)
+    wall_type = merged_floor_wall_type(floors)
+    smooth_boundary = any(floor_boundary_is_smooth(obj) for obj in floors)
+    if has_room:
+        result = polygon_room_from_points(points)
+        source = next(
+            (obj for obj in floors if obj.get("type") in {"room", "round", "cave"}),
+            floors[0],
+        )
+        for key in campaign_room_fields():
+            if key in source:
+                result[key] = json_clone(source[key])
+        if not result.get("roomName"):
+            result["roomName"] = "Merged floor"
+    else:
+        result = cave_corridor_from_points(points, smooth_boundary=smooth_boundary)
+        source = floors[0]
+    result["wallType"] = wall_type
+    if "wallThickness" in source:
+        result["wallThickness"] = max(0.02, coerce_float(source.get("wallThickness"), 0.16))
+    for key in ("terrain", "district", "poiRole", "textureFill", "export", "playerVisible"):
+        if key in source:
+            result[key] = json_clone(source[key])
+    result["layer"] = merged_floor_layer(floors, has_room)
+    result.pop("group", None)
+    result.pop("floorMergeGroup", None)
+    return validate_object(result, 1)
 
 
 def floor_rect_exact_merge_groups(objects: list[dict[str, Any]]) -> list[list[str]]:
