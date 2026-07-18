@@ -474,13 +474,16 @@ class PerformanceSmokeTests(unittest.TestCase):
 
         app.OSRMapMaker.refresh_object_list(maker)
         self.assertEqual(maker.object_list_ids, [""])
-        self.assertEqual(maker.object_listbox.items, ["No objects on this map yet."])
+        self.assertEqual(
+            maker.object_listbox.items,
+            ["No objects yet. Draw on the map to add one."],
+        )
 
         maker.object_search_var.set("missing")
         app.OSRMapMaker.refresh_object_list(maker)
         self.assertEqual(
             maker.object_listbox.items,
-            ["No objects match the current filter."],
+            ["No matches. Clear filters to show all objects."],
         )
 
     def test_spatial_index_uses_cached_object_bounds(self) -> None:

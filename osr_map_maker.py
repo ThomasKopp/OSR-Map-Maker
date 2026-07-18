@@ -87,7 +87,7 @@ LONG_TEXT_FIELDS = {
 }
 HANDLE_PIXEL_SIZE = 8
 MIN_ZOOM = 0.25
-MAX_ZOOM = 2.2
+MAX_ZOOM = 4.0
 ZOOM_PRESET_LABELS = (
     "25%",
     "50%",
@@ -95,6 +95,8 @@ ZOOM_PRESET_LABELS = (
     "100%",
     "150%",
     "200%",
+    "300%",
+    "400%",
     "Fit Map",
     "Fit Selection",
     "Fit Width",
@@ -133,7 +135,7 @@ WORKSPACE_PANEL_TITLES = (
 )
 WORKSPACE_PRESETS: dict[str, dict[str, Any]] = {
     "Drawing": {
-        "panels": {"Layers", "Selection", "History", "Navigator", "Objects"},
+        "panels": {"Layers", "Selection", "History", "Navigator"},
         "minimap": True,
         "toolbar": True,
         "colorPicker": False,
@@ -201,14 +203,29 @@ UI_METRICS = {
 }
 GLOBAL_ACTION_ICONS = {
     "New": "+",
+    "Add": "+",
     "Load": "⇱",
     "Save": "▣",
+    "Delete": "×",
+    "Duplicate": "⧉",
     "Undo": "↶",
     "Redo": "↷",
+    "Move Up": "↑",
+    "Move Down": "↓",
+    "Collapse": "−",
+    "Expand": "+",
+    "Close": "×",
+    "Restore": "←",
     "Search": "⌕",
     "Command": "⌘",
     "Export": "⇩",
+    "Layers": "▤",
+    "Selection": "↖",
+    "Symbols": "★",
+    "Navigator": "⌖",
     "Fit": "▢",
+    "Zoom In": "+",
+    "Zoom Out": "−",
     "100%": "1:1",
     "Sel": "⧉",
     "Width": "↔",
@@ -219,6 +236,10 @@ def icon_label(action: str, label: str | None = None) -> str:
     icon = GLOBAL_ACTION_ICONS.get(action, "")
     text = label or action
     return f"{icon} {text}" if icon else text
+
+
+def icon_only(action: str) -> str:
+    return GLOBAL_ACTION_ICONS.get(action, action)
 
 
 def save_state_label(dirty: bool, autosaved: bool) -> str:
@@ -315,11 +336,11 @@ LINKABLE_SYMBOL_KINDS = {
 }
 ROOM_STATUSES = ("undiscovered", "discovered", "looted", "secured", "dangerous")
 ROOM_STATUS_LABELS = {
-    "undiscovered": "Unentdeckt",
-    "discovered": "Entdeckt",
-    "looted": "Gepluendert",
-    "secured": "Gesichert",
-    "dangerous": "Gefaehrlich",
+    "undiscovered": "Undiscovered",
+    "discovered": "Discovered",
+    "looted": "Looted",
+    "secured": "Secured",
+    "dangerous": "Dangerous",
 }
 ROOM_STATUS_COLORS = {
     "undiscovered": "#7a8791",
@@ -432,11 +453,11 @@ GENERATOR_SCOPES = ("Map", "Selection", "Active zone")
 DOOR_PLACEMENT_TYPES = ("normal", "secret", "locked", "trapdoor")
 WALL_TYPES = ("standard", "thin", "thick", "natural", "ruined")
 RANDOM_ROOM_CONTENTS = (
-    ("empty", "Leer", "Dust, echoes, and a useful clue to the next area."),
+    ("empty", "Empty", "Dust, echoes, and a useful clue to the next area."),
     ("monster", "Monster", "Hostile creatures guard the obvious route."),
-    ("trap", "Falle", "A pressure trigger threatens anyone crossing the room."),
-    ("treasure", "Schatz", "A hidden cache rewards careful searching."),
-    ("special", "Spezial", "An odd feature changes the local situation."),
+    ("trap", "Trap", "A pressure trigger threatens anyone crossing the room."),
+    ("treasure", "Treasure", "A hidden cache rewards careful searching."),
+    ("special", "Special", "An odd feature changes the local situation."),
 )
 DEFAULT_SHORTCUTS = {
     "select_tool": "v",
@@ -450,6 +471,8 @@ DEFAULT_SHORTCUTS = {
     "shape_circle_tool": "i",
     "shape_polygon_tool": "p",
     "shape_line_tool": "l",
+    "freehand_tool": "",
+    "brush_tool": "",
     "text_tool": "t",
     "number_tool": "n",
     "note_tool": "m",
@@ -608,6 +631,8 @@ TOOL_ACTIONS = {
     "shape_circle": "shape_circle_tool",
     "shape_polygon": "shape_polygon_tool",
     "shape_line": "shape_line_tool",
+    "freehand": "freehand_tool",
+    "brush": "brush_tool",
     "text": "text_tool",
     "number": "number_tool",
     "note": "note_tool",
@@ -615,20 +640,22 @@ TOOL_ACTIONS = {
 }
 TOOL_DESCRIPTIONS = {
     "select": "Select, move, and edit objects",
-    "room": "Rechteckigen Raum ziehen",
-    "room_polygon": "Freien Polygonraum punktweise zeichnen; Startpunkt oder Enter schliesst",
-    "corridor": "Geraden oder diagonalen Korridor ziehen",
-    "cave_corridor": "Naturtunnel punktweise zeichnen; Startpunkt oder Enter schliesst",
-    "round": "Runden Raum ziehen",
-    "cave": "Hoehle mit unregelmaessigem Rand ziehen",
-    "shape_rect": "Einfaches Rechteck ziehen",
-    "shape_circle": "Einfachen Kreis ziehen",
-    "shape_polygon": "Polygon punktweise zeichnen und am Startpunkt schliessen",
-    "shape_line": "Einfache Linie ziehen",
-    "text": "Beschriftung platzieren",
-    "number": "Automatische Raumnummer platzieren",
-    "note": "Nicht exportierbare GM-Notiz platzieren",
-    "measure": "Distanz, Weglaenge und Flaeche messen",
+    "room": "Drag to draw a rectangular room",
+    "room_polygon": "Place room points; close at the start point or with Enter",
+    "corridor": "Drag to draw a straight or diagonal corridor",
+    "cave_corridor": "Place tunnel points; close at the start point or with Enter",
+    "round": "Drag to draw a round room",
+    "cave": "Drag to draw a cave with an irregular edge",
+    "shape_rect": "Drag to draw a rectangle",
+    "shape_circle": "Drag to draw a circle",
+    "shape_polygon": "Place polygon points and close at the start point",
+    "shape_line": "Drag to draw a line",
+    "freehand": "Draw a freehand line",
+    "brush": "Paint a freeform area",
+    "text": "Place a text label",
+    "number": "Place an automatic room number",
+    "note": "Place a non-exported GM note",
+    "measure": "Measure distance, path length, and area",
 }
 CURSOR_BY_TOOL = {
     "select": "arrow",
@@ -642,6 +669,8 @@ CURSOR_BY_TOOL = {
     "shape_circle": "crosshair",
     "shape_polygon": "crosshair",
     "shape_line": "crosshair",
+    "freehand": "pencil",
+    "brush": "spraycan",
     "text": "xterm",
     "number": "tcross",
     "note": "pencil",
@@ -722,8 +751,10 @@ SYMBOL_GROUPS = [
             ("illusion_passage", "⋱", "Illusion Passage"),
             ("revolving_wall", "⟳", "Revolving Wall"),
             ("collapse_barrier", "▲", "Collapse Barrier"),
-            ("barricade", "≡", "Barricade"),
+            ("barricade", "╳", "Barricade"),
             ("force_barrier", "◇", "Force Barrier"),
+            ("iron_gate", "▥", "Iron Gate"),
+            ("veil", "⌇", "Veil"),
         ],
     ),
     (
@@ -788,6 +819,9 @@ SYMBOL_GROUPS = [
             ("crystal_focus", "◆", "Crystal Focus"),
             ("cursed_idol", "☠", "Cursed Idol"),
             ("talking_statue", "☽", "Talking Statue"),
+            ("pentagram", "☆", "Pentagram"),
+            ("magic_swirl", "〰", "Magic Swirl"),
+            ("will_o_wisp", "✧", "Will-o'-Wisp"),
             ("invisible_wall", "⋯", "Invisible Wall"),
             ("time_warp_zone", "⌛", "Time Warp Zone"),
             ("dream_vision_site", "☾", "Dream or Vision Site"),
@@ -803,6 +837,9 @@ SYMBOL_GROUPS = [
             ("pool", "≋", "Pool"),
             ("dais", "▣", "Dais"),
             ("altar", "▥", "Altar"),
+            ("brazier", "♨", "Brazier"),
+            ("pedestal", "▤", "Pedestal"),
+            ("chain", "⛓", "Chain"),
             ("fireplace", "▔", "Fireplace"),
             ("table_chest", "▤", "Table, Chest"),
             ("bed", "▭", "Bed"),
@@ -854,6 +891,12 @@ SYMBOL_GROUPS = [
             ("animal_burrow", "⌾", "Animal Burrow"),
             ("nest", "◔", "Nest"),
             ("bone_field", "☠", "Bone Field"),
+            ("fog_bank", "≋", "Fog Bank"),
+            ("spider_web", "✳", "Spider Web"),
+            ("guano_pile", "∴", "Guano Pile"),
+            ("mould_patch", "✽", "Mould Patch"),
+            ("slime_pool", "≈", "Slime Pool"),
+            ("crystal_cluster", "◆", "Crystal Cluster"),
         ],
     ),
     (
@@ -899,6 +942,18 @@ SYMBOL_GROUPS = [
             ("market_stall", "⌂", "Market Stall"),
             ("supply_crates", "▧", "Supply Crates"),
             ("barrel_group", "◍", "Barrel Group"),
+            ("broken_pot", "◜", "Broken Pot"),
+            ("skeleton_remains", "☠", "Skeleton Remains"),
+            ("skull_pile", "☠", "Skull Pile"),
+        ],
+    ),
+    (
+        "Creatures & Remains",
+        [
+            ("rat_swarm", "••", "Rat Swarm"),
+            ("snake", "〰", "Snake"),
+            ("spider", "✳", "Spider"),
+            ("earthworm", "⌇", "Earthworm"),
         ],
     ),
     (
@@ -1034,6 +1089,26 @@ SYMBOL_ALIASES = {
     "loot_pile": {"loot", "treasure", "coins"},
     "grave": {"gravestone", "tombstone"},
     "open_coffin": {"coffin open", "opened coffin"},
+    "iron_gate": {"iron bars", "gate", "portcullis gate"},
+    "barricade": {"barricaded door", "blockade", "boarded door", "wooden barrier"},
+    "veil": {"curtain", "hanging veil"},
+    "brazier": {"fire bowl", "fire brazier", "coal brazier"},
+    "pedestal": {"plinth", "display pedestal"},
+    "chain": {"chains", "shackles"},
+    "pentagram": {"five-point star", "ritual star"},
+    "magic_swirl": {"arcane swirl", "magical vortex"},
+    "will_o_wisp": {"will o wisp", "wisp", "spirit light"},
+    "fog_bank": {"fog", "mist", "mist bank"},
+    "spider_web": {"web", "cobweb"},
+    "guano_pile": {"bat guano", "droppings"},
+    "mould_patch": {"mold", "mould", "mildew"},
+    "slime_pool": {"slime", "ooze", "ooze pool"},
+    "crystal_cluster": {"crystals", "crystal formation"},
+    "broken_pot": {"broken pottery", "shards"},
+    "skeleton_remains": {"skeleton", "bones", "remains"},
+    "skull_pile": {"skulls", "skull heap"},
+    "rat_swarm": {"rats", "rat nest"},
+    "earthworm": {"worm", "giant worm"},
     "table_long": {"long table", "dining table"},
     "table_square": {"square table"},
     "table_round": {"round table"},
@@ -1063,6 +1138,7 @@ DOOR_ROLE_SYMBOLS = {
     "broken_door",
     "heavy_stone_door",
     "illusion_passage",
+    "iron_gate",
     "trap_floor",
     "secret_trap_door",
 }
@@ -1142,6 +1218,7 @@ SYMBOL_GROUP_TAGS = {
     "Features": {"feature", "furniture", "dungeon"},
     "Natural": {"natural", "cave", "terrain"},
     "Dungeon Objects": {"furniture", "object", "dungeon"},
+    "Creatures & Remains": {"creature", "remains", "dungeon"},
     "Gameplay Markers": {"marker", "gameplay", "vtt"},
     "Urban & Overland": {"urban", "overland", "settlement"},
 }
@@ -1163,6 +1240,10 @@ for _kind in (
     "teleporter",
     "trap_rune",
     "alarm_glyph",
+    "pentagram",
+    "magic_swirl",
+    "will_o_wisp",
+    "crystal_cluster",
 ):
     SYMBOL_TAGS.setdefault(_kind, []).extend(
         tag for tag in ("magic",) if tag not in SYMBOL_TAGS.setdefault(_kind, [])
@@ -1179,6 +1260,11 @@ for _kind in (
     "boulder_cluster",
     "fallen_slab",
     "cracked_ground",
+    "fog_bank",
+    "spider_web",
+    "guano_pile",
+    "mould_patch",
+    "slime_pool",
 ):
     SYMBOL_TAGS.setdefault(_kind, []).extend(
         tag
@@ -1219,6 +1305,7 @@ SYMBOL_VARIANT_SETS = {
         ("open_door", "Open"),
         ("locked_door", "Locked"),
         ("barred_door", "Barred"),
+        ("barricade", "Barricaded"),
         ("broken_door", "Broken"),
     ],
     "secret_door": [
@@ -1229,6 +1316,7 @@ SYMBOL_VARIANT_SETS = {
     ],
     "portcullis": [
         ("portcullis", "Bars"),
+        ("iron_gate", "Iron gate"),
         ("directional_portcullis", "Directional"),
         ("force_barrier", "Force"),
         ("collapse_barrier", "Collapsed"),
@@ -1338,6 +1426,7 @@ SYMBOL_GROUP_ICONS = {
     "Features": "●",
     "Natural": "〰",
     "Dungeon Objects": "▤",
+    "Creatures & Remains": "☠",
     "Gameplay Markers": "★",
     "Urban & Overland": "⌂",
 }
@@ -1626,20 +1715,22 @@ def default_settings() -> dict[str, Any]:
         "smoothCaveCorridors": True,
         "showRoomStatus": True,
         "roomStatusGmOnly": True,
-        "showMinimap": False,
+        "showMinimap": True,
         "showToolbar": True,
         "showColorPicker": False,
         "colorPickerX": 120,
         "colorPickerY": 120,
         "showTooltips": True,
+        "showSymbolPreviews": True,
         "showPerformanceMetrics": False,
         "compactMode": False,
-        "toolbarDock": "floating",
+        "autoContextPanels": True,
+        "toolbarDock": "left",
         "toolbarX": 8,
         "toolbarY": 8,
         "minimapX": -18,
         "minimapY": -18,
-        "rightPanels": {},
+        "rightPanels": default_right_panel_states("Drawing"),
         "focusMode": "Off",
         "showPrintGrid": False,
         "mapMode": "Dungeon",
@@ -1706,7 +1797,7 @@ def default_right_panel_states(preset_name: Any = "Drawing") -> dict[str, dict[s
     return {
         key: {
             "visible": visible,
-            "docked": False,
+            "docked": True,
             "collapsed": False,
             "x": 72 + index * 24,
             "y": 92 + index * 24,
@@ -1724,18 +1815,19 @@ def default_window_layout_settings(preset_name: Any = "Drawing") -> dict[str, An
         "workspacePreset": preset_name,
         "rightPanels": default_right_panel_states(preset_name),
         "inspectorWidth": 420,
-        "toolbarDock": "floating",
+        "toolbarDock": "left",
         "toolbarX": 8,
         "toolbarY": 8,
         "showToolbar": bool(preset.get("toolbar", True)),
         "showMinimap": bool(preset.get("minimap", False)),
-        "minimapDocked": bool(preset.get("minimap", False)),
+        "minimapDocked": False,
         "minimapTransparent": False,
         "minimapX": -18,
         "minimapY": -18,
         "showColorPicker": bool(preset.get("colorPicker", False)),
         "colorPickerX": 120,
         "colorPickerY": 120,
+        "compactMode": False,
     }
 
 
@@ -2048,17 +2140,31 @@ def validate_settings(value: Any) -> dict[str, Any]:
     settings = default_settings()
     if isinstance(value, dict):
         settings.update(value)
-    settings["width"] = max(12, int(settings.get("width") or 70))
-    settings["height"] = max(12, int(settings.get("height") or 52))
-    settings["cellSize"] = max(8, int(settings.get("cellSize") or 18))
-    settings["backgroundColor"] = settings.get("backgroundColor") or BLUE
-    settings["gridColor"] = settings.get("gridColor") or settings["backgroundColor"]
-    settings["floorColor"] = settings.get("floorColor") or WHITE
-    settings["textColor"] = settings.get("textColor") or settings["gridColor"]
-    settings["selectionColor"] = settings.get("selectionColor") or SELECT
-    settings["legendColor"] = settings.get("legendColor") or settings["gridColor"]
-    settings["floorOutlineColor"] = settings.get("floorOutlineColor") or BLUE
-    settings["styleTemplate"] = settings.get("styleTemplate") or "Blueprint"
+    settings["width"] = max(12, safe_int(settings.get("width"), 70))
+    settings["height"] = max(12, safe_int(settings.get("height"), 52))
+    settings["cellSize"] = max(8, safe_int(settings.get("cellSize"), 18))
+    settings["backgroundColor"] = validated_hex_color(
+        settings.get("backgroundColor"), BLUE
+    )
+    settings["gridColor"] = validated_hex_color(
+        settings.get("gridColor"), settings["backgroundColor"]
+    )
+    settings["floorColor"] = validated_hex_color(settings.get("floorColor"), WHITE)
+    settings["textColor"] = validated_hex_color(
+        settings.get("textColor"), settings["gridColor"]
+    )
+    settings["selectionColor"] = validated_hex_color(
+        settings.get("selectionColor"), SELECT
+    )
+    settings["legendColor"] = validated_hex_color(
+        settings.get("legendColor"), settings["gridColor"]
+    )
+    settings["floorOutlineColor"] = validated_hex_color(
+        settings.get("floorOutlineColor"), BLUE
+    )
+    settings["styleTemplate"] = str(settings.get("styleTemplate") or "Blueprint")
+    if settings["styleTemplate"] not in STYLE_TEMPLATES:
+        settings["styleTemplate"] = "Blueprint"
     settings["showLegend"] = bool(settings.get("showLegend", True))
     settings["cellScale"] = max(0.01, coerce_float(settings.get("cellScale"), 10.0))
     settings["cellScaleUnit"] = (
@@ -2081,10 +2187,14 @@ def validate_settings(value: Any) -> dict[str, Any]:
     settings["colorPickerX"] = max(0, min(4000, int(coerce_float(settings.get("colorPickerX"), 120))))
     settings["colorPickerY"] = max(0, min(4000, int(coerce_float(settings.get("colorPickerY"), 120))))
     settings["showTooltips"] = bool(settings.get("showTooltips", True))
+    settings["showSymbolPreviews"] = bool(
+        settings.get("showSymbolPreviews", True)
+    )
     settings["showPerformanceMetrics"] = bool(
         settings.get("showPerformanceMetrics", False)
     )
     settings["compactMode"] = bool(settings.get("compactMode", False))
+    settings["autoContextPanels"] = bool(settings.get("autoContextPanels", True))
     settings["toolbarDock"] = str(settings.get("toolbarDock") or "floating")
     if settings["toolbarDock"] not in {"floating", "top", "left"}:
         settings["toolbarDock"] = "floating"
@@ -2103,8 +2213,8 @@ def validate_settings(value: Any) -> dict[str, Any]:
             continue
         validated_panels[str(key)] = {
             "visible": bool(state.get("visible", True)),
-            "docked": False,
-            "collapsed": False,
+            "docked": bool(state.get("docked", True)),
+            "collapsed": bool(state.get("collapsed", False)),
             "x": max(0, min(4000, int(coerce_float(state.get("x"), 8)))),
             "y": max(0, min(4000, int(coerce_float(state.get("y"), 8)))),
             "width": max(260, min(900, int(coerce_float(state.get("width"), 330)))),
@@ -2117,7 +2227,7 @@ def validate_settings(value: Any) -> dict[str, Any]:
     settings["showPrintGrid"] = bool(settings.get("showPrintGrid", False))
     settings["mapMode"] = str(settings.get("mapMode") or "Dungeon")
     if settings["mapMode"] not in MAP_MODES:
-        settings["mapMode"] = "Sketch"
+        settings["mapMode"] = "Dungeon"
     settings["hexOrientation"] = str(settings.get("hexOrientation") or "pointy")
     if settings["hexOrientation"] not in HEX_ORIENTATIONS:
         settings["hexOrientation"] = "pointy"
@@ -2151,19 +2261,28 @@ def validate_settings(value: Any) -> dict[str, Any]:
     settings["workspacePreset"] = normalize_workspace_preset(
         settings.get("workspacePreset")
     )
+    if not settings["rightPanels"]:
+        settings["rightPanels"] = default_right_panel_states(settings["workspacePreset"])
+    else:
+        default_panels = default_right_panel_states(settings["workspacePreset"])
+        for key, default_state in default_panels.items():
+            settings["rightPanels"].setdefault(key, default_state)
     settings["inspectorWidth"] = max(
         260, min(1200, int(coerce_float(settings.get("inspectorWidth"), 420)))
     )
     settings["snapToObjects"] = bool(settings.get("snapToObjects", False))
-    settings["defaultTextFont"] = settings.get("defaultTextFont") or "Arial"
-    settings["defaultTextSize"] = max(
-        0.25, coerce_float(settings.get("defaultTextSize"), 1.0)
+    default_font = settings.get("defaultTextFont")
+    settings["defaultTextFont"] = (
+        default_font.strip() if isinstance(default_font, str) and default_font.strip() else "Arial"
+    )
+    settings["defaultTextSize"] = coerce_text_size(
+        settings.get("defaultTextSize"), 1.0
     )
     settings["defaultShapeLineWidth"] = max(
         0.01, coerce_float(settings.get("defaultShapeLineWidth"), 0.12)
     )
-    settings["defaultShapeStrokeColor"] = (
-        settings.get("defaultShapeStrokeColor") or settings["gridColor"]
+    settings["defaultShapeStrokeColor"] = validated_hex_color(
+        settings.get("defaultShapeStrokeColor"), settings["gridColor"]
     )
     settings["defaultSymbolSizePreset"] = str(
         settings.get("defaultSymbolSizePreset") or DEFAULT_SYMBOL_SIZE_PRESET
@@ -2249,21 +2368,37 @@ def validate_project(value: Any) -> dict[str, Any]:
         )
     if not isinstance(value.get("objects"), list):
         raise ValueError("This project format is not supported.")
-    schema_version = int(value.get("schemaVersion") or 1)
+    schema_version = safe_int(value.get("schemaVersion"), 1)
     if schema_version > CURRENT_SCHEMA_VERSION:
         raise ValueError(
             f"This project format is newer than this app ({schema_version})."
         )
-    settings = value.setdefault("settings", {})
-    meta = value.setdefault("meta", {})
-    meta.setdefault("title", "Imported Dungeon")
-    meta.setdefault("author", "")
-    meta.setdefault("createdAt", now_iso())
-    meta["updatedAt"] = now_iso()
+    settings = value.get("settings", {})
+    meta = value.get("meta", {})
+    if not isinstance(meta, dict):
+        meta = {}
+        value["meta"] = meta
+    title = meta.get("title")
+    author = meta.get("author")
+    created_at = meta.get("createdAt")
+    updated_at = meta.get("updatedAt")
+    meta["title"] = title if isinstance(title, str) and title.strip() else "Imported Dungeon"
+    meta["author"] = author if isinstance(author, str) else ""
+    meta["createdAt"] = (
+        created_at if isinstance(created_at, str) and created_at.strip() else now_iso()
+    )
+    meta["updatedAt"] = (
+        updated_at
+        if isinstance(updated_at, str) and updated_at.strip()
+        else meta["createdAt"]
+    )
     value["settings"] = validate_settings(settings)
     settings = value["settings"]
     value["layers"] = validate_layers(value.get("layers"))
-    value["symbolFavorites"] = [str(kind) for kind in value.get("symbolFavorites", [])]
+    symbol_favorites = value.get("symbolFavorites", [])
+    if not isinstance(symbol_favorites, list):
+        symbol_favorites = []
+    value["symbolFavorites"] = [str(kind) for kind in symbol_favorites]
     value["objectTemplates"] = validate_object_templates(
         value.get("objectTemplates", [])
     )
@@ -2541,7 +2676,7 @@ def validate_zones(value: Any) -> list[dict[str, Any]]:
                 "y": coerce_float(item.get("y")),
                 "width": width,
                 "height": height,
-                "color": str(item.get("color") or SELECT),
+                "color": validated_hex_color(item.get("color"), SELECT),
                 "visible": bool(item.get("visible", True)),
                 "encounterTable": str(item.get("encounterTable") or ""),
                 "wallType": str(item.get("wallType") or "standard")
@@ -3043,7 +3178,7 @@ def validate_color_palettes(value: Any) -> list[dict[str, Any]]:
         colors = item.get("colors") if isinstance(item.get("colors"), dict) else item
         palette = {"name": str(item.get("name") or f"Palette {index}"), "colors": {}}
         for key in color_keys:
-            value_color = str(colors.get(key) or "").strip()
+            value_color = validated_hex_color(colors.get(key))
             if value_color:
                 palette["colors"][key] = value_color
         if palette["colors"]:
@@ -3070,7 +3205,7 @@ def validate_symbol_color_palettes(value: Any) -> list[dict[str, Any]]:
                 raw = {"color": raw}
             colors: dict[str, str] = {}
             for field in ("color", "outlineColor"):
-                color = str(raw.get(field) or "").strip()
+                color = validated_hex_color(raw.get(field))
                 if color:
                     colors[field] = color
             if colors:
@@ -3151,7 +3286,7 @@ def validate_asset_library(value: Any) -> list[dict[str, Any]]:
                 "name": str(item.get("name") or asset_id),
                 "type": asset_type,
                 "tags": normalize_tags(item.get("tags", [])),
-                "color": str(item.get("color") or ""),
+                "color": validated_hex_color(item.get("color")),
                 "symbol": normalize_symbol_kind(str(item.get("symbol") or "")),
             }
         )
@@ -3704,10 +3839,27 @@ def normalize_symbol_kind(kind: str) -> str:
 
 
 def coerce_float(value: Any, default: float = 0.0) -> float:
+    if isinstance(value, str):
+        value = value.strip().replace(",", ".")
     try:
-        return float(value)
-    except (TypeError, ValueError):
+        result = float(value)
+    except (TypeError, ValueError, tk.TclError):
         return default
+    return result if math.isfinite(result) else default
+
+
+def coerce_text_size(value: Any, default: float = 1.0) -> float:
+    return max(0.25, coerce_float(value, default))
+
+
+def variable_value(variable: tk.Variable, default: Any = "") -> Any:
+    try:
+        return variable.get()
+    except (tk.TclError, ValueError):
+        try:
+            return variable._tk.globalgetvar(variable._name)
+        except (tk.TclError, AttributeError):
+            return default
 
 
 def validate_shape_points(value: Any) -> list[dict[str, float]]:
@@ -3756,6 +3908,8 @@ def validate_object(obj: Any, index: int) -> dict[str, Any]:
     clean = dict(obj)
     clean["id"] = str(clean.get("id") or object_id())
     obj_type = clean["type"]
+    if not isinstance(obj_type, str):
+        raise ValueError(f"Object {index} has an invalid type.")
     if obj_type in RECTLIKE_TYPES:
         clean["x"] = coerce_float(clean.get("x"))
         clean["y"] = coerce_float(clean.get("y"))
@@ -3770,7 +3924,7 @@ def validate_object(obj: Any, index: int) -> dict[str, Any]:
         if clean["wallType"] not in WALL_TYPES:
             clean["wallType"] = default_wall
         if obj_type in {"cave", "cave_corridor"}:
-            clean["seed"] = int(clean.get("seed") or 1)
+            clean["seed"] = safe_int(clean.get("seed"), 1)
         if obj_type == "room":
             points = validate_shape_points(clean.get("points"))
             if len(points) >= 3:
@@ -3821,7 +3975,7 @@ def validate_object(obj: Any, index: int) -> dict[str, Any]:
         clean["sizePreset"] = str(clean.get("sizePreset") or "")
         if clean["sizePreset"] and clean["sizePreset"] not in SYMBOL_SIZE_PRESETS:
             clean["sizePreset"] = ""
-        clean["color"] = str(clean.get("color") or "")
+        clean["color"] = validated_hex_color(clean.get("color"))
         clean["opacity"] = max(0.0, min(1.0, coerce_float(clean.get("opacity"), 1.0)))
         clean["shadow"] = bool(clean.get("shadow", False))
         clean["outline"] = bool(clean.get("outline", False))
@@ -3845,11 +3999,11 @@ def validate_object(obj: Any, index: int) -> dict[str, Any]:
         clean["x"] = coerce_float(clean.get("x"))
         clean["y"] = coerce_float(clean.get("y"))
         clean["lineWidth"] = max(0.01, coerce_float(clean.get("lineWidth"), 0.12))
-        clean["strokeColor"] = str(
-            clean.get("strokeColor") or clean.get("foregroundColor") or ""
+        clean["strokeColor"] = validated_hex_color(
+            clean.get("strokeColor") or clean.get("foregroundColor")
         )
-        clean["fillColor"] = str(
-            clean.get("fillColor") or clean.get("backgroundColor") or ""
+        clean["fillColor"] = validated_hex_color(
+            clean.get("fillColor") or clean.get("backgroundColor")
         )
         clean["opacity"] = max(0.0, min(1.0, coerce_float(clean.get("opacity"), 1.0)))
         clean["lineStyle"] = str(clean.get("lineStyle") or "solid").lower()
@@ -3893,9 +4047,11 @@ def validate_object(obj: Any, index: int) -> dict[str, Any]:
         clean["size"] = max(0.25, coerce_float(clean.get("size"), 1.0))
         clean["width"] = max(0.0, coerce_float(clean.get("width"), 0.0))
         clean["height"] = max(0.0, coerce_float(clean.get("height"), 0.0))
-        clean["align"] = clean.get("align") or "center"
         clean["font"] = str(clean.get("font") or "Arial")
-        clean["color"] = str(clean.get("color") or "")
+        clean["color"] = validated_hex_color(clean.get("color"))
+        clean["align"] = str(clean.get("align") or "center").lower()
+        if clean["align"] not in {"left", "center", "right"}:
+            clean["align"] = "center"
         clean["rotation"] = coerce_float(clean.get("rotation"), 0.0) % 360
         clean["export"] = bool(clean.get("export", True))
         clean["textRole"] = str(clean.get("textRole") or "text")
@@ -3920,7 +4076,7 @@ def validate_object(obj: Any, index: int) -> dict[str, Any]:
         )
         clean.setdefault("layer", "legend")
     else:
-        raise ValueError(f"Objekt {index} hat einen unbekannten Typ: {obj_type}.")
+        raise ValueError(f"Object {index} has an unknown type: {obj_type}.")
     if clean.get("group") is not None:
         clean["group"] = str(clean["group"])
     clean["terrain"] = str(clean.get("terrain") or "")
@@ -4112,6 +4268,36 @@ class ToolTip:
         for tooltip in list(cls.active_instances):
             tooltip.hide()
 
+    @classmethod
+    def visible_bounds(cls) -> list[tuple[int, int, int, int]]:
+        bounds: list[tuple[int, int, int, int]] = []
+        for tooltip in list(cls.active_instances):
+            if tooltip.tip is None:
+                continue
+            tooltip.tip.update_idletasks()
+            bounds.append(
+                (
+                    tooltip.tip.winfo_rootx(),
+                    tooltip.tip.winfo_rooty(),
+                    tooltip.tip.winfo_width(),
+                    tooltip.tip.winfo_height(),
+                )
+            )
+        return bounds
+
+
+def popup_rectangles_overlap(
+    first: tuple[int, int, int, int], second: tuple[int, int, int, int]
+) -> bool:
+    first_x, first_y, first_width, first_height = first
+    second_x, second_y, second_width, second_height = second
+    return not (
+        first_x + first_width <= second_x
+        or second_x + second_width <= first_x
+        or first_y + first_height <= second_y
+        or second_y + second_height <= first_y
+    )
+
 
 class SymbolPreview:
     active_instances = weakref.WeakSet["SymbolPreview"]()
@@ -4130,7 +4316,7 @@ class SymbolPreview:
         widget.bind("<ButtonPress>", self.hide, add="+")
 
     def show(self, _event: tk.Event | None = None) -> None:
-        if self.tip or not self.app.tooltips_enabled():
+        if self.tip or not self.app.symbol_previews_enabled():
             return
         self.tip = tk.Toplevel(self.widget)
         self.tip.wm_overrideredirect(True)
@@ -4167,11 +4353,39 @@ class SymbolPreview:
         tip_height = self.tip.winfo_reqheight()
         screen_width = self.widget.winfo_screenwidth()
         screen_height = self.widget.winfo_screenheight()
-        right_x = self.widget.winfo_rootx() + self.widget.winfo_width() + 8
-        left_x = self.widget.winfo_rootx() - tip_width - 8
-        x = left_x if right_x + tip_width > screen_width else right_x
-        x = max(0, min(x, screen_width - tip_width))
-        y = max(0, min(self.widget.winfo_rooty() + 34, screen_height - tip_height))
+        widget_x = self.widget.winfo_rootx()
+        widget_y = self.widget.winfo_rooty()
+        right_x = widget_x + self.widget.winfo_width() + 8
+        left_x = widget_x - tip_width - 8
+        tooltip_bounds = ToolTip.visible_bounds()
+        lowest_tooltip = max(
+            (top + height for _left, top, _width, height in tooltip_bounds),
+            default=widget_y + self.widget.winfo_height(),
+        )
+        highest_tooltip = min(
+            (top for _left, top, _width, _height in tooltip_bounds),
+            default=widget_y,
+        )
+        candidates = (
+            (right_x, lowest_tooltip + 8),
+            (left_x, lowest_tooltip + 8),
+            (right_x, highest_tooltip - tip_height - 8),
+            (left_x, highest_tooltip - tip_height - 8),
+        )
+        x, y = 0, 0
+        for candidate_x, candidate_y in candidates:
+            candidate_x = max(0, min(candidate_x, screen_width - tip_width))
+            candidate_y = max(0, min(candidate_y, screen_height - tip_height))
+            candidate = (candidate_x, candidate_y, tip_width, tip_height)
+            if not any(
+                popup_rectangles_overlap(candidate, tooltip)
+                for tooltip in tooltip_bounds
+            ):
+                x, y = candidate_x, candidate_y
+                break
+        else:
+            x = max(0, min(right_x, screen_width - tip_width))
+            y = max(0, min(lowest_tooltip + 8, screen_height - tip_height))
         self.tip.wm_geometry(f"+{x}+{y}")
 
     def hide(self, _event: tk.Event | None = None) -> None:
@@ -4235,7 +4449,7 @@ class OSRMapMaker(tk.Tk):
         self.drag_symbol_group: str | None = None
         self.active_symbol_group = tk.StringVar(value=SYMBOL_GROUPS[0][0])
         self.symbol_search_var = tk.StringVar(value="")
-        self.symbol_favorites_only_var = tk.BooleanVar(value=False)
+        self.symbol_search_entry: ttk.Entry | None = None
         self.symbol_filter_var = tk.StringVar(value="All")
         self.symbol_browser_view_var = tk.StringVar(
             value=self.settings.get("symbolBrowserView", "Grid")
@@ -4306,8 +4520,8 @@ class OSRMapMaker(tk.Tk):
         self.layer_status_var = tk.StringVar(value="Layer: Symbols")
         self.selection_status_var = tk.StringVar(value="Selected: 0")
         self.snap_status_var = tk.StringVar(value="Snap: Grid 1")
-        self.save_status_var = tk.StringVar(value="Saved")
-        self.validation_status_var = tk.StringVar(value="")
+        self.save_status_var = tk.StringVar(value="Save: Saved")
+        self.validation_status_var = tk.StringVar(value="Warnings: 0")
         self.mouse_grid: tuple[float, float] | None = None
         self.context_menu: tk.Menu | None = None
         self.minimap_photo: Any = None
@@ -4356,19 +4570,25 @@ class OSRMapMaker(tk.Tk):
             value=self.settings.get("showColorPicker", False)
         )
         self.tooltip_var = tk.BooleanVar(value=self.settings.get("showTooltips", True))
+        self.symbol_preview_var = tk.BooleanVar(
+            value=self.settings.get("showSymbolPreviews", True)
+        )
         self.performance_var = tk.BooleanVar(
             value=self.settings.get("showPerformanceMetrics", False)
         )
         self.compact_mode_var = tk.BooleanVar(
             value=self.settings.get("compactMode", False)
         )
+        self.auto_context_panels_var = tk.BooleanVar(
+            value=self.settings.get("autoContextPanels", True)
+        )
         self.toolbar_dock_var = tk.StringVar(
             value=self.settings.get("toolbarDock", "floating")
         )
-        self.dock_panels: dict[str, tk.Toplevel] = {}
+        self.dock_panels: dict[str, tk.Widget] = {}
         self.dock_panel_content: dict[str, ttk.Frame] = {}
         self.dock_panel_buttons: dict[str, dict[str, ttk.Button]] = {}
-        self.dock_panel_grips: dict[str, ttk.Sizegrip] = {}
+        self.dock_panel_grips: dict[str, tk.Widget] = {}
         self.dock_panel_rows: dict[str, int] = {}
         self.dock_panel_visible_vars: dict[str, tk.BooleanVar] = {}
         for title in WORKSPACE_PANEL_TITLES:
@@ -4430,6 +4650,7 @@ class OSRMapMaker(tk.Tk):
         self.drag_layer_id: str | None = None
         self.history_summary_var = tk.StringVar(value="")
         self.history_target_var = tk.StringVar(value="")
+        self.export_frame_status_var = tk.StringVar(value="")
         self.object_search_var = tk.StringVar(value="")
         self.object_type_filter_var = tk.StringVar(value="All")
         self.object_layer_filter_var = tk.StringVar(value="All")
@@ -4720,9 +4941,14 @@ class OSRMapMaker(tk.Tk):
         view_menu.add_command(label="Fit Selection", command=self.fit_selection)
         view_menu.add_separator()
         view_menu.add_checkbutton(
-            label="Hide Panels",
+            label="Compact Mode",
             variable=self.compact_mode_var,
             command=self.toggle_compact_mode,
+        )
+        view_menu.add_checkbutton(
+            label="Auto Context Panels",
+            variable=self.auto_context_panels_var,
+            command=self.toggle_auto_context_panels,
         )
         view_menu.add_checkbutton(
             label="Print Grid",
@@ -4750,9 +4976,14 @@ class OSRMapMaker(tk.Tk):
             command=self.toggle_color_picker_panel,
         )
         view_menu.add_checkbutton(
-            label="Tooltips",
+            label="UI tooltips",
             variable=self.tooltip_var,
             command=self.toggle_tooltips,
+        )
+        view_menu.add_checkbutton(
+            label="Symbol previews",
+            variable=self.symbol_preview_var,
+            command=self.toggle_symbol_previews,
         )
         view_menu.add_checkbutton(
             label="Performance Metrics",
@@ -4794,15 +5025,15 @@ class OSRMapMaker(tk.Tk):
         view_menu.add_cascade(label="Panels", menu=panels_menu)
         view_menu.add_separator()
         view_menu.add_command(
-            label="Save Preferred Layout",
+            label="Save Current Layout",
             command=self.save_preferred_window_layout,
         )
         view_menu.add_command(
-            label="Apply Preferred Layout",
+            label="Restore Saved Layout",
             command=self.apply_preferred_window_layout,
         )
         view_menu.add_command(
-            label="Reset Window Layout", command=self.reset_window_layout
+            label="Reset to Drawing Layout", command=self.reset_window_layout
         )
         view_menu.add_separator()
         view_menu.add_command(label="Global Search", command=self.open_global_search)
@@ -4931,6 +5162,7 @@ class OSRMapMaker(tk.Tk):
         self.rowconfigure(2, weight=1)
 
         top = ttk.Frame(self, padding=(8, 5))
+        self.command_bar = top
         top.grid(row=0, column=0, columnspan=2, sticky="ew")
         top.columnconfigure(4, weight=1)
 
@@ -4973,33 +5205,23 @@ class OSRMapMaker(tk.Tk):
             variable=self.zoom,
             command=lambda _v: self.redraw(),
         ).grid(row=0, column=1, sticky="ew", padx=(5, 4))
-        ttk.Label(zoom_group, textvariable=self.zoom_percent_var, width=5).grid(
-            row=0, column=2, sticky="w"
-        )
         zoom_preset = ttk.Combobox(
             zoom_group,
             textvariable=self.zoom_preset_var,
             values=ZOOM_PRESET_LABELS,
             state="readonly",
-            width=12,
+            width=11,
         )
-        zoom_preset.grid(row=0, column=3, padx=(4, 2))
+        zoom_preset.grid(row=0, column=2, padx=(0, 2))
         zoom_preset.bind("<<ComboboxSelected>>", lambda _e: self.apply_zoom_preset())
-        self.command_button(zoom_group, "Fit", self.fit_map, width=6).grid(
-            row=0, column=4, padx=(0, 2)
+        ToolTip(
+            zoom_preset,
+            "Zoom presets and fit modes",
+            self.tooltips_enabled,
         )
-        self.command_button(
-            zoom_group,
-            "100%",
-            lambda: self.set_zoom(1.0),
-            width=8,
-        ).grid(row=0, column=5, padx=(0, 2))
-        self.command_button(
-            zoom_group, "Sel", self.fit_selection, label="Sel", width=6
-        ).grid(row=0, column=6, padx=(0, 2))
-        self.command_button(
-            zoom_group, "Width", self.fit_width, width=7
-        ).grid(row=0, column=7)
+        self.command_button(zoom_group, "Fit", self.fit_map, width=6).grid(
+            row=0, column=3
+        )
 
         ttk.Separator(top, orient="vertical").grid(
             row=0, column=5, sticky="ns", padx=8
@@ -5029,6 +5251,11 @@ class OSRMapMaker(tk.Tk):
         export_menu.add_command(label="Batch Export", command=self.batch_export)
         export_menu.add_command(label="Legend Export", command=self.export_legend_image)
         export_menu_button.configure(menu=export_menu)
+        ToolTip(
+            export_menu_button,
+            "Export image or choose a quick export",
+            self.tooltips_enabled,
+        )
         self.command_bar_export_menu = export_menu
 
         options_bar = ttk.Frame(self, padding=(8, 3))
@@ -5067,10 +5294,37 @@ class OSRMapMaker(tk.Tk):
         self._build_toolbar(toolbox)
         self.apply_toolbar_dock()
         self.enable_floating_panel_drag(toolbox, "toolbar")
-        self.restore_inspector_button = ttk.Button(
-            canvas_frame, text="Panels", command=self.show_inspector
+        self.compact_panel_bar = ttk.Frame(
+            canvas_frame,
+            padding=3,
+            relief="raised",
+            borderwidth=1,
         )
-        self.restore_inspector_button.place_forget()
+        self.compact_panel_buttons: dict[str, ttk.Button] = {}
+        for row, title in enumerate(
+            ("Layers", "Selection", "Symbols", "Navigator", "Export")
+        ):
+            button = ttk.Button(
+                self.compact_panel_bar,
+                text=icon_only(title),
+                width=UI_METRICS["icon_button_width"],
+                command=lambda value=title: self.open_compact_panel(value),
+            )
+            button.grid(row=row, column=0, pady=1)
+            ToolTip(button, f"Open {title}", self.tooltips_enabled)
+            self.compact_panel_buttons[title] = button
+        ttk.Separator(self.compact_panel_bar, orient="horizontal").grid(
+            row=5, column=0, sticky="ew", pady=3
+        )
+        restore_button = ttk.Button(
+            self.compact_panel_bar,
+            text=icon_only("Restore"),
+            width=UI_METRICS["icon_button_width"],
+            command=self.show_inspector,
+        )
+        restore_button.grid(row=6, column=0, pady=1)
+        ToolTip(restore_button, "Restore inspector", self.tooltips_enabled)
+        self.compact_panel_bar.place_forget()
         self.toast_label = tk.Label(
             canvas_frame,
             text="",
@@ -5103,12 +5357,14 @@ class OSRMapMaker(tk.Tk):
             width=5,
             command=lambda: self.set_minimap_docked(True),
         ).grid(row=0, column=2, sticky="e", padx=(4, 0))
-        ttk.Button(
+        minimap_close_button = ttk.Button(
             minimap_controls,
-            text="x",
+            text=icon_only("Close"),
             width=2,
             command=lambda: self.set_minimap_visible(False),
-        ).grid(row=0, column=3, sticky="e", padx=(4, 0))
+        )
+        minimap_close_button.grid(row=0, column=3, sticky="e", padx=(4, 0))
+        ToolTip(minimap_close_button, "Hide Navigator", self.tooltips_enabled)
         minimap_filter = ttk.Combobox(
             self.minimap_panel,
             textvariable=self.minimap_layer_filter_var,
@@ -5147,6 +5403,7 @@ class OSRMapMaker(tk.Tk):
         inspector.columnconfigure(0, weight=1)
         inspector.rowconfigure(0, weight=1)
         dock_canvas = tk.Canvas(inspector, highlightthickness=0, background="#f0f0f0")
+        self.dock_panel_canvas = dock_canvas
         dock_scroll = ttk.Scrollbar(
             inspector, orient="vertical", command=dock_canvas.yview
         )
@@ -5411,18 +5668,24 @@ class OSRMapMaker(tk.Tk):
         ).grid(row=5, column=0, sticky="w")
         ttk.Checkbutton(
             overlay_opts,
-            text="Tooltips",
+            text="UI tooltips",
             variable=self.tooltip_var,
             command=self.toggle_tooltips,
         ).grid(row=6, column=0, sticky="w")
         ttk.Checkbutton(
             overlay_opts,
+            text="Symbol previews",
+            variable=self.symbol_preview_var,
+            command=self.toggle_symbol_previews,
+        ).grid(row=7, column=0, sticky="w")
+        ttk.Checkbutton(
+            overlay_opts,
             text="Print grid",
             variable=self.print_grid_var,
             command=self.toggle_print_grid,
-        ).grid(row=7, column=0, sticky="w")
+        ).grid(row=8, column=0, sticky="w")
         focus_row = ttk.Frame(overlay_opts)
-        focus_row.grid(row=8, column=0, sticky="ew", pady=(2, 0))
+        focus_row.grid(row=9, column=0, sticky="ew", pady=(2, 0))
         focus_row.columnconfigure(1, weight=1)
         ttk.Label(focus_row, text="Focus").grid(row=0, column=0, sticky="w")
         focus_combo = ttk.Combobox(
@@ -5551,13 +5814,14 @@ class OSRMapMaker(tk.Tk):
         export_panel.grid(row=1, column=0, sticky="ew", pady=(4, 0))
         export_panel.columnconfigure(1, weight=1)
         ttk.Label(export_panel, text="Format").grid(row=0, column=0, sticky="w")
-        ttk.Combobox(
+        self.export_format_combo = ttk.Combobox(
             export_panel,
             textvariable=self.export_format,
             values=("png", "jpeg", "webp", "pdf", "svg"),
             width=10,
             state="readonly",
-        ).grid(row=0, column=1, sticky="ew", pady=1)
+        )
+        self.export_format_combo.grid(row=0, column=1, sticky="ew", pady=1)
         ttk.Label(export_panel, text="Scale").grid(row=1, column=0, sticky="w")
         ttk.Combobox(
             export_panel,
@@ -5616,6 +5880,20 @@ class OSRMapMaker(tk.Tk):
             text="Fantasy Grounds JSON",
             command=lambda: self.export_scene_json("fantasy_grounds"),
         ).grid(row=11, column=0, columnspan=2, sticky="ew", pady=1)
+        export_frame_state = ttk.Frame(export_panel)
+        export_frame_state.grid(row=12, column=0, columnspan=2, sticky="ew", pady=(8, 0))
+        export_frame_state.columnconfigure(0, weight=1)
+        ttk.Label(
+            export_frame_state,
+            textvariable=self.export_frame_status_var,
+            wraplength=280,
+        ).grid(row=0, column=0, sticky="w")
+        ttk.Button(
+            export_frame_state,
+            text="Add export frame",
+            command=self.define_export_frame,
+        ).grid(row=1, column=0, sticky="ew", pady=(4, 0))
+        self.refresh_export_empty_state()
 
         layers_tab = create_inspector_page("Build", "Layers")
         self.layers_frame = ttk.Frame(layers_tab)
@@ -5649,9 +5927,12 @@ class OSRMapMaker(tk.Tk):
                 ("Handouts", self.export_handouts),
             ]
         ):
-            ttk.Button(campaign_actions, text=label, command=command).grid(
+            button = ttk.Button(campaign_actions, text=label, command=command)
+            button.grid(
                 row=index // 2, column=index % 2, sticky="ew", padx=1, pady=1
             )
+            if index == 0:
+                self.campaign_primary_button = button
 
         objects_tab = create_inspector_page("Inspect", "Objects")
         objects_tab.rowconfigure(3, weight=1)
@@ -5734,6 +6015,11 @@ class OSRMapMaker(tk.Tk):
             text="Invert selection",
             command=self.invert_visible_selection,
         ).grid(row=1, column=1, sticky="ew", padx=(2, 0))
+        ttk.Button(
+            object_actions,
+            text="Clear filters",
+            command=self.reset_object_filters,
+        ).grid(row=2, column=0, columnspan=2, sticky="ew", pady=(2, 0))
 
         history_tab = create_inspector_page("Project", "History")
         history_tab.rowconfigure(2, weight=1)
@@ -5751,7 +6037,7 @@ class OSRMapMaker(tk.Tk):
         history_list_frame.columnconfigure(0, weight=1)
         history_list_frame.rowconfigure(1, weight=1)
         history_list_frame.rowconfigure(3, weight=1)
-        ttk.Label(history_list_frame, text="Undo stack").grid(
+        ttk.Label(history_list_frame, text="Recent changes").grid(
             row=0, column=0, columnspan=2, sticky="w"
         )
         self.history_listbox = tk.Listbox(
@@ -5767,7 +6053,7 @@ class OSRMapMaker(tk.Tk):
         )
         history_scroll.grid(row=1, column=1, sticky="ns")
         self.history_listbox.configure(yscrollcommand=history_scroll.set)
-        ttk.Label(history_list_frame, text="Redo stack").grid(
+        ttk.Label(history_list_frame, text="Undone changes").grid(
             row=2, column=0, columnspan=2, sticky="w", pady=(6, 0)
         )
         self.history_redo_listbox = tk.Listbox(
@@ -5789,11 +6075,27 @@ class OSRMapMaker(tk.Tk):
         history_buttons.grid(row=3, column=0, sticky="ew", pady=(6, 0))
         history_buttons.columnconfigure(0, weight=1)
         history_buttons.columnconfigure(1, weight=1)
-        ttk.Button(history_buttons, text="↶", width=3, command=self.undo).grid(
-            row=0, column=0, sticky="ew", padx=(0, 2)
+        self.history_undo_button = ttk.Button(
+            history_buttons,
+            text=icon_label("Undo"),
+            command=self.undo,
         )
-        ttk.Button(history_buttons, text="↷", width=3, command=self.redo).grid(
-            row=0, column=1, sticky="ew", padx=(2, 0)
+        self.history_undo_button.grid(row=0, column=0, sticky="ew", padx=(0, 2))
+        self.history_redo_button = ttk.Button(
+            history_buttons,
+            text=icon_label("Redo"),
+            command=self.redo,
+        )
+        self.history_redo_button.grid(row=0, column=1, sticky="ew", padx=(2, 0))
+        self.history_undo_tooltip = ToolTip(
+            self.history_undo_button,
+            "Nothing to undo",
+            self.tooltips_enabled,
+        )
+        self.history_redo_tooltip = ToolTip(
+            self.history_redo_button,
+            "Nothing to redo",
+            self.tooltips_enabled,
         )
         ttk.Label(history_tab, textvariable=self.history_summary_var).grid(
             row=4, column=0, sticky="ew", pady=(4, 0)
@@ -5892,11 +6194,16 @@ class OSRMapMaker(tk.Tk):
         ttk.Button(nav_buttons, text="Color", command=self.color_nav_item).grid(
             row=1, column=1, sticky="ew", padx=(2, 0), pady=(2, 0)
         )
+        ttk.Button(
+            nav_buttons,
+            text="Move marker to cursor",
+            command=self.move_selected_marker_to_cursor,
+        ).grid(row=2, column=0, columnspan=2, sticky="ew", pady=(2, 0))
         ttk.Button(nav_buttons, text="Zone parent", command=self.edit_zone_parent).grid(
-            row=2, column=0, sticky="ew", padx=(0, 2), pady=(2, 0)
+            row=3, column=0, sticky="ew", padx=(0, 2), pady=(2, 0)
         )
         ttk.Button(nav_buttons, text="Zone scale", command=self.edit_zone_scale).grid(
-            row=2, column=1, sticky="ew", padx=(2, 0), pady=(2, 0)
+            row=3, column=1, sticky="ew", padx=(2, 0), pady=(2, 0)
         )
         link_frame = ttk.LabelFrame(nav_tab, text="Floor link", padding=4)
         link_frame.grid(row=5, column=0, sticky="ew", pady=(6, 0))
@@ -5916,16 +6223,22 @@ class OSRMapMaker(tk.Tk):
         self.rebuild_navigator_panel()
 
         body.add(canvas_frame, weight=1)
+        body.add(inspector, weight=0)
         try:
             body.pane(canvas_frame, minsize=320)
+            body.pane(inspector, minsize=260)
         except tk.TclError:
             pass
+        body.bind("<ButtonRelease-1>", lambda _event: self.save_inspector_width())
+        body.bind("<Motion>", self.update_body_sash_cursor)
+        self.after_idle(self.restore_inspector_width)
 
         self.rebuild_contextual_tool_options()
 
         status = ttk.Frame(self, padding=(8, 4), style="Status.TFrame")
         status.grid(row=3, column=0, columnspan=2, sticky="ew")
         status.columnconfigure(0, weight=1)
+        self.status_labels: dict[str, ttk.Label] = {}
         ttk.Label(status, textvariable=self.status, style="Status.TLabel").grid(
             row=0, column=0, sticky="w", padx=(0, 10)
         )
@@ -5951,9 +6264,15 @@ class OSRMapMaker(tk.Tk):
             label.grid(
                 row=0, column=column, sticky="w", padx=(0, 8)
             )
+            self.status_labels[str(variable)] = label
             if variable is self.zoom_status_var:
                 label.configure(cursor="hand2")
                 label.bind("<Button-1>", lambda _e: self.open_zoom_menu_from_status())
+                ToolTip(label, "Choose zoom or fit mode", self.tooltips_enabled)
+            elif variable is self.save_status_var:
+                label.configure(cursor="hand2")
+                label.bind("<Button-1>", self.on_save_status_click)
+                ToolTip(label, "Update autosave status", self.tooltips_enabled)
         validation_label = ttk.Label(
             status,
             textvariable=self.validation_status_var,
@@ -5977,6 +6296,7 @@ class OSRMapMaker(tk.Tk):
         ).grid(
             row=0, column=10, sticky="e"
         )
+        self.apply_compact_mode()
 
     def dock_panel_key(self, title: str) -> str:
         return title.lower().replace("/", "_").replace(" ", "_")
@@ -5990,13 +6310,16 @@ class OSRMapMaker(tk.Tk):
         if not isinstance(state, dict):
             state = {}
             panels[key] = state
-        state.setdefault("visible", True)
-        state["docked"] = False
-        state.setdefault("collapsed", False)
-        state.setdefault("x", 72)
-        state.setdefault("y", 92)
-        state.setdefault("width", 330)
-        state.setdefault("height", 320)
+        defaults = default_right_panel_states(
+            self.settings.get("workspacePreset", "Drawing")
+        ).get(key, {})
+        state.setdefault("visible", bool(defaults.get("visible", True)))
+        state.setdefault("docked", bool(defaults.get("docked", True)))
+        state.setdefault("collapsed", bool(defaults.get("collapsed", False)))
+        state.setdefault("x", defaults.get("x", 72))
+        state.setdefault("y", defaults.get("y", 92))
+        state.setdefault("width", defaults.get("width", 330))
+        state.setdefault("height", defaults.get("height", 320))
         return state
 
     def create_dock_panel(self, title: str) -> ttk.Frame:
@@ -6010,40 +6333,71 @@ class OSRMapMaker(tk.Tk):
         visible_var.set(bool(state.get("visible", True)))
         self.dock_panel_visible_vars[key] = visible_var
 
-        panel = tk.Toplevel(self)
-        panel.withdraw()
-        panel.title(title)
-        panel.transient(self)
-        panel.minsize(260, 120)
-        panel.resizable(True, True)
+        host = getattr(self, "dock_panel_host", None)
+        if host is None:
+            host = self
+        panel = ttk.Frame(host, padding=(0, 0, 0, 6))
         panel.columnconfigure(0, weight=1)
-        panel.rowconfigure(0, weight=1)
-        panel.protocol(
-            "WM_DELETE_WINDOW",
-            lambda value=key: self.set_dock_panel_visible(value, False),
+        panel.rowconfigure(0, weight=0)
+        panel.rowconfigure(1, weight=1)
+        panel.rowconfigure(2, weight=0)
+        header = ttk.Frame(panel, padding=(6, 4))
+        header.grid(row=0, column=0, sticky="ew")
+        header.columnconfigure(0, weight=1)
+        ttk.Label(header, text=title, style="PanelTitle.TLabel").grid(
+            row=0, column=0, sticky="w"
         )
-        panel.bind(
-            "<Configure>",
-            lambda event, value=key: self.save_dock_panel_window_geometry(value, event),
-            add="+",
+        collapse_button = ttk.Button(
+            header,
+            text=icon_only("Collapse"),
+            width=2,
+            command=lambda value=key: self.toggle_dock_panel_collapsed(value),
         )
+        collapse_button.grid(row=0, column=1, sticky="e", padx=(4, 0))
+        close_button = ttk.Button(
+            header,
+            text=icon_only("Close"),
+            width=2,
+            command=lambda value=key: self.set_dock_panel_visible(value, False),
+        )
+        close_button.grid(row=0, column=2, sticky="e", padx=(2, 0))
+        ToolTip(collapse_button, f"Collapse {title}", self.tooltips_enabled)
+        ToolTip(close_button, f"Hide {title}", self.tooltips_enabled)
 
-        content = ttk.Frame(panel, padding=8)
-        content.grid(row=0, column=0, sticky="nsew")
+        content = ttk.Frame(panel, padding=(6, 0, 6, 6))
+        content.grid(row=1, column=0, sticky="nsew")
         content.columnconfigure(0, weight=1)
         content.rowconfigure(0, weight=1)
-        resize_grip = ttk.Sizegrip(panel)
-        resize_grip.grid(row=1, column=0, sticky="se")
+
+        resize_handle = ttk.Frame(
+            panel,
+            height=8,
+            cursor="sb_v_double_arrow",
+        )
+        resize_handle.grid(row=2, column=0, sticky="ew")
+        resize_handle.grid_propagate(False)
+        ttk.Separator(resize_handle, orient="horizontal").place(
+            relx=0.5,
+            rely=0.5,
+            anchor="center",
+            relwidth=0.28,
+        )
+        ToolTip(resize_handle, f"Resize {title}", self.tooltips_enabled)
         self.dock_panels[key] = panel
         self.dock_panel_content[key] = content
-        self.dock_panel_grips[key] = resize_grip
-        self.dock_panel_buttons[key] = {}
+        self.dock_panel_grips[key] = resize_handle
+        self.dock_panel_buttons[key] = {
+            "collapse": collapse_button,
+            "close": close_button,
+        }
+        self.enable_dock_panel_resize(panel, key, resize_handle)
         self.apply_dock_panel_state(key)
         return content
 
     def apply_dock_panel_state(self, key: str) -> None:
         panel = self.dock_panels.get(key)
         content = self.dock_panel_content.get(key)
+        resize_handle = self.dock_panel_grips.get(key)
         if panel is None or content is None:
             return
         state = self.panel_state(key)
@@ -6053,23 +6407,34 @@ class OSRMapMaker(tk.Tk):
         compact_var = getattr(self, "compact_mode_var", None)
         compact = bool(compact_var.get()) if compact_var is not None else False
         if not visible or compact:
-            panel.withdraw()
+            try:
+                panel.grid_remove()
+            except tk.TclError:
+                pass
             return
-        width = max(260, min(900, int(state.get("width", 330))))
-        height = max(120, min(1200, int(state.get("height", 320))))
-        x, y = self.clamp_panel_window_position(
-            int(state.get("x", 72)), int(state.get("y", 92)), width, height
-        )
-        state["docked"] = False
-        state["collapsed"] = False
-        state["x"], state["y"] = x, y
-        panel.geometry(f"{width}x{height}+{x}+{y}")
-        content.grid()
-        grip = self.dock_panel_grips.get(key)
-        if grip is not None:
-            grip.grid()
-        panel.deiconify()
-        panel.lift()
+        state["docked"] = True
+        row = self.dock_panel_rows.get(key, 0)
+        panel.grid(row=row, column=0, sticky="ew", pady=(0, 2))
+        collapsed = bool(state.get("collapsed", False))
+        buttons = self.dock_panel_buttons.get(key, {})
+        collapse_button = buttons.get("collapse")
+        if collapse_button is not None:
+            collapse_button.configure(
+                text=icon_only("Expand" if collapsed else "Collapse")
+            )
+        if collapsed:
+            content.grid_remove()
+            if resize_handle is not None:
+                resize_handle.grid_remove()
+            panel.grid_propagate(True)
+        else:
+            height = max(120, min(1200, int(state.get("height", 320))))
+            state["height"] = height
+            content.grid(row=1, column=0, sticky="nsew")
+            if resize_handle is not None:
+                resize_handle.grid(row=2, column=0, sticky="ew")
+            panel.configure(height=height)
+            panel.grid_propagate(False)
 
     def save_dock_panel_window_geometry(
         self, key: str, event: tk.Event | None = None
@@ -6079,19 +6444,14 @@ class OSRMapMaker(tk.Tk):
             return
         if event is not None and event.widget is not panel:
             return
-        try:
-            if panel.state() == "withdrawn":
-                return
-        except tk.TclError:
-            return
         state = self.panel_state(key)
-        width = max(260, min(900, panel.winfo_width()))
-        height = max(120, min(1200, panel.winfo_height()))
-        state["width"] = width
-        state["height"] = height
+        if bool(state.get("collapsed", False)):
+            return
         try:
-            state["x"] = max(0, int(panel.winfo_x()))
-            state["y"] = max(0, int(panel.winfo_y()))
+            if not panel.winfo_ismapped():
+                return
+            state["width"] = max(260, min(900, panel.winfo_width()))
+            state["height"] = max(120, min(1200, panel.winfo_height()))
         except tk.TclError:
             return
 
@@ -6175,27 +6535,27 @@ class OSRMapMaker(tk.Tk):
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(json.dumps(layout, indent=2), encoding="utf-8")
         except OSError as exc:
-            self.show_status(f"Could not save preferred layout: {exc}")
-            self.show_toast("Preferred layout could not be saved", "error")
+            self.show_status(f"Could not save current layout: {exc}")
+            self.show_toast("Current layout could not be saved", "error")
             return
-        self.show_status("Preferred window layout saved.")
-        self.show_toast("Preferred layout saved", "success")
+        self.show_status("Current layout saved.")
+        self.show_toast("Current layout saved", "success")
 
     def apply_preferred_window_layout(self) -> None:
         path = preferred_window_layout_path()
         try:
             layout = json.loads(path.read_text(encoding="utf-8"))
         except FileNotFoundError:
-            self.show_status("No preferred window layout saved yet.")
-            self.show_toast("No preferred layout saved", "warning")
+            self.show_status("No saved layout available yet.")
+            self.show_toast("No saved layout available", "warning")
             return
         except (OSError, json.JSONDecodeError) as exc:
-            self.show_status(f"Could not load preferred layout: {exc}")
-            self.show_toast("Preferred layout could not be loaded", "error")
+            self.show_status(f"Could not restore saved layout: {exc}")
+            self.show_toast("Saved layout could not be restored", "error")
             return
         if self.apply_window_layout(layout, show_message=False):
-            self.show_status("Preferred window layout applied.")
-            self.show_toast("Preferred layout applied", "success")
+            self.show_status("Saved layout restored.")
+            self.show_toast("Saved layout restored", "success")
 
     def set_dock_panel_visible(self, key: str, visible: bool) -> None:
         self.panel_state(key)["visible"] = bool(visible)
@@ -6207,6 +6567,7 @@ class OSRMapMaker(tk.Tk):
         if visible and self.compact_mode_var.get():
             self.compact_mode_var.set(False)
             self.settings["compactMode"] = False
+            self.apply_compact_mode()
         self.set_dock_panel_visible(key, visible)
 
     def toggle_dock_panel_collapsed(self, key: str) -> None:
@@ -6217,7 +6578,8 @@ class OSRMapMaker(tk.Tk):
     def toggle_dock_panel_docked(self, key: str) -> None:
         state = self.panel_state(key)
         state["visible"] = True
-        state["docked"] = False
+        state["docked"] = True
+        state["collapsed"] = False
         self.apply_dock_panel_state(key)
 
     def show_dock_panel_by_title(self, title: str) -> None:
@@ -6225,7 +6587,27 @@ class OSRMapMaker(tk.Tk):
         if bool(self.compact_mode_var.get()):
             self.compact_mode_var.set(False)
             self.settings["compactMode"] = False
+            self.apply_compact_mode()
         self.set_dock_panel_visible(key, True)
+
+    def reveal_context_panel_by_title(self, title: str) -> None:
+        if not bool(self.settings.get("autoContextPanels", True)):
+            return
+        compact_var = self.__dict__.get("compact_mode_var")
+        if compact_var is not None and bool(compact_var.get()):
+            return
+        key = self.dock_panel_key(title)
+        if key not in self.__dict__.get("dock_panel_visible_vars", {}):
+            return
+        self.set_dock_panel_visible(key, True)
+
+    def reveal_context_panels_for_tool(self, tool: str) -> None:
+        if self.is_symbol_tool(tool):
+            self.reveal_context_panel_by_title("Symbols")
+        elif tool == "select":
+            self.reveal_context_panel_by_title("Selection")
+        elif tool in SHAPE_TOOLS:
+            self.reveal_context_panel_by_title("Colors/Style")
 
     def apply_workspace_preset(self, name: str | None = None) -> None:
         preset_name = normalize_workspace_preset(name or self.workspace_var.get())
@@ -6245,18 +6627,99 @@ class OSRMapMaker(tk.Tk):
         self.minimap_visible_var.set(bool(preset.get("minimap", False)))
         self.settings["showMinimap"] = bool(self.minimap_visible_var.get())
         if self.minimap_visible_var.get() and preset_name in {"Drawing", "Symbols"}:
-            self.minimap_docked_var.set(True)
-            self.settings["minimapDocked"] = True
+            self.minimap_docked_var.set(False)
+            self.settings["minimapDocked"] = False
         self.apply_minimap_visibility()
         self.color_picker_visible_var.set(bool(preset.get("colorPicker", False)))
         self.toggle_color_picker_panel()
         self.redraw_minimap(full=False)
         self.show_status(f"Workspace: {preset_name}")
+        self.after_idle(
+            lambda value=preset_name: self.focus_workspace_target(value)
+            if self.workspace_var.get() == value
+            else None
+        )
+
+    def first_focusable_descendant(self, parent: tk.Widget) -> tk.Widget | None:
+        focusable_types = (
+            tk.Button,
+            tk.Entry,
+            tk.Listbox,
+            ttk.Button,
+            ttk.Combobox,
+            ttk.Entry,
+            ttk.Spinbox,
+        )
+        for child in parent.winfo_children():
+            if isinstance(child, focusable_types):
+                return child
+            nested = self.first_focusable_descendant(child)
+            if nested is not None:
+                return nested
+        return None
+
+    def scroll_dock_panel_into_view(self, title: str) -> None:
+        canvas = getattr(self, "dock_panel_canvas", None)
+        panel = self.dock_panels.get(self.dock_panel_key(title))
+        if canvas is None or panel is None or not panel.winfo_ismapped():
+            return
+        try:
+            canvas.update_idletasks()
+            bounds = canvas.bbox("all")
+            if not bounds:
+                return
+            total_height = max(1, bounds[3] - bounds[1])
+            viewport_height = max(1, canvas.winfo_height())
+            panel_top = panel.winfo_y()
+            panel_bottom = panel_top + panel.winfo_height()
+            visible_top = canvas.canvasy(0)
+            visible_bottom = visible_top + viewport_height
+            if panel_top < visible_top:
+                canvas.yview_moveto(max(0.0, panel_top / total_height))
+            elif panel_bottom > visible_bottom:
+                target = max(0, panel_bottom - viewport_height)
+                canvas.yview_moveto(min(1.0, target / total_height))
+        except tk.TclError:
+            return
+
+    def focus_workspace_target(self, preset_name: str) -> tk.Widget | None:
+        target: tk.Widget | None = None
+        panel_title = ""
+        compact_var = getattr(self, "compact_mode_var", None)
+        if compact_var is not None and bool(compact_var.get()):
+            target = self.canvas
+        elif preset_name == "Drawing":
+            if self.selected_ids:
+                target = self.first_focusable_descendant(self.selection_frame)
+                panel_title = "Selection"
+            if target is None:
+                target = self.tool_buttons.get(self.tool.get())
+                if target is None and self.toolbar_focus_buttons:
+                    target = self.toolbar_focus_buttons[0]
+        elif preset_name == "Symbols":
+            target = self.symbol_search_entry
+            panel_title = "Symbols"
+        elif preset_name == "Campaign":
+            target = getattr(self, "campaign_primary_button", None)
+            if target is None:
+                target = self.navigator_listbox
+            panel_title = "Rooms"
+        elif preset_name in {"Export/VTT", "Print"}:
+            target = getattr(self, "export_format_combo", None)
+            panel_title = "Export"
+        if panel_title:
+            self.scroll_dock_panel_into_view(panel_title)
+        if target is not None:
+            try:
+                target.focus_set()
+            except tk.TclError:
+                pass
+        return target
 
     def reset_window_layout(self, confirm: bool = True) -> None:
         if confirm and not messagebox.askyesno(
-            "Reset Window Layout",
-            "Reset panel windows, toolbar and minimap to the Drawing workspace?",
+            "Reset to Drawing Layout",
+            "Reset panels, toolbar and minimap to the Drawing layout?",
             parent=self,
         ):
             return
@@ -6269,14 +6732,17 @@ class OSRMapMaker(tk.Tk):
         self.minimap_docked_var.set(bool(layout["minimapDocked"]))
         self.minimap_transparent_var.set(bool(layout["minimapTransparent"]))
         self.color_picker_visible_var.set(bool(layout["showColorPicker"]))
+        self.compact_mode_var.set(bool(layout["compactMode"]))
         for key in list(getattr(self, "dock_panels", {})):
             self.apply_dock_panel_state(key)
         self.apply_toolbar_dock()
         self.apply_minimap_visibility()
         self.toggle_color_picker_panel()
+        self.apply_compact_mode()
+        self.after_idle(self.restore_inspector_width)
         self.redraw_minimap()
-        self.show_status("Window layout reset.")
-        self.show_toast("Window layout reset", "success")
+        self.show_status("Drawing layout restored.")
+        self.show_toast("Drawing layout restored", "success")
 
     def apply_accessibility_defaults(self, widget: tk.Widget | None = None) -> None:
         root = widget or self
@@ -6307,10 +6773,57 @@ class OSRMapMaker(tk.Tk):
             self.apply_accessibility_defaults(child)
 
     def restore_inspector_width(self) -> None:
-        return
+        pane = getattr(self, "body_pane", None)
+        inspector = getattr(self, "inspector_pane", None)
+        if pane is None or inspector is None:
+            return
+        try:
+            if str(inspector) not in pane.panes():
+                return
+            total_width = pane.winfo_width()
+            if total_width <= 1:
+                self.after(50, self.restore_inspector_width)
+                return
+            inspector_width = max(
+                260,
+                min(1200, int(self.settings.get("inspectorWidth", 420))),
+            )
+            pane.sashpos(0, max(320, total_width - inspector_width))
+        except tk.TclError:
+            return
 
     def save_inspector_width(self) -> None:
-        return
+        pane = getattr(self, "body_pane", None)
+        inspector = getattr(self, "inspector_pane", None)
+        if pane is None or inspector is None:
+            return
+        try:
+            if str(inspector) not in pane.panes():
+                return
+            total_width = pane.winfo_width()
+            sash = pane.sashpos(0)
+        except tk.TclError:
+            return
+        if total_width > 1:
+            self.settings["inspectorWidth"] = max(260, min(1200, total_width - sash))
+
+    def set_inspector_pane_visible(self, visible: bool) -> None:
+        pane = getattr(self, "body_pane", None)
+        inspector = getattr(self, "inspector_pane", None)
+        if pane is None or inspector is None:
+            return
+        try:
+            panes = pane.panes()
+            is_visible = str(inspector) in panes
+            if visible and not is_visible:
+                pane.add(inspector, weight=0)
+                pane.pane(inspector, minsize=260)
+                self.after_idle(self.restore_inspector_width)
+            elif not visible and is_visible:
+                self.save_inspector_width()
+                pane.forget(inspector)
+        except tk.TclError:
+            return
 
     def update_body_sash_cursor(self, event: tk.Event) -> None:
         pane = getattr(self, "body_pane", None)
@@ -6331,6 +6844,9 @@ class OSRMapMaker(tk.Tk):
         handle: tk.Widget,
     ) -> None:
         def start(event: tk.Event) -> None:
+            state = self.panel_state(panel_name)
+            if bool(state.get("collapsed", False)):
+                return
             self.panel_resize = {
                 "name": panel_name,
                 "panel": panel,
@@ -6357,6 +6873,7 @@ class OSRMapMaker(tk.Tk):
             if docked:
                 state["height"] = height
                 panel.configure(height=height)
+                panel.grid_propagate(False)
             else:
                 state["width"] = width
                 state["height"] = height
@@ -6481,24 +6998,56 @@ class OSRMapMaker(tk.Tk):
         self.settings["compactMode"] = bool(self.compact_mode_var.get())
         self.apply_compact_mode()
 
+    def toggle_auto_context_panels(self) -> None:
+        self.settings["autoContextPanels"] = bool(self.auto_context_panels_var.get())
+        self.show_status(
+            "Auto context panels on."
+            if self.settings["autoContextPanels"]
+            else "Auto context panels off."
+        )
+
     def apply_compact_mode(self) -> None:
         compact = bool(self.compact_mode_var.get())
         self.settings["compactMode"] = compact
         self.inspector_hidden = compact
+        self.set_inspector_pane_visible(not compact)
         for key, panel in getattr(self, "dock_panels", {}).items():
             if compact:
                 try:
-                    panel.withdraw()
+                    panel.grid_remove()
                 except tk.TclError:
                     pass
             else:
                 self.apply_dock_panel_state(key)
-        button = getattr(self, "restore_inspector_button", None)
-        if button is not None:
+        bar = getattr(self, "compact_panel_bar", None)
+        if bar is not None:
             if compact:
-                button.place(relx=1.0, y=8, x=-18, anchor="ne")
+                bar.place(relx=1.0, y=8, x=-18, anchor="ne")
+                bar.lift()
             else:
-                button.place_forget()
+                bar.place_forget()
+
+    def open_compact_panel(self, title: str) -> None:
+        key = self.dock_panel_key(title)
+        state = self.panel_state(key)
+        state["visible"] = True
+        state["collapsed"] = False
+        self.compact_mode_var.set(False)
+        self.settings["compactMode"] = False
+        self.apply_compact_mode()
+        self.set_dock_panel_visible(key, True)
+
+        def focus_panel() -> None:
+            self.scroll_dock_panel_into_view(title)
+            content = self.dock_panel_content.get(key)
+            target = self.first_focusable_descendant(content) if content else None
+            if target is not None:
+                try:
+                    target.focus_set()
+                except tk.TclError:
+                    pass
+
+        self.after_idle(focus_panel)
 
     def show_inspector(self) -> None:
         self.compact_mode_var.set(False)
@@ -6519,11 +7068,19 @@ class OSRMapMaker(tk.Tk):
     def tooltips_enabled(self) -> bool:
         return bool(self.settings.get("showTooltips", True))
 
+    def symbol_previews_enabled(self) -> bool:
+        return bool(self.settings.get("showSymbolPreviews", True))
+
     def toggle_tooltips(self) -> None:
         enabled = bool(self.tooltip_var.get())
         self.settings["showTooltips"] = enabled
         if not enabled:
             ToolTip.hide_all()
+
+    def toggle_symbol_previews(self) -> None:
+        enabled = bool(self.symbol_preview_var.get())
+        self.settings["showSymbolPreviews"] = enabled
+        if not enabled:
             SymbolPreview.hide_all()
 
     def toggle_performance_metrics(self) -> None:
@@ -6816,7 +7373,21 @@ class OSRMapMaker(tk.Tk):
         menu = tk.Menu(self, tearoff=0)
         menu.add_command(label="Rename", command=self.rename_map)
         menu.add_command(label="Duplicate", command=self.duplicate_map)
-        menu.add_command(label="Delete", command=self.delete_map)
+        menu.add_command(
+            label="Delete",
+            command=self.delete_map,
+            state="normal" if len(self.maps()) > 1 else "disabled",
+        )
+        menu.add_separator()
+        menu.add_command(label="Folder / chapter", command=self.edit_map_structure)
+        menu.add_command(label="Overlay floor", command=self.set_floor_overlay_dialog)
+        menu.add_command(label="Map scale", command=self.edit_map_scale)
+        menu.add_command(
+            label="Show map settings",
+            command=lambda: self.show_dock_panel_by_title("Map"),
+        )
+        menu.add_separator()
+        menu.add_command(label="Export this map", command=self.export_image)
         menu.tk_popup(event.x_root, event.y_root)
         return "break"
 
@@ -7217,12 +7788,14 @@ class OSRMapMaker(tk.Tk):
         ttk.Label(header, text="Tools", font=("Segoe UI", 9, "bold")).grid(
             row=0, column=0, sticky="w"
         )
-        ttk.Button(
+        close_button = ttk.Button(
             header,
-            text="x",
+            text=icon_only("Close"),
             width=2,
             command=lambda: self.set_toolbar_visible(False),
-        ).grid(row=0, column=1, sticky="e")
+        )
+        close_button.grid(row=0, column=1, sticky="e")
+        ToolTip(close_button, "Hide tool palette", self.tooltips_enabled)
         self.enable_floating_panel_drag(toolbar, "toolbar", header)
 
         active_status = ttk.Label(
@@ -7239,15 +7812,44 @@ class OSRMapMaker(tk.Tk):
         for column in range(2):
             basic.columnconfigure(column, weight=1, minsize=34)
         tool_lookup = {tool: (icon, label) for tool, icon, label in BASIC_TOOLS}
+        collapsed_groups = {
+            group
+            for group in self.settings.get("collapsedToolGroups", [])
+            if group in BASIC_TOOL_GROUP_NAMES
+        }
+        active_tool = self.tool.get()
         matrix_row = 0
         for group_name, tools in BASIC_TOOL_GROUPS:
-            ttk.Label(
+            is_active_group = active_tool in tools
+            collapsed = group_name in collapsed_groups and not is_active_group
+            header_text = f"{'+' if collapsed else '-'} {group_name.upper()}"
+            header = tk.Button(
                 basic,
-                text=group_name.upper(),
-                foreground="#53666f",
+                text=header_text,
+                command=lambda value=group_name: self.toggle_tool_group(value),
+                anchor="w",
+                relief="flat",
+                borderwidth=0,
+                background="#eaf1f5" if is_active_group else "#f4f7f8",
+                foreground="#17384a" if is_active_group else "#53666f",
                 font=("Segoe UI", 7, "bold"),
-            ).grid(row=matrix_row, column=0, columnspan=2, sticky="w", pady=(3, 1))
+                takefocus=1,
+            )
+            header.grid(
+                row=matrix_row,
+                column=0,
+                columnspan=2,
+                sticky="ew",
+                pady=(3, 1),
+            )
+            ToolTip(
+                header,
+                f"{group_name} tools\nClick to collapse or expand.",
+                self.tooltips_enabled,
+            )
             matrix_row += 1
+            if collapsed:
+                continue
             for index, tool in enumerate(tools):
                 icon, tool_label = tool_lookup[tool]
                 self._add_tool_button(
@@ -7336,6 +7938,66 @@ class OSRMapMaker(tk.Tk):
         entry.bind("<FocusOut>", lambda _e: self.apply_tool_variant_options())
         return column + 1
 
+    def add_tool_options_more_menu(
+        self, parent: ttk.Frame, active_tool: str, column: int
+    ) -> None:
+        menu_button = ttk.Menubutton(parent, text="More")
+        menu = tk.Menu(menu_button, tearoff=False)
+        menu.add_command(
+            label=f"Open {self.tool_label(active_tool)} options",
+            command=lambda value=active_tool: self.open_tool_options(value),
+        )
+        if active_tool in {
+            "room",
+            "room_polygon",
+            "round",
+            "cave",
+            "corridor",
+            "cave_corridor",
+        }:
+            menu.add_command(
+                label="Pick grid color",
+                command=lambda: self.pick_color("gridColor"),
+            )
+        if active_tool in SHAPE_TOOLS:
+            menu.add_command(
+                label="Pick stroke color",
+                command=lambda: self.pick_color("defaultShapeStrokeColor"),
+            )
+        menu.add_separator()
+        menu.add_command(
+            label="Show Layers", command=lambda: self.show_dock_panel_by_title("Layers")
+        )
+        menu.add_command(
+            label="Show Selection",
+            command=lambda: self.show_dock_panel_by_title("Selection"),
+        )
+        menu.add_command(
+            label="Show Symbols", command=lambda: self.show_dock_panel_by_title("Symbols")
+        )
+        menu.add_command(
+            label="Show Navigator",
+            command=lambda: self.show_dock_panel_by_title("Navigator"),
+        )
+        menu.add_command(
+            label="Show Map Settings", command=lambda: self.show_dock_panel_by_title("Map")
+        )
+        menu.add_command(
+            label="Show Export", command=lambda: self.show_dock_panel_by_title("Export")
+        )
+        menu_button.configure(menu=menu)
+        menu_button.grid(row=0, column=column, sticky="e", padx=(8, 0))
+        ToolTip(menu_button, "More options for the active tool.", self.tooltips_enabled)
+
+    def current_default_text_size(self) -> float:
+        variable = self.__dict__.get("text_size_var")
+        if variable is None:
+            return coerce_text_size(self.settings.get("defaultTextSize"), 1.0)
+        return coerce_text_size(
+            variable_value(variable),
+            self.settings.get("defaultTextSize", 1.0),
+        )
+
     def rebuild_contextual_tool_options(self) -> None:
         bar = self.tool_options_content
         if bar is None:
@@ -7387,7 +8049,7 @@ class OSRMapMaker(tk.Tk):
                 variable=self.symbol_random_variant_var,
                 command=self.apply_tool_variant_options,
             ).grid(row=0, column=column, sticky="w", padx=(0, 8))
-        elif active in {"shape_rect", "shape_circle", "shape_polygon", "shape_line"}:
+        elif active in SHAPE_TOOLS:
             column = self.add_tool_option_label(bar, "Line", column)
             column = self.add_tool_option_combo(
                 bar,
@@ -7425,10 +8087,6 @@ class OSRMapMaker(tk.Tk):
                 bar, text="Floor color", command=lambda: self.pick_color("floorColor")
             ).grid(row=0, column=column, sticky="w", padx=(0, 8))
             column += 1
-            ttk.Button(
-                bar, text="Grid color", command=lambda: self.pick_color("gridColor")
-            ).grid(row=0, column=column, sticky="w", padx=(0, 8))
-            column += 1
             if active == "cave_corridor":
                 ttk.Checkbutton(
                     bar,
@@ -7436,6 +8094,10 @@ class OSRMapMaker(tk.Tk):
                     variable=self.cave_corridor_smooth_var,
                     command=self.apply_tool_variant_options,
                 ).grid(row=0, column=column, sticky="w", padx=(0, 8))
+                column += 1
+        spacer_column = max(column, 12)
+        bar.columnconfigure(spacer_column, weight=1)
+        self.add_tool_options_more_menu(bar, active, spacer_column + 1)
 
     def apply_tool_variant_options(self) -> None:
         before = self.project_snapshot()
@@ -7444,13 +8106,17 @@ class OSRMapMaker(tk.Tk):
         self.settings["smoothCaveCorridors"] = bool(
             self.cave_corridor_smooth_var.get()
         )
+        self.settings["defaultTextFont"] = (
+            str(variable_value(self.text_font_var, "Arial")).strip() or "Arial"
+        )
+        self.settings["defaultTextSize"] = self.current_default_text_size()
         layer_id = self.layer_id_from_name(self.current_layer_var.get())
         if layer_id:
             self.current_layer_var.set(self.layer_name(layer_id))
         self.settings["defaultShapeLineWidth"] = max(
             0.01,
             coerce_float(
-                self.shape_line_width_var.get(),
+                variable_value(self.shape_line_width_var),
                 self.settings.get("defaultShapeLineWidth", 0.12),
             ),
         )
@@ -7557,19 +8223,16 @@ class OSRMapMaker(tk.Tk):
                 lambda event, value=tool: self.finish_symbol_drag(event, value),
                 add="+",
             )
-        ToolTip(button, self.tooltip_text(tool, label), self.tooltips_enabled)
-        if tool in self.symbol_tools():
-            SymbolPreview(button, self, tool, label)
+        tooltip = self.tooltip_text(tool, label)
         if is_custom_symbol(self.project, tool) and any(
             kind == tool
             for kind, _label, _path in missing_custom_symbol_files(self.project)
         ):
             button.configure(background="#ffe8d2", foreground="#8a2f11")
-            ToolTip(
-                button,
-                f"{self.tooltip_text(tool, label)}\nMissing source file",
-                self.tooltips_enabled,
-            )
+            tooltip += "\nMissing source file"
+        ToolTip(button, tooltip, self.tooltips_enabled)
+        if tool in self.symbol_tools():
+            SymbolPreview(button, self, tool, label)
         self.tool_buttons[tool] = button
 
     def symbol_tile_text(self, tool: str, icon: str) -> str:
@@ -7693,7 +8356,7 @@ class OSRMapMaker(tk.Tk):
                 ),
                 add="+",
             )
-            ToolTip(button, f"{group_name}\nSymbolgruppe oeffnen", self.tooltips_enabled)
+            ToolTip(button, f"{group_name}\nOpen symbol group", self.tooltips_enabled)
             self.group_buttons[group_name] = button
 
     def select_symbol_group(self, value: str) -> None:
@@ -7734,7 +8397,19 @@ class OSRMapMaker(tk.Tk):
     def populate_symbol_panel(self, keep_scroll: bool = False) -> None:
         if self.symbol_panel is None:
             return
+        self.after_idle(lambda: self.apply_accessibility_defaults(self.symbol_panel))
         self.ensure_active_symbol_group()
+        focused_widget = self.focus_get()
+        restore_search_focus = (
+            self.symbol_search_entry is not None
+            and focused_widget == self.symbol_search_entry
+        )
+        search_insert_index = 0
+        if restore_search_focus:
+            try:
+                search_insert_index = self.symbol_search_entry.index(tk.INSERT)
+            except tk.TclError:
+                restore_search_focus = False
         scroll_fraction = 0.0
         if keep_scroll and self.symbol_scroll_canvas is not None:
             try:
@@ -7747,6 +8422,7 @@ class OSRMapMaker(tk.Tk):
             self.tool_buttons.pop(symbol_tool, None)
         for child in self.symbol_panel.winfo_children():
             child.destroy()
+        self.symbol_search_entry = None
         group_name = self.active_symbol_group.get()
         self.symbol_panel.configure(text=group_name)
         symbol_columns = self.symbol_grid_columns()
@@ -7762,8 +8438,22 @@ class OSRMapMaker(tk.Tk):
         search_entry = ttk.Entry(
             search_row, textvariable=self.symbol_search_var, width=10
         )
+        self.symbol_search_entry = search_entry
         search_entry.grid(row=0, column=0, sticky="ew")
         search_entry.bind("<KeyRelease>", lambda _e: self.populate_symbol_panel())
+
+        def restore_symbol_search_focus() -> None:
+            if not restore_search_focus or self.symbol_search_entry is None:
+                return
+            try:
+                self.symbol_search_entry.focus_set()
+                self.symbol_search_entry.icursor(
+                    min(search_insert_index, len(self.symbol_search_var.get()))
+                )
+            except tk.TclError:
+                return
+
+        self.after_idle(restore_symbol_search_focus)
         filter_row = ttk.Frame(self.symbol_panel)
         filter_row.grid(
             row=1, column=0, columnspan=symbol_columns, sticky="ew", pady=(0, 4)
@@ -7814,7 +8504,7 @@ class OSRMapMaker(tk.Tk):
         options.columnconfigure(1, weight=1)
         ttk.Checkbutton(
             options,
-            text="Rand",
+            text="Random",
             variable=self.symbol_random_variant_var,
             command=self.apply_symbol_options,
         ).grid(row=0, column=0, sticky="w")
@@ -7892,13 +8582,23 @@ class OSRMapMaker(tk.Tk):
             button_start_row = 5
             self.error_status.set("Missing custom symbol file(s)")
         if not entries:
-            ttk.Label(self.symbol_panel, text="No symbols match this filter.").grid(
+            empty_state = ttk.Frame(self.symbol_panel)
+            empty_state.grid(
                 row=button_start_row,
                 column=0,
                 columnspan=symbol_columns,
                 sticky="ew",
                 pady=4,
             )
+            empty_state.columnconfigure(0, weight=1)
+            ttk.Label(empty_state, text="No symbols match. Clear the filters to browse all.").grid(
+                row=0, column=0, sticky="w"
+            )
+            ttk.Button(
+                empty_state,
+                text="Clear filters",
+                command=self.reset_symbol_browser_filters,
+            ).grid(row=1, column=0, sticky="ew", pady=(4, 0))
             self.symbol_panel_row_count = button_start_row + 1
             self.refresh_symbol_scroll_region()
             return
@@ -7930,6 +8630,11 @@ class OSRMapMaker(tk.Tk):
         if self.symbol_scroll_canvas is not None:
             self.symbol_scroll_canvas.yview_moveto(scroll_fraction if keep_scroll else 0)
             self.symbol_scroll_canvas.after_idle(self.refresh_symbol_scroll_region)
+
+    def reset_symbol_browser_filters(self) -> None:
+        self.symbol_search_var.set("")
+        self.symbol_filter_var.set("All")
+        self.populate_symbol_panel()
 
     def apply_symbol_browser_view(self) -> None:
         view = self.symbol_browser_view_var.get()
@@ -8081,6 +8786,7 @@ class OSRMapMaker(tk.Tk):
     def on_symbol_context_menu(self, event: tk.Event, tool: str) -> str:
         self.select_tool(tool)
         custom = is_custom_symbol(self.project, tool)
+        favorite = tool in set(self.project.get("symbolFavorites", []))
         missing = any(
             kind == tool for kind, _label, _path in missing_custom_symbol_files(self.project)
         )
@@ -8090,23 +8796,25 @@ class OSRMapMaker(tk.Tk):
             label="Show options",
             command=lambda value=tool: self.open_tool_options(value),
         )
-        menu.add_command(label="Toggle favorite", command=self.toggle_current_favorite)
-        menu.add_separator()
         menu.add_command(
-            label="Edit custom symbol",
-            command=self.edit_current_custom_symbol,
-            state="normal" if custom else "disabled",
+            label="Remove from favorites" if favorite else "Add to favorites",
+            command=self.toggle_current_favorite,
         )
-        menu.add_command(
-            label="Repair missing file",
-            command=self.repair_current_custom_symbol_path,
-            state="normal" if custom and missing else "disabled",
-        )
-        menu.add_command(
-            label="Delete variant",
-            command=self.delete_current_custom_symbol_variant,
-            state="normal" if custom else "disabled",
-        )
+        if custom:
+            menu.add_separator()
+            menu.add_command(
+                label="Edit custom symbol",
+                command=self.edit_current_custom_symbol,
+            )
+            if missing:
+                menu.add_command(
+                    label="Repair missing file",
+                    command=self.repair_current_custom_symbol_path,
+                )
+            menu.add_command(
+                label="Delete variant",
+                command=self.delete_current_custom_symbol_variant,
+            )
         menu.tk_popup(event.x_root, event.y_root)
         return "break"
 
@@ -8491,6 +9199,7 @@ class OSRMapMaker(tk.Tk):
             self.layer_name(default_layer_for_tool(value, self.is_symbol_tool(value)))
         )
         self.refresh_toolbar()
+        self.reveal_context_panels_for_tool(value)
         self.update_cursor()
         self.update_status()
 
@@ -8504,7 +9213,7 @@ class OSRMapMaker(tk.Tk):
         self.refresh_recent_tools()
 
     def tooltip_text(self, tool: str, label: str) -> str:
-        description = TOOL_DESCRIPTIONS.get(tool, f"{label} platzieren")
+        description = TOOL_DESCRIPTIONS.get(tool, f"Place {label.lower()}")
         shortcut = self.shortcut_for_tool(tool)
         mode = self.tool_mode_hint(tool)
         suffix = f"\nShortcut: {shortcut}" if shortcut else "\nShortcut: -"
@@ -8514,48 +9223,48 @@ class OSRMapMaker(tk.Tk):
             variant_text = f"\nVariants: {len(variants)}" if len(variants) > 1 else ""
             tag_text = f"\nTags: {tags}" if tags else ""
             return (
-                f"{label}\n{description}\nModus: {mode}{tag_text}{variant_text}{suffix}"
+                f"{label}\n{description}\nMode: {mode}{tag_text}{variant_text}{suffix}"
             )
-        return f"{label}\n{description}\nModus: {mode}{suffix}"
+        return f"{label}\n{description}\nMode: {mode}{suffix}"
 
     def tool_mode_hint(self, tool: str) -> str:
         if tool == "select":
             return "Select, move, resize"
         if tool == "room_polygon":
-            return "Punkte setzen, am Startpunkt oder mit Enter schliessen"
+            return "Place points; close at the start point or with Enter"
         if tool == "shape_polygon":
-            return "Punkte setzen, am Startpunkt schliessen"
+            return "Place points; close at the start point"
         if tool == "cave_corridor":
-            return "Punkte setzen, am Startpunkt oder mit Enter schliessen"
+            return "Place points; close at the start point or with Enter"
         if tool in DRAG_SHAPE_TOOLS:
-            return "Aufziehen auf dem Canvas"
+            return "Drag on the canvas"
         if tool in {"room", "round", "cave"}:
-            return f"Aufziehen, Snap {self.snap_step_var.get()}"
+            return f"Drag to draw, snap {self.snap_step_var.get()}"
         if tool == "corridor":
-            return f"Gerade oder diagonal, Snap {self.snap_step_var.get()}"
+            return f"Straight or diagonal, snap {self.snap_step_var.get()}"
         if tool in {"text", "number", "note"}:
-            return "Klick platziert Text"
+            return "Click to place text"
         if tool == "measure":
-            return "Klicks setzen Messpunkte"
+            return "Click to add measurement points"
         if self.is_symbol_tool(tool):
             preset = self.symbol_size_preset_var.get()
             variant = (
-                "zufaellige Variante"
+                "random variant"
                 if self.symbol_random_variant_var.get()
-                else "Standardvariante"
+                else "default variant"
             )
-            return f"Symbol platzieren, {preset}, {variant}"
-        return "Werkzeug aktivieren"
+            return f"Place symbol, {preset}, {variant}"
+        return "Activate tool"
 
     def recent_tool_hint(self, tool: str) -> str:
         recent = [item for item in self.settings.get("recentTools", []) if item]
         if tool not in recent:
-            return "Zuletzt genutzt: noch nicht"
+            return "Last used: not yet"
         index = recent.index(tool)
         return (
-            "Zuletzt genutzt: gerade"
+            "Last used: just now"
             if index == 0
-            else f"Zuletzt genutzt: #{index + 1} in Recent"
+            else f"Last used: #{index + 1} in Recent"
         )
 
     def shortcut_for_tool(self, tool: str) -> str:
@@ -8635,12 +9344,12 @@ class OSRMapMaker(tk.Tk):
         self.canvas.bind("<MouseWheel>", self.on_mousewheel_zoom)
         self.canvas.bind("<Button-4>", self.on_mousewheel_zoom)
         self.canvas.bind("<Button-5>", self.on_mousewheel_zoom)
-        self.bind("<Delete>", lambda _e: self.delete_selected())
-        self.bind("<Control-z>", lambda _e: self.undo())
-        self.bind("<Control-y>", lambda _e: self.redo())
-        self.bind("<Control-g>", lambda _e: self.group_selected())
-        self.bind("<Control-u>", lambda _e: self.ungroup_selected())
-        self.bind("<Escape>", lambda _e: self.clear_measurement())
+        self.bind("<Delete>", self.guarded_shortcut(self.delete_selected))
+        self.bind("<Control-z>", self.guarded_shortcut(self.undo))
+        self.bind("<Control-y>", self.guarded_shortcut(self.redo))
+        self.bind("<Control-g>", self.guarded_shortcut(self.group_selected))
+        self.bind("<Control-u>", self.guarded_shortcut(self.ungroup_selected))
+        self.bind("<Escape>", self.guarded_shortcut(self.clear_measurement))
         self.bind_all("<KeyPress-space>", self.start_space_pan)
         self.bind_all("<KeyRelease-space>", self.end_space_pan)
         self.bind_configured_shortcuts()
@@ -8654,6 +9363,8 @@ class OSRMapMaker(tk.Tk):
         )
 
     def handle_return_key(self, _event: tk.Event) -> str | None:
+        if not self.should_handle_zoom_key():
+            return None
         if self.draft and self.draft.kind in POLYGON_DRAFT_TOOLS:
             self.close_polygon_draft()
             return "break"
@@ -8676,6 +9387,15 @@ class OSRMapMaker(tk.Tk):
                     self.bind_all(upper, callback)
                     self.bound_shortcut_sequences.append(upper)
 
+    def guarded_shortcut(self, command: Callable[[], Any]):
+        def handler(_event: tk.Event) -> str | None:
+            if not self.should_handle_zoom_key():
+                return None
+            result = command()
+            return result if result is not None else "break"
+
+        return handler
+
     def shortcut_callback(self, action: str):
         tool = next(
             (
@@ -8688,17 +9408,19 @@ class OSRMapMaker(tk.Tk):
         if tool:
             return lambda event, value=tool: self.handle_tool_shortcut(value)
         actions = {
-            "duplicate": lambda _event: self.duplicate_selected(),
-            "copy": lambda _event: self.copy_selected(),
-            "paste": lambda _event: self.paste_clipboard(at_cursor=True),
-            "bring_front": lambda _event: self.bring_selected_to_front(),
-            "send_back": lambda _event: self.send_selected_to_back(),
-            "toggle_lock": lambda _event: self.toggle_selected_lock(),
-            "command_palette": lambda _event: self.open_command_palette(),
-            "fit_map": lambda _event: self.fit_map(),
-            "fit_selection": lambda _event: self.fit_selection(),
-            "zoom_100": lambda _event: self.set_zoom(1.0),
-            "repeat_last": lambda _event: self.repeat_last_action(),
+            "duplicate": self.guarded_shortcut(self.duplicate_selected),
+            "copy": self.guarded_shortcut(self.copy_selected),
+            "paste": self.guarded_shortcut(
+                lambda: self.paste_clipboard(at_cursor=True)
+            ),
+            "bring_front": self.guarded_shortcut(self.bring_selected_to_front),
+            "send_back": self.guarded_shortcut(self.send_selected_to_back),
+            "toggle_lock": self.guarded_shortcut(self.toggle_selected_lock),
+            "command_palette": self.guarded_shortcut(self.open_command_palette),
+            "fit_map": self.guarded_shortcut(self.fit_map),
+            "fit_selection": self.guarded_shortcut(self.fit_selection),
+            "zoom_100": self.guarded_shortcut(lambda: self.set_zoom(1.0)),
+            "repeat_last": self.guarded_shortcut(self.repeat_last_action),
         }
         return actions.get(action)
 
@@ -8908,18 +9630,39 @@ class OSRMapMaker(tk.Tk):
         self.history_listbox.delete(0, "end")
         if getattr(self, "history_redo_listbox", None):
             self.history_redo_listbox.delete(0, "end")
+        undo_description = self.history[-1].description if self.history else "Nothing"
+        redo_description = self.future[0].description if self.future else "Nothing"
         self.history_target_var.set(
-            f"Next undo: {self.history[-1].description}" if self.history else "No undo target"
+            f"Undo: {undo_description}\nRedo: {redo_description}"
         )
         self.history_summary_var.set(
             f"{len(self.history)} undo / {len(self.future)} redo"
         )
+        undo_button = getattr(self, "history_undo_button", None)
+        if undo_button is not None:
+            undo_button.configure(state="normal" if self.history else "disabled")
+        redo_button = getattr(self, "history_redo_button", None)
+        if redo_button is not None:
+            redo_button.configure(state="normal" if self.future else "disabled")
+        undo_tooltip = getattr(self, "history_undo_tooltip", None)
+        if undo_tooltip is not None:
+            undo_tooltip.text = (
+                f"Undo {undo_description}" if self.history else "Nothing to undo"
+            )
+        redo_tooltip = getattr(self, "history_redo_tooltip", None)
+        if redo_tooltip is not None:
+            redo_tooltip.text = (
+                f"Redo {redo_description}" if self.future else "Nothing to redo"
+            )
         for index, command in enumerate(reversed(self.history), start=1):
             self.history_listbox.insert("end", f"↶ {index}. {command.description}")
             if index == 1:
                 self.history_listbox.itemconfigure(index - 1, background="#d9ecff")
         if not self.history:
-            self.insert_empty_list_state(self.history_listbox, "No undo history yet.")
+            self.insert_empty_list_state(
+                self.history_listbox,
+                "Make a change to start the history.",
+            )
         if getattr(self, "history_redo_listbox", None):
             for index, command in enumerate(self.future, start=1):
                 self.history_redo_listbox.insert(
@@ -8932,8 +9675,13 @@ class OSRMapMaker(tk.Tk):
             if not self.future:
                 self.insert_empty_list_state(
                     self.history_redo_listbox,
-                    "No redo actions.",
+                    "Undo a change to make redo available.",
                 )
+
+    def reset_edit_history(self) -> None:
+        self.history.clear()
+        self.future.clear()
+        self.refresh_history_panel()
 
     def on_history_context_menu(self, event: tk.Event, redo: bool = False) -> str:
         listbox = self.history_redo_listbox if redo else self.history_listbox
@@ -8998,19 +9746,20 @@ class OSRMapMaker(tk.Tk):
         before = self.project_snapshot()
         self.project["meta"]["title"] = self.title_var.get() or "Untitled Dungeon"
         self.settings["width"] = max(
-            12, safe_int(self.width_var.get(), self.settings["width"])
+            12, safe_int(variable_value(self.width_var), self.settings["width"])
         )
         self.settings["height"] = max(
-            12, safe_int(self.height_var.get(), self.settings["height"])
+            12, safe_int(variable_value(self.height_var), self.settings["height"])
         )
         self.settings["cellSize"] = max(
-            8, safe_int(self.cell_var.get(), self.settings["cellSize"])
+            8, safe_int(variable_value(self.cell_var), self.settings["cellSize"])
         )
         self.settings["showLegend"] = bool(self.legend_var.get())
         self.settings["cellScale"] = max(
             0.01,
             coerce_float(
-                self.cell_scale_var.get(), self.settings.get("cellScale", 10.0)
+                variable_value(self.cell_scale_var),
+                self.settings.get("cellScale", 10.0),
             ),
         )
         self.settings["cellScaleUnit"] = (
@@ -9029,6 +9778,7 @@ class OSRMapMaker(tk.Tk):
         )
         self.settings["showRoomStatus"] = bool(self.room_status_var.get())
         self.settings["showTooltips"] = bool(self.tooltip_var.get())
+        self.settings["showSymbolPreviews"] = bool(self.symbol_preview_var.get())
         self.settings["showPerformanceMetrics"] = bool(self.performance_var.get())
         self.performance_profiler.enabled = bool(self.performance_var.get())
         self.settings["showPrintGrid"] = bool(self.print_grid_var.get())
@@ -9048,15 +9798,14 @@ class OSRMapMaker(tk.Tk):
         self.settings["exportGrid"] = bool(self.export_grid_var.get())
         self.settings["vttPreset"] = self.vtt_preset_var.get()
         self.settings["exportAudience"] = self.export_audience_var.get()
-        self.settings["defaultTextFont"] = self.text_font_var.get() or "Arial"
-        self.settings["defaultTextSize"] = max(
-            0.25,
-            coerce_float(self.text_size_var.get(), self.settings["defaultTextSize"]),
+        self.settings["defaultTextFont"] = (
+            str(variable_value(self.text_font_var, "Arial")).strip() or "Arial"
         )
+        self.settings["defaultTextSize"] = self.current_default_text_size()
         self.settings["defaultShapeLineWidth"] = max(
             0.01,
             coerce_float(
-                self.shape_line_width_var.get(),
+                variable_value(self.shape_line_width_var),
                 self.settings.get("defaultShapeLineWidth", 0.12),
             ),
         )
@@ -9069,7 +9818,10 @@ class OSRMapMaker(tk.Tk):
             self.symbol_random_variant_var.get()
         )
         self.settings["numberStart"] = max(
-            1, safe_int(self.number_start_var.get(), self.settings["numberStart"])
+            1,
+            safe_int(
+                variable_value(self.number_start_var), self.settings["numberStart"]
+            ),
         )
         self.settings["numberArea"] = self.number_area_var.get().strip()
         self.settings["numberPrefix"] = self.number_prefix_var.get().strip()
@@ -9148,12 +9900,15 @@ class OSRMapMaker(tk.Tk):
             "room_tool": "Room tool",
             "room_polygon_tool": "Free room tool",
             "corridor_tool": "Corridor tool",
+            "cave_corridor_tool": "Cave tunnel tool",
             "round_tool": "Round tool",
             "cave_tool": "Cave tool",
             "shape_rect_tool": "Rectangle tool",
             "shape_circle_tool": "Circle tool",
             "shape_polygon_tool": "Polygon tool",
             "shape_line_tool": "Line tool",
+            "freehand_tool": "Freehand tool",
+            "brush_tool": "Brush tool",
             "text_tool": "Text tool",
             "number_tool": "Number tool",
             "note_tool": "Note tool",
@@ -9168,6 +9923,7 @@ class OSRMapMaker(tk.Tk):
             "fit_map": "Fit map",
             "fit_selection": "Fit selection",
             "zoom_100": "Zoom 100%",
+            "repeat_last": "Repeat last",
         }
         for row, action in enumerate(DEFAULT_SHORTCUTS, start=2):
             ttk.Label(frame, text=labels.get(action, action)).grid(
@@ -9348,6 +10104,22 @@ class OSRMapMaker(tk.Tk):
             )
         return items
 
+    def move_listbox_selection(self, listbox: tk.Listbox, delta: int) -> str:
+        size = listbox.size()
+        if size <= 0:
+            return "break"
+        selection = listbox.curselection()
+        if selection:
+            target = int(selection[0]) + delta
+        else:
+            target = 0 if delta >= 0 else size - 1
+        target = max(0, min(size - 1, target))
+        listbox.selection_clear(0, "end")
+        listbox.selection_set(target)
+        listbox.activate(target)
+        listbox.see(target)
+        return "break"
+
     def open_global_search(self) -> None:
         dialog = tk.Toplevel(self)
         dialog.title("Global Search")
@@ -9399,6 +10171,8 @@ class OSRMapMaker(tk.Tk):
 
         query_var.trace_add("write", refresh)
         entry.bind("<Return>", run_selected)
+        entry.bind("<Down>", lambda _e: self.move_listbox_selection(listbox, 1))
+        entry.bind("<Up>", lambda _e: self.move_listbox_selection(listbox, -1))
         listbox.bind("<Double-Button-1>", run_selected)
         listbox.bind("<Return>", run_selected)
         ttk.Button(dialog, text="Go", command=lambda: run_selected()).grid(
@@ -9406,6 +10180,7 @@ class OSRMapMaker(tk.Tk):
         )
         refresh()
         entry.focus_set()
+        self.after_idle(lambda: self.apply_accessibility_defaults(dialog))
 
     def command_palette_items(self) -> list[tuple[str, Any]]:
         items: list[tuple[str, Any]] = [
@@ -9421,6 +10196,9 @@ class OSRMapMaker(tk.Tk):
             ("View: Fit selection", self.fit_selection),
             ("View: Reset zoom", self.reset_zoom),
             ("View: Global search", self.open_global_search),
+            ("View: Save current layout", self.save_preferred_window_layout),
+            ("View: Restore saved layout", self.apply_preferred_window_layout),
+            ("View: Reset to Drawing layout", self.reset_window_layout),
             ("Tools: Validate project", self.open_validation_dialog),
             ("Tools: Legend categories", self.open_legend_categories_dialog),
             ("Tools: Asset library", self.open_asset_library_dialog),
@@ -9523,11 +10301,14 @@ class OSRMapMaker(tk.Tk):
 
         query_var.trace_add("write", refresh)
         entry.bind("<Return>", run_selected)
+        entry.bind("<Down>", lambda _e: self.move_listbox_selection(listbox, 1))
+        entry.bind("<Up>", lambda _e: self.move_listbox_selection(listbox, -1))
         listbox.bind("<Return>", run_selected)
         listbox.bind("<Double-Button-1>", run_selected)
         dialog.bind("<Escape>", lambda _e: dialog.destroy())
         refresh()
         entry.focus_set()
+        self.after_idle(lambda: self.apply_accessibility_defaults(dialog))
 
     def select_and_jump_to_object(self, obj_id: str) -> None:
         obj = next(
@@ -9924,6 +10705,7 @@ class OSRMapMaker(tk.Tk):
     def rebuild_layers_panel(self) -> None:
         if not hasattr(self, "layers_frame"):
             return
+        self.after_idle(lambda: self.apply_accessibility_defaults(self.layers_frame))
         for child in self.layers_frame.winfo_children():
             child.destroy()
         self.layer_visible_vars.clear()
@@ -9972,21 +10754,65 @@ class OSRMapMaker(tk.Tk):
             )
         actions = ttk.Frame(self.layers_frame)
         actions.grid(row=3, column=0, sticky="ew", pady=(8, 0))
-        for column in range(5):
+        for column in range(6):
             actions.columnconfigure(column, weight=1)
         layer_id = active_layer
-        for column, (label, command) in enumerate(
-            [
-                ("+", self.add_layer),
-                ("-", self.delete_active_layer),
-                ("⧉", self.duplicate_active_layer),
-                ("↑", lambda: self.move_layer(layer_id, -1)),
-                ("↓", lambda: self.move_layer(layer_id, 1)),
-            ]
-        ):
-            ttk.Button(actions, text=label, width=3, command=command).grid(
-                row=0, column=column, sticky="ew", padx=1
+        layers = self.project.get("layers", [])
+        active_index = next(
+            (index for index, layer in enumerate(layers) if layer.get("id") == layer_id),
+            -1,
+        )
+        action_specs = [
+            (icon_only("Add"), self.add_layer, "Add layer", "normal"),
+            (
+                icon_only("Delete"),
+                self.delete_active_layer,
+                "Delete active layer",
+                "normal" if active_index >= 0 else "disabled",
+            ),
+            (
+                icon_only("Duplicate"),
+                self.duplicate_active_layer,
+                "Duplicate active layer",
+                "normal" if active_index >= 0 else "disabled",
+            ),
+            (
+                icon_only("Move Up"),
+                lambda: self.move_layer(layer_id, -1),
+                "Move active layer up",
+                "normal" if active_index > 0 else "disabled",
+            ),
+            (
+                icon_only("Move Down"),
+                lambda: self.move_layer(layer_id, 1),
+                "Move active layer down",
+                "normal" if 0 <= active_index < len(layers) - 1 else "disabled",
+            ),
+        ]
+        for column, (label, command, tooltip, state) in enumerate(action_specs):
+            button = ttk.Button(
+                actions,
+                text=label,
+                width=UI_METRICS["icon_button_width"],
+                command=command,
+                state=state,
             )
+            button.grid(row=0, column=column, sticky="ew", padx=1)
+            ToolTip(button, tooltip, self.tooltips_enabled)
+
+        lock_button = ttk.Menubutton(actions, text="Lock", width=5)
+        lock_button.grid(row=0, column=5, sticky="ew", padx=1)
+        lock_menu = tk.Menu(lock_button, tearoff=False)
+        for label, locked in (
+            ("Lock all layers", True),
+            ("Unlock all layers", False),
+        ):
+            lock_menu.add_command(
+                label=label,
+                command=lambda value=locked: self.set_all_layers_locked(value),
+            )
+        lock_button.configure(menu=lock_menu)
+        ToolTip(lock_button, "Lock or unlock all layers", self.tooltips_enabled)
 
     def create_layer_row(
         self,
@@ -10029,12 +10855,24 @@ class OSRMapMaker(tk.Tk):
         )
         meta.layer_id = layer_id  # type: ignore[attr-defined]
         meta.grid(row=1, column=1, sticky="ew", padx=(0, 4), pady=(0, 4))
-        ttk.Checkbutton(
-            item, text="V", variable=visible, command=self.apply_layer_states, width=3
-        ).grid(row=0, column=3, sticky="e", padx=(2, 0))
-        ttk.Checkbutton(
-            item, text="L", variable=locked, command=self.apply_layer_states, width=3
-        ).grid(row=0, column=4, sticky="e", padx=(2, 0))
+        visible_button = ttk.Checkbutton(
+            item,
+            text="Show",
+            variable=visible,
+            command=self.apply_layer_states,
+            width=5,
+        )
+        visible_button.grid(row=0, column=3, sticky="e", padx=(2, 0))
+        locked_button = ttk.Checkbutton(
+            item,
+            text="Lock",
+            variable=locked,
+            command=self.apply_layer_states,
+            width=5,
+        )
+        locked_button.grid(row=0, column=4, sticky="e", padx=(2, 0))
+        ToolTip(visible_button, "Show or hide this layer", self.tooltips_enabled)
+        ToolTip(locked_button, "Lock or unlock this layer", self.tooltips_enabled)
         spin = ttk.Spinbox(
             item,
             from_=0.0,
@@ -10047,6 +10885,7 @@ class OSRMapMaker(tk.Tk):
         spin.grid(row=1, column=3, columnspan=2, sticky="e", padx=(2, 4), pady=(0, 4))
         spin.bind("<Return>", lambda _e: self.apply_layer_states())
         spin.bind("<FocusOut>", lambda _e: self.apply_layer_states())
+        ToolTip(spin, "Layer opacity from 0 to 1", self.tooltips_enabled)
         for widget in (item, thumb, name, meta):
             widget.bind("<Button-1>", lambda _e, value=layer_id: self.select_layer(value))
             widget.bind(
@@ -10098,10 +10937,21 @@ class OSRMapMaker(tk.Tk):
         if not layer:
             return "break"
         is_background = layer_id == "background"
+        layers = self.project.get("layers", [])
+        layer_index = next(
+            (index for index, item in enumerate(layers) if item.get("id") == layer_id),
+            -1,
+        )
+        object_count = sum(
+            1
+            for obj in self.project.get("objects", [])
+            if obj.get("layer", normalize_layer_id(None, obj.get("type"))) == layer_id
+        )
         menu = tk.Menu(self, tearoff=0)
         menu.add_command(
             label="Select objects on layer",
             command=lambda value=layer_id: self.select_layer_objects(value),
+            state="normal" if object_count else "disabled",
         )
         menu.add_separator()
         menu.add_command(
@@ -10114,25 +10964,20 @@ class OSRMapMaker(tk.Tk):
         )
         menu.add_separator()
         menu.add_command(label="Add layer", command=self.add_layer)
-        menu.add_command(
-            label="Duplicate layer",
-            command=self.duplicate_active_layer,
-            state="disabled" if is_background else "normal",
-        )
-        menu.add_command(
-            label="Move up",
-            command=lambda value=layer_id: self.move_layer(value, -1),
-        )
-        menu.add_command(
-            label="Move down",
-            command=lambda value=layer_id: self.move_layer(value, 1),
-        )
-        menu.add_separator()
-        menu.add_command(
-            label="Delete layer",
-            command=self.delete_active_layer,
-            state="disabled" if is_background else "normal",
-        )
+        if not is_background:
+            menu.add_command(label="Duplicate layer", command=self.duplicate_active_layer)
+            menu.add_command(
+                label="Move up",
+                command=lambda value=layer_id: self.move_layer(value, -1),
+                state="normal" if layer_index > 0 else "disabled",
+            )
+            menu.add_command(
+                label="Move down",
+                command=lambda value=layer_id: self.move_layer(value, 1),
+                state="normal" if 0 <= layer_index < len(layers) - 1 else "disabled",
+            )
+            menu.add_separator()
+            menu.add_command(label="Delete layer", command=self.delete_active_layer)
         menu.tk_popup(event.x_root, event.y_root)
         return "break"
 
@@ -10343,6 +11188,20 @@ class OSRMapMaker(tk.Tk):
         self.commit_history(before, "Change layer state")
         self.redraw()
 
+    def set_all_layers_locked(self, locked: bool) -> None:
+        layers = self.project.get("layers", [])
+        if not layers or all(bool(layer.get("locked", False)) == locked for layer in layers):
+            self.show_status("All layers already have that lock state.")
+            return
+        before = self.project_snapshot()
+        for layer in layers:
+            layer["locked"] = locked
+        self.commit_history(before, "Lock all layers" if locked else "Unlock all layers")
+        self.rebuild_layers_panel()
+        self.refresh_object_list()
+        self.redraw()
+        self.show_toast("All layers locked" if locked else "All layers unlocked")
+
     def pick_color(self, key: str) -> None:
         color = self.choose_color(f"Choose {key}", self.settings[key])
         if not color:
@@ -10357,14 +11216,13 @@ class OSRMapMaker(tk.Tk):
     def new_project(self) -> None:
         if not self.confirm_discard_changes("starting a new project"):
             return
-        before = self.project_snapshot()
         self.project = create_project()
         self.bump_project_revision()
         self.current_file = None
         self.set_selection(set())
         self.sync_vars()
         self.refresh_symbol_browser()
-        self.commit_history(before, "New project")
+        self.reset_edit_history()
         self.mark_saved()
         self.clear_autosave()
         self.redraw()
@@ -10524,20 +11382,19 @@ class OSRMapMaker(tk.Tk):
             return
         try:
             raw = read_project_file(path)
-            schema_version = int(raw.get("schemaVersion") or 1)
+            schema_version = safe_int(raw.get("schemaVersion"), 1)
             backup = backup_project_before_migration(path, schema_version)
             loaded = validate_project(raw)
         except Exception as exc:
             self.show_error("Load failed", str(exc), parent=self)
             return
-        before = self.project_snapshot()
         self.project = loaded
         self.bump_project_revision()
         self.current_file = path
         self.set_selection(set())
         self.sync_vars()
         self.refresh_symbol_browser()
-        self.commit_history(before, "Load project")
+        self.reset_edit_history()
         self.mark_saved()
         self.clear_autosave()
         self.remember_recent_project(path)
@@ -10553,7 +11410,7 @@ class OSRMapMaker(tk.Tk):
         if Image is None:
             self.show_error(
                 "Export failed",
-                "Pillow ist nicht installiert: python -m pip install pillow",
+                "Pillow is not installed: python -m pip install pillow",
                 parent=self,
             )
             return
@@ -11190,6 +12047,7 @@ class OSRMapMaker(tk.Tk):
             title="Compare project file",
             filetypes=[
                 ("OSR Map", "*.osrmap.json"),
+                ("Compressed OSR Map", f"*{COMPRESSED_PROJECT_SUFFIX}"),
                 ("JSON", "*.json"),
                 ("All files", "*.*"),
             ],
@@ -11198,7 +12056,7 @@ class OSRMapMaker(tk.Tk):
         if not path:
             return
         try:
-            other = validate_project(json.loads(Path(path).read_text(encoding="utf-8")))
+            other = validate_project(read_project_file(Path(path)))
         except Exception as exc:
             self.show_error("Compare failed", str(exc), parent=self)
             return
@@ -11281,11 +12139,24 @@ class OSRMapMaker(tk.Tk):
             snap_text = f"{snap_text} + edges"
         self.snap_status_var.set(f"Snap: {snap_text}")
         dirty = self.is_dirty()
-        self.save_status_var.set(save_state_label(dirty, self.autosave_matches_revision()))
-        warnings = self.project.get("validationWarnings", [])
-        self.validation_status_var.set(
-            f"Warnings: {len(warnings)}" if warnings else ""
+        self.save_status_var.set(
+            f"Save: {save_state_label(dirty, self.autosave_matches_revision())}"
         )
+        warnings = self.project.get("validationWarnings", [])
+        self.validation_status_var.set(f"Warnings: {len(warnings)}")
+
+    def on_save_status_click(self, _event: tk.Event | None = None) -> str:
+        if not self.is_dirty():
+            self.show_toast("Project file is saved", "success")
+            return "break"
+        if not self.autosave_matches_revision():
+            self.run_autosave()
+        self.update_status()
+        if self.autosave_matches_revision():
+            self.show_toast("Autosave is current", "success")
+        else:
+            self.show_toast("Autosave could not be updated", "warning")
+        return "break"
 
     def update_status(self, base: str | None = None) -> None:
         zoom_text = f"{int(round(self.zoom.get() * 100))}%"
@@ -11337,7 +12208,9 @@ class OSRMapMaker(tk.Tk):
         self.update_cursor()
         return "break"
 
-    def end_space_pan(self, _event: tk.Event | None = None) -> str:
+    def end_space_pan(self, _event: tk.Event | None = None) -> str | None:
+        if not self.space_pan_active and not self.is_panning:
+            return None
         self.space_pan_active = False
         if self.is_panning:
             self.end_pan()
@@ -11376,9 +12249,11 @@ class OSRMapMaker(tk.Tk):
         self.toolbar_visible_var.set(self.settings.get("showToolbar", True))
         self.color_picker_visible_var.set(self.settings.get("showColorPicker", False))
         self.tooltip_var.set(self.settings.get("showTooltips", True))
+        self.symbol_preview_var.set(self.settings.get("showSymbolPreviews", True))
         self.performance_var.set(self.settings.get("showPerformanceMetrics", False))
         self.performance_profiler.enabled = bool(self.performance_var.get())
         self.compact_mode_var.set(self.settings.get("compactMode", False))
+        self.auto_context_panels_var.set(self.settings.get("autoContextPanels", True))
         self.toolbar_dock_var.set(self.settings.get("toolbarDock", "floating"))
         self.focus_mode_var.set(self.settings.get("focusMode", "Off"))
         self.print_grid_var.set(self.settings.get("showPrintGrid", False))
@@ -11478,6 +12353,7 @@ class OSRMapMaker(tk.Tk):
 
     def on_context_menu(self, event: tk.Event) -> str:
         point = self.event_to_grid(event)
+        self.mouse_grid = point
         hit = self.find_hit(*point)
         if hit and hit["id"] not in self.selected_ids:
             self.set_selection(self.ids_for_hit(hit), primary=hit["id"])
@@ -11497,51 +12373,68 @@ class OSRMapMaker(tk.Tk):
                 command=lambda value=index: self.delete_polygon_point(value),
             )
             menu.add_separator()
+        if hit is None and handle is None:
+            draw_menu = tk.Menu(menu, tearoff=0)
+            for label, tool in (
+                ("Room", "room"),
+                ("Corridor", "corridor"),
+                ("Door", "door"),
+                ("Number", "number"),
+                ("Text", "text"),
+            ):
+                draw_menu.add_command(
+                    label=label,
+                    command=lambda value=tool: self.select_tool(value),
+                )
+            menu.add_cascade(label="Choose drawing tool", menu=draw_menu)
+            menu.add_command(
+                label="Paste here",
+                command=lambda: self.paste_clipboard(at_cursor=True),
+                state="normal" if self.clipboard_objects else "disabled",
+            )
+            menu.add_command(label="Add marker here", command=self.add_jump_marker)
+            selected_nav = self.selected_nav_item()
+            if selected_nav and selected_nav[0] == "marker":
+                menu.add_command(
+                    label="Move selected marker here",
+                    command=lambda value=point: self.move_selected_marker(value),
+                )
+            menu.add_separator()
+            menu.add_command(
+                label="Select all visible",
+                command=self.select_all_visible_objects,
+                state="normal" if self.selectable_visible_object_ids() else "disabled",
+            )
+            menu.add_command(label="Fit map", command=self.fit_map)
+            menu.tk_popup(event.x_root, event.y_root)
+            return "break"
         menu.add_command(
             label="Duplicate",
             command=self.duplicate_selected,
-            state="normal" if has_selection else "disabled",
         )
         menu.add_command(
             label="Copy",
             command=self.copy_selected,
-            state="normal" if has_selection else "disabled",
         )
-        menu.add_command(
-            label="Paste",
-            command=lambda: self.paste_clipboard(at_cursor=True),
-            state="normal" if self.clipboard_objects else "disabled",
-        )
-        menu.add_command(
+        arrange_menu = tk.Menu(menu, tearoff=0)
+        arrange_menu.add_command(
             label="Bring to front",
             command=self.bring_selected_to_front,
-            state="normal" if has_selection else "disabled",
         )
-        menu.add_command(
+        arrange_menu.add_command(
             label="Send to back",
             command=self.send_selected_to_back,
-            state="normal" if has_selection else "disabled",
         )
         menu.add_command(
             label="Lock / unlock",
             command=self.toggle_selected_lock,
-            state="normal" if has_selection else "disabled",
         )
-        menu.add_command(
-            label="Group",
-            command=self.group_selected,
-            state="normal" if len(self.selected_ids) > 1 else "disabled",
-        )
-        menu.add_command(
-            label="Ungroup",
-            command=self.ungroup_selected,
-            state="normal" if has_selection else "disabled",
-        )
-        menu.add_command(
-            label="Merge floors",
-            command=self.merge_selected_floors,
-            state="normal" if self.can_merge_selected_floors() else "disabled",
-        )
+        if len(self.selected_ids) > 1:
+            menu.add_command(label="Group", command=self.group_selected)
+        if any(obj.get("group") for obj in self.selected_objects()):
+            menu.add_command(label="Ungroup", command=self.ungroup_selected)
+        if self.can_merge_selected_floors():
+            menu.add_command(label="Merge floors", command=self.merge_selected_floors)
         layer_menu = tk.Menu(menu, tearoff=0)
         for layer in self.project.get("layers", []):
             if layer["id"] == "background":
@@ -11549,13 +12442,8 @@ class OSRMapMaker(tk.Tk):
             layer_menu.add_command(
                 label=layer.get("name", layer["id"]),
                 command=lambda value=layer["id"]: self.move_selection_to_layer(value),
-                state="normal" if has_selection else "disabled",
             )
-        menu.add_cascade(
-            label="Move to layer",
-            menu=layer_menu,
-            state="normal" if has_selection else "disabled",
-        )
+        menu.add_cascade(label="Move to layer", menu=layer_menu)
         align_menu = tk.Menu(menu, tearoff=0)
         for label, mode in [
             ("Left", "left"),
@@ -11570,11 +12458,8 @@ class OSRMapMaker(tk.Tk):
                 command=lambda value=mode: self.align_selection(value),
                 state="normal" if len(self.selected_ids) > 1 else "disabled",
             )
-        menu.add_cascade(
-            label="Align",
-            menu=align_menu,
-            state="normal" if len(self.selected_ids) > 1 else "disabled",
-        )
+        if len(self.selected_ids) > 1:
+            arrange_menu.add_cascade(label="Align", menu=align_menu)
         distribute_menu = tk.Menu(menu, tearoff=0)
         distribute_menu.add_command(
             label="Horizontal",
@@ -11586,16 +12471,13 @@ class OSRMapMaker(tk.Tk):
             command=lambda: self.distribute_selection("vertical"),
             state="normal" if len(self.selected_ids) > 2 else "disabled",
         )
-        menu.add_cascade(
-            label="Distribute",
-            menu=distribute_menu,
-            state="normal" if len(self.selected_ids) > 2 else "disabled",
-        )
+        if len(self.selected_ids) > 2:
+            arrange_menu.add_cascade(label="Distribute", menu=distribute_menu)
+        menu.add_cascade(label="Arrange", menu=arrange_menu)
         template_menu = tk.Menu(menu, tearoff=0)
         template_menu.add_command(
             label="Save as template",
             command=self.save_selection_as_template,
-            state="normal" if has_selection else "disabled",
         )
         templates = self.project.get("objectTemplates", [])
         if templates:
@@ -11609,21 +12491,16 @@ class OSRMapMaker(tk.Tk):
         menu.add_command(
             label="Fit view to selection",
             command=self.fit_view_to_selection,
-            state="normal" if has_selection else "disabled",
         )
         linked = bool(
             self.selected_object() and self.selected_object().get("targetMapId")
         )
-        menu.add_command(
-            label="Follow floor link",
-            command=self.follow_selected_link,
-            state="normal" if linked else "disabled",
-        )
+        if linked:
+            menu.add_command(label="Follow floor link", command=self.follow_selected_link)
         menu.add_separator()
         menu.add_command(
             label="Delete",
             command=self.delete_selected,
-            state="normal" if has_selection else "disabled",
         )
         menu.tk_popup(event.x_root, event.y_root)
         return "break"
@@ -11736,9 +12613,7 @@ class OSRMapMaker(tk.Tk):
                         value,
                         snapped[0],
                         snapped[1],
-                        1.45
-                        if tool == "number"
-                        else self.settings.get("defaultTextSize", 1.0),
+                        self.current_default_text_size(),
                     )
                     obj["font"] = self.settings.get("defaultTextFont", "Arial")
                     obj["color"] = self.settings.get(
@@ -11914,14 +12789,23 @@ class OSRMapMaker(tk.Tk):
         return "break"
 
     def should_handle_zoom_key(self) -> bool:
-        focus = self.focus_get()
+        try:
+            focus = self.focus_get()
+        except (tk.TclError, AttributeError, RecursionError):
+            return True
         if focus is None:
             return True
-        widget_class = focus.winfo_class()
+        try:
+            widget_class = focus.winfo_class()
+        except tk.TclError:
+            return True
         return widget_class not in {
             "Entry",
+            "Listbox",
             "TEntry",
             "TCombobox",
+            "Text",
+            "Treeview",
             "Spinbox",
             "TSpinbox",
         }
@@ -12744,6 +13628,8 @@ class OSRMapMaker(tk.Tk):
         else:
             self.selected_id = next(iter(self.selected_ids), None)
         self.selected_polygon_point = None
+        if self.selected_ids:
+            self.reveal_context_panel_by_title("Selection")
 
     def ids_for_hit(self, obj: dict[str, Any]) -> set[str]:
         group = obj.get("group")
@@ -13652,9 +14538,9 @@ class OSRMapMaker(tk.Tk):
             if matched_count == 0:
                 filtered = bool(search or type_filter != "All" or layer_filter != "All")
                 message = (
-                    "No objects match the current filter."
+                    "No matches. Clear filters to show all objects."
                     if filtered
-                    else "No objects on this map yet."
+                    else "No objects yet. Draw on the map to add one."
                 )
                 self.insert_empty_list_state(
                     self.object_listbox,
@@ -13682,6 +14568,12 @@ class OSRMapMaker(tk.Tk):
             return
         self.set_selection(ids, primary=next(iter(ids)))
         self.redraw()
+
+    def reset_object_filters(self) -> None:
+        self.object_search_var.set("")
+        self.object_type_filter_var.set("All")
+        self.object_layer_filter_var.set("All")
+        self.refresh_object_list(force=True)
 
     def on_object_list_context_menu(self, event: tk.Event) -> str:
         if not self.object_listbox:
@@ -14007,7 +14899,19 @@ class OSRMapMaker(tk.Tk):
         _x, _y, width, height = bounds(obj)
         return f"{format_measure_value(width)} x {format_measure_value(height)} cells"
 
+    def refresh_export_empty_state(self) -> None:
+        variable = getattr(self, "export_frame_status_var", None)
+        if variable is None:
+            return
+        count = len(self.project.get("exportFrames", []))
+        variable.set(
+            f"{count} export frame{'s' if count != 1 else ''} available."
+            if count
+            else "No export frame yet. Full-map export is ready."
+        )
+
     def rebuild_navigator_panel(self) -> None:
+        self.refresh_export_empty_state()
         self.refresh_link_target_options()
         if not getattr(self, "navigator_listbox", None):
             return
@@ -14212,6 +15116,11 @@ class OSRMapMaker(tk.Tk):
             state="normal" if selected and not is_link else "disabled",
         )
         menu.add_command(
+            label="Move marker to cursor",
+            command=self.move_selected_marker_to_cursor,
+            state="normal" if kind == "marker" and self.mouse_grid else "disabled",
+        )
+        menu.add_command(
             label="Delete",
             command=self.delete_nav_item,
             state="normal" if selected and not is_link else "disabled",
@@ -14281,6 +15190,25 @@ class OSRMapMaker(tk.Tk):
         self.commit_history(before, f"Delete {kind}")
         self.rebuild_navigator_panel()
         self.redraw()
+
+    def move_selected_marker(self, point: tuple[float, float]) -> None:
+        """Move the selected jump marker to a map-grid coordinate."""
+        selected = self.selected_nav_item()
+        if not selected or selected[0] != "marker":
+            self.show_status("Select a jump marker in the Navigator first.")
+            return
+        marker = selected[1]
+        before = self.project_snapshot()
+        marker["x"], marker["y"] = point
+        self.commit_history(before, "Move jump marker")
+        self.rebuild_navigator_panel()
+        self.redraw()
+
+    def move_selected_marker_to_cursor(self) -> None:
+        if self.mouse_grid is None:
+            self.show_status("Hover over the target position on the map first.")
+            return
+        self.move_selected_marker(self.mouse_grid)
 
     def rename_nav_item(self) -> None:
         selected = self.selected_nav_item()
@@ -14432,6 +15360,7 @@ class OSRMapMaker(tk.Tk):
         self.redraw()
 
     def update_selection_panel(self) -> None:
+        self.after_idle(lambda: self.apply_accessibility_defaults(self.selection_frame))
         for child in self.selection_frame.winfo_children():
             child.destroy()
         obj = self.selected_object()
@@ -14532,8 +15461,17 @@ class OSRMapMaker(tk.Tk):
             ).grid(row=row, column=0, columnspan=2, sticky="ew", pady=2)
             return
         if not obj:
-            ttk.Label(self.selection_frame, text="No object selected.").grid(
-                row=0, column=0, sticky="w"
+            ttk.Label(
+                self.selection_frame,
+                text="Select an object on the map to edit it here.",
+                wraplength=280,
+            ).grid(row=0, column=0, columnspan=2, sticky="w")
+            ttk.Button(
+                self.selection_frame,
+                text="Select all visible",
+                command=self.select_all_visible_objects,
+            ).grid(
+                row=1, column=0, columnspan=2, sticky="ew", pady=(4, 0)
             )
             return
         row = self._selection_overview_panel(0, [obj])
@@ -16016,7 +16954,7 @@ class OSRMapMaker(tk.Tk):
 
         relationships = ttk.Frame(notebook, padding=8)
         relationships.columnconfigure(1, weight=1)
-        notebook.add(relationships, text="Beziehungen")
+        notebook.add(relationships, text="Relationships")
         for row, (label, field) in enumerate(
             [
                 ("Faction", "relationshipFaction"),
@@ -16035,19 +16973,19 @@ class OSRMapMaker(tk.Tk):
 
         for tab_label, fields in [
             (
-                "Beschreibung",
+                "Description",
                 [
                     ("Description", "description", 7),
                     ("Contents", "contents", 5),
                     ("Player handout", "handoutText", 5),
                 ],
             ),
-            ("Gegner", [("Monsters", "monsters", 8)]),
-            ("Schatz", [("Treasure", "treasure", 5), ("Loot table", "lootTable", 7)]),
-            ("Fallen", [("Traps", "traps", 8)]),
-            ("Vorlesetext", [("Read-aloud text", "readAloud", 10)]),
+            ("Enemies", [("Monsters", "monsters", 8)]),
+            ("Treasure", [("Treasure", "treasure", 5), ("Loot table", "lootTable", 7)]),
+            ("Traps", [("Traps", "traps", 8)]),
+            ("Read Aloud", [("Read-aloud text", "readAloud", 10)]),
             (
-                "Hinweise",
+                "Notes",
                 [
                     ("Rumors", "rumors", 4),
                     ("Clues", "clues", 4),
@@ -16256,7 +17194,7 @@ class OSRMapMaker(tk.Tk):
                     number["numberArea"] = area
             else:
                 x, y = object_center(room)
-                number = text_obj(value, x, y, 1.45)
+                number = text_obj(value, x, y, self.current_default_text_size())
                 number["textRole"] = "number"
                 number["roomId"] = room["id"]
                 number["numberArea"] = area
@@ -17390,7 +18328,7 @@ class OSRMapMaker(tk.Tk):
         if Image is None:
             self.show_error(
                 "Batch export failed",
-                "Pillow ist nicht installiert: python -m pip install pillow",
+                "Pillow is not installed: python -m pip install pillow",
                 parent=self,
             )
             return
@@ -17526,7 +18464,7 @@ class OSRMapMaker(tk.Tk):
         if Image is None or ImageDraw is None:
             self.show_error(
                 "Legend export failed",
-                "Pillow ist nicht installiert: python -m pip install pillow",
+                "Pillow is not installed: python -m pip install pillow",
                 parent=self,
             )
             return
@@ -17653,21 +18591,30 @@ class OSRMapMaker(tk.Tk):
         preview_toolbar = ttk.Frame(preview_area)
         preview_toolbar.grid(row=0, column=0, sticky="ew", pady=(0, 6))
         ttk.Label(preview_toolbar, text="Preview").pack(side="left")
-        ttk.Button(
+        zoom_out_button = ttk.Button(
             preview_toolbar,
-            text="-",
+            text=icon_only("Zoom Out"),
             width=3,
             command=lambda: set_preview_zoom(preview_zoom_var.get() / 1.2),
-        ).pack(side="right", padx=1)
-        ttk.Button(
+        )
+        zoom_out_button.pack(side="right", padx=1)
+        zoom_in_button = ttk.Button(
             preview_toolbar,
-            text="+",
+            text=icon_only("Zoom In"),
             width=3,
             command=lambda: set_preview_zoom(preview_zoom_var.get() * 1.2),
-        ).pack(side="right", padx=1)
-        ttk.Button(
-            preview_toolbar, text="Fit", width=5, command=lambda: set_preview_zoom(1.0)
-        ).pack(side="right", padx=1)
+        )
+        zoom_in_button.pack(side="right", padx=1)
+        fit_preview_button = ttk.Button(
+            preview_toolbar,
+            text=icon_label("Fit"),
+            width=7,
+            command=lambda: set_preview_zoom(1.0),
+        )
+        fit_preview_button.pack(side="right", padx=1)
+        ToolTip(zoom_out_button, "Zoom preview out", self.tooltips_enabled)
+        ToolTip(zoom_in_button, "Zoom preview in", self.tooltips_enabled)
+        ToolTip(fit_preview_button, "Fit preview", self.tooltips_enabled)
         ttk.Label(preview_toolbar, textvariable=preview_zoom_label_var, width=6).pack(
             side="right", padx=(0, 4)
         )
@@ -18326,7 +19273,7 @@ class OSRMapMaker(tk.Tk):
             )
             return project
         if not self.selected_ids:
-            raise ValueError("Keine Auswahl fuer den Export vorhanden.")
+            raise ValueError("No selection is available for export.")
         selected = [
             json.loads(json.dumps(obj))
             for obj in self.project["objects"]
@@ -18334,7 +19281,7 @@ class OSRMapMaker(tk.Tk):
         ]
         box = union_bounds(selected)
         if not box:
-            raise ValueError("Keine Auswahl fuer den Export vorhanden.")
+            raise ValueError("No selection is available for export.")
         left, top, width, height = box
         padding = 0.5
         offset_x = left - padding
@@ -20508,8 +21455,8 @@ def draw_symbol_preview_canvas(
 
 def safe_int(value: Any, default: int) -> int:
     try:
-        return int(float(value))
-    except (TypeError, ValueError, tk.TclError):
+        return int(coerce_float(value, float(default)))
+    except (TypeError, ValueError, OverflowError, tk.TclError):
         return default
 
 
@@ -20536,6 +21483,12 @@ def normalize_hex_color(value: Any) -> str:
     if len(text) == 7 and all(char in "0123456789abcdefABCDEF" for char in text[1:]):
         return text.lower()
     return ""
+
+
+def validated_hex_color(value: Any, default: str = "") -> str:
+    if not isinstance(value, str):
+        return default
+    return normalize_hex_color(value) or default
 
 
 def corridor_polygon_points(
@@ -20777,31 +21730,40 @@ def flatten_points(points: list[tuple[float, float]]) -> list[float]:
     return [coord for point in points for coord in point]
 
 
-def polygon_axis_line_interval(
+def polygon_axis_line_intervals(
     polygon: list[tuple[float, float]], axis: int, value: float
-) -> tuple[float, float] | None:
+) -> list[tuple[float, float]]:
+    """Return every part of an axis-aligned line that lies in a polygon.
+
+    A cave can be concave, so one scan line may cross it more than once.  The
+    former single-interval implementation joined those separate crossings and
+    could draw grid lines through empty space.
+    """
     eps = 0.000001
     other = 1 - axis
-    coords: list[float] = []
+    crossings: list[float] = []
+    boundary: list[tuple[float, float]] = []
     for index, point in enumerate(polygon):
         next_point = polygon[(index + 1) % len(polygon)]
         a1, a2 = point[axis], next_point[axis]
         b1, b2 = point[other], next_point[other]
         if abs(a1 - a2) <= eps:
             if abs(value - a1) <= eps:
-                coords.extend([b1, b2])
+                boundary.append(tuple(sorted((b1, b2))))
             continue
-        if min(a1, a2) - eps <= value <= max(a1, a2) + eps:
+        # Half-open inclusion prevents a vertex shared by two edges from
+        # becoming two crossings.
+        if min(a1, a2) - eps <= value < max(a1, a2) - eps:
             t = (value - a1) / (a2 - a1)
             if -eps <= t <= 1 + eps:
-                coords.append(b1 + (b2 - b1) * max(0.0, min(1.0, t)))
-    unique: list[float] = []
-    for coord in sorted(coords):
-        if not unique or abs(coord - unique[-1]) > eps:
-            unique.append(coord)
-    if len(unique) < 2 or abs(unique[-1] - unique[0]) <= eps:
-        return None
-    return unique[0], unique[-1]
+                crossings.append(b1 + (b2 - b1) * max(0.0, min(1.0, t)))
+    result = list(boundary)
+    crossings.sort()
+    for index in range(0, len(crossings) - 1, 2):
+        start, end = crossings[index], crossings[index + 1]
+        if end - start > eps:
+            result.append((start, end))
+    return result
 
 
 def orthogonal_grid_segments(
@@ -20815,17 +21777,13 @@ def orthogonal_grid_segments(
     end_x = math.floor((max(xs) + eps) / cell)
     for index in range(start_x, end_x + 1):
         x = index * cell
-        interval = polygon_axis_line_interval(polygon, 0, x)
-        if interval:
-            y1, y2 = interval
+        for y1, y2 in polygon_axis_line_intervals(polygon, 0, x):
             segments.append((x, y1, x, y2))
     start_y = math.ceil((min(ys) - eps) / cell)
     end_y = math.floor((max(ys) + eps) / cell)
     for index in range(start_y, end_y + 1):
         y = index * cell
-        interval = polygon_axis_line_interval(polygon, 1, y)
-        if interval:
-            x1, x2 = interval
+        for x1, x2 in polygon_axis_line_intervals(polygon, 1, y):
             segments.append((x1, y, x2, y))
     return segments
 
@@ -20863,29 +21821,30 @@ def is_polygon_boundary_grid_segment(
 
 
 def floor_grid_segments(
-    obj: dict[str, Any], cell: float, include_boundary: bool = True
+    obj: dict[str, Any],
+    cell: float,
+    include_boundary: bool = True,
+    grid_step: float | None = None,
 ) -> list[tuple[float, float, float, float]]:
+    """Return globally aligned square-grid segments clipped to a floor.
+
+    ``cell`` converts map coordinates to pixels; ``grid_step`` controls the
+    actual line spacing.  Keeping these separate lets the subgrid use a
+    fraction of a cell without changing floor geometry.
+    """
+    spacing = max(0.01, float(grid_step if grid_step is not None else cell))
     key = floor_geometry_cache_key(
-        obj, cell, "grid", "boundary" if include_boundary else "inner"
+        obj,
+        cell,
+        "grid",
+        round(spacing, 5),
+        "boundary" if include_boundary else "inner",
     )
     cached = cache_get(_FLOOR_GRID_SEGMENTS_CACHE, key)
     if cached is not None:
         return list(cached)
-    if (
-        obj.get("type") in {"room", "corridor"}
-        and not is_polygon_room(obj)
-        and not has_floor_rotation(obj)
-    ):
-        segments = rectlike_local_grid_segments(obj, cell, include_boundary)
-        cache_put(
-            _FLOOR_GRID_SEGMENTS_CACHE,
-            key,
-            tuple(segments),
-            FLOOR_GEOMETRY_CACHE_LIMIT,
-        )
-        return segments
     polygon = floor_polygon_points(obj, cell)
-    segments = orthogonal_grid_segments(polygon, cell)
+    segments = orthogonal_grid_segments(polygon, spacing)
     if include_boundary:
         result = segments
     else:
@@ -20903,31 +21862,115 @@ def floor_grid_segments(
     return result
 
 
-def rectlike_local_grid_segments(
-    obj: dict[str, Any], cell: float, include_boundary: bool = True
+def segment_intersection_parameter(
+    start: tuple[float, float],
+    end: tuple[float, float],
+    edge_start: tuple[float, float],
+    edge_end: tuple[float, float],
+) -> float | None:
+    """Return the parameter on ``start`` → ``end`` where two segments meet."""
+    dx, dy = end[0] - start[0], end[1] - start[1]
+    ex, ey = edge_end[0] - edge_start[0], edge_end[1] - edge_start[1]
+    denominator = dx * ey - dy * ex
+    if abs(denominator) <= 0.000001:
+        return None
+    ox, oy = edge_start[0] - start[0], edge_start[1] - start[1]
+    t = (ox * ey - oy * ex) / denominator
+    u = (ox * dy - oy * dx) / denominator
+    if -0.000001 <= t <= 1.000001 and -0.000001 <= u <= 1.000001:
+        return max(0.0, min(1.0, t))
+    return None
+
+
+def clip_segment_to_polygon(
+    start: tuple[float, float],
+    end: tuple[float, float],
+    polygon: list[tuple[float, float]],
 ) -> list[tuple[float, float, float, float]]:
-    x = float(obj.get("x", 0)) * cell
-    y = float(obj.get("y", 0)) * cell
-    width = float(obj.get("width", 1)) * cell
-    height = float(obj.get("height", 1)) * cell
-    center = (x + width / 2, y + height / 2)
-    rotation = floor_rotation(obj)
-    segments: list[tuple[float, float, float, float]] = []
-    columns = int(math.floor(float(obj.get("width", 1)) + 0.000001))
-    rows = int(math.floor(float(obj.get("height", 1)) + 0.000001))
-    for index in range(columns + 1):
-        if not include_boundary and index in {0, columns}:
+    """Clip a segment to every interior interval of a possibly concave polygon."""
+    if len(polygon) < 3:
+        return []
+    parameters = {0.0, 1.0}
+    for index, edge_start in enumerate(polygon):
+        edge_end = polygon[(index + 1) % len(polygon)]
+        parameter = segment_intersection_parameter(start, end, edge_start, edge_end)
+        if parameter is not None:
+            parameters.add(round(parameter, 10))
+    result: list[tuple[float, float, float, float]] = []
+    values = sorted(parameters)
+    for first, second in zip(values, values[1:]):
+        if second - first <= 0.000001:
             continue
-        sx = x + index * cell
-        start = rotate_points_if_needed([(sx, y), (sx, y + height)], center, rotation)
-        segments.append((start[0][0], start[0][1], start[1][0], start[1][1]))
-    for index in range(rows + 1):
-        if not include_boundary and index in {0, rows}:
-            continue
-        sy = y + index * cell
-        start = rotate_points_if_needed([(x, sy), (x + width, sy)], center, rotation)
-        segments.append((start[0][0], start[0][1], start[1][0], start[1][1]))
-    return segments
+        middle = (first + second) / 2
+        mid_x = start[0] + (end[0] - start[0]) * middle
+        mid_y = start[1] + (end[1] - start[1]) * middle
+        if point_in_polygon(mid_x, mid_y, polygon):
+            x1 = start[0] + (end[0] - start[0]) * first
+            y1 = start[1] + (end[1] - start[1]) * first
+            x2 = start[0] + (end[0] - start[0]) * second
+            y2 = start[1] + (end[1] - start[1]) * second
+            result.append((x1, y1, x2, y2))
+    return result
+
+
+def floor_hex_grid_segments(
+    obj: dict[str, Any], settings: dict[str, Any], cell: float
+) -> list[tuple[float, float, float, float]]:
+    """Return the map's hex-grid edges clipped to one floor polygon."""
+    polygon = floor_polygon_points(obj, cell)
+    left, top, width, height = tuple_points_bounds(polygon)
+    right, bottom = left + width, top + height
+    orientation = settings.get("hexOrientation", "pointy")
+    radius = cell / math.sqrt(3) if orientation == "pointy" else cell / 2
+    rows = range(max(0, int(top / (cell * 1.5)) - 2), settings["height"] + 2)
+    columns = range(max(0, int(left / (cell * 1.5)) - 2), settings["width"] + 2)
+    result: list[tuple[float, float, float, float]] = []
+    for row in rows:
+        for column in columns:
+            center_x, center_y = hex_cell_center(column, row, cell, orientation)
+            if (
+                center_x + radius < left
+                or center_y + radius < top
+                or center_x - radius > right
+                or center_y - radius > bottom
+            ):
+                continue
+            points = hex_points(center_x, center_y, radius, orientation)
+            for index, start in enumerate(points):
+                result.extend(
+                    clip_segment_to_polygon(start, points[(index + 1) % len(points)], polygon)
+                )
+    return result
+
+
+def floor_grid_layers(
+    settings: dict[str, Any], obj: dict[str, Any], cell: float
+) -> list[tuple[list[tuple[float, float, float, float]], str]]:
+    """Return visible grid layers for a floor with the same global phase as the map."""
+    if settings.get("mapMode") == "Hexmap":
+        if not settings.get("showMainGrid", True):
+            return []
+        return [
+            (
+                floor_hex_grid_segments(obj, settings, cell),
+                soften_color(settings["backgroundColor"], 0.55),
+            )
+        ]
+    include_boundary = settings.get("showFloorOutlines", True)
+    layers: list[tuple[list[tuple[float, float, float, float]], str]] = []
+    step = normalize_snap_step(settings.get("snapStep", 1.0))
+    if settings.get("showSubGrid", True) and step < 1:
+        layers.append(
+            (
+                floor_grid_segments(obj, cell, include_boundary, cell * step),
+                soften_color(settings["backgroundColor"], 0.35),
+            )
+        )
+    if settings.get("showMainGrid", True):
+        layers.append(
+            (floor_grid_segments(obj, cell, include_boundary), settings["gridColor"])
+        )
+    return layers
 
 
 def span_from_points(
@@ -22167,6 +23210,22 @@ def svg_grid_lines(settings: dict[str, Any], scale: int) -> list[str]:
     width = settings["width"] * cell
     height = settings["height"] * cell
     parts: list[str] = []
+    if settings.get("mapMode") == "Hexmap":
+        if not settings.get("showMainGrid", True):
+            return parts
+        color = soften_color(settings["backgroundColor"], 0.55)
+        orientation = settings.get("hexOrientation", "pointy")
+        radius = cell / math.sqrt(3) if orientation == "pointy" else cell / 2
+        for row in range(settings["height"] + 2):
+            for column in range(settings["width"] + 2):
+                cx, cy = hex_cell_center(column, row, cell, orientation)
+                if cx < -cell or cy < -cell or cx > width + cell or cy > height + cell:
+                    continue
+                parts.append(
+                    f'<polygon points="{svg_points(hex_points(cx, cy, radius, orientation))}" '
+                    f'fill="none" stroke="{color}" stroke-width="{max(1, scale)}"/>'
+                )
+        return parts
     if settings.get("showSubGrid", True):
         step = normalize_snap_step(settings.get("snapStep", 1.0))
         if step < 1:
@@ -22378,15 +23437,13 @@ def svg_for_floor_grid(
     project: dict[str, Any], obj: dict[str, Any], scale: int
 ) -> list[str]:
     settings = project["settings"]
+    if not settings.get("exportGrid", True):
+        return []
     cell = settings["cellSize"] * scale
-    ink = settings["gridColor"]
     return [
-        f'<line x1="{gx1:.2f}" y1="{gy1:.2f}" x2="{gx2:.2f}" y2="{gy2:.2f}" stroke="{ink}" stroke-width="{max(1, scale)}"/>'
-        for gx1, gy1, gx2, gy2 in floor_grid_segments(
-            obj,
-            cell,
-            include_boundary=settings.get("showFloorOutlines", True),
-        )
+        f'<line x1="{gx1:.2f}" y1="{gy1:.2f}" x2="{gx2:.2f}" y2="{gy2:.2f}" stroke="{color}" stroke-width="{max(1, scale)}"/>'
+        for segments, color in floor_grid_layers(settings, obj, cell)
+        for gx1, gy1, gx2, gy2 in segments
     ]
 
 
@@ -22762,6 +23819,16 @@ def vector_ladder_ops(label: str = "") -> list[tuple[Any, ...]]:
     return ops
 
 
+def vector_barricade_ops() -> list[tuple[Any, ...]]:
+    """Cross-braced boards, distinct from the parallel bars of a barred door."""
+    return [
+        ("line", -0.34, -0.15, 0.34, 0.1),
+        ("line", -0.34, 0.15, 0.34, -0.1),
+        ("line", -0.26, -0.16, -0.26, 0.16),
+        ("line", 0.26, -0.16, 0.26, 0.16),
+    ]
+
+
 def vector_spiral_stair_ops(label: str = "") -> list[tuple[Any, ...]]:
     ops: list[tuple[Any, ...]] = [
         ("ellipse", 0.0, 0.0, 0.15, 0.15, "none"),
@@ -22849,6 +23916,8 @@ def vector_symbol_ops(kind: str) -> list[tuple[Any, ...]]:
         return vector_ladder_ops("U")
     if kind == "ladder_down":
         return vector_ladder_ops("D")
+    if kind == "barricade":
+        return vector_barricade_ops()
     if kind == "double_bed":
         return [
             ("rect", -0.38, -0.44, 0.38, 0.44, "none"),
@@ -23011,6 +24080,154 @@ def vector_symbol_ops(kind: str) -> list[tuple[Any, ...]]:
             ("ellipse", 0.18, 0.08, 0.18, 0.24, "none"),
             ("ellipse", 0.0, -0.18, 0.18, 0.24, "none"),
         ]
+    if kind == "iron_gate":
+        ops = [
+            ("polyline", ((-0.42, 0.4), (-0.42, -0.1), (-0.3, -0.34), (0.0, -0.44), (0.3, -0.34), (0.42, -0.1), (0.42, 0.4)), "none"),
+            ("line", -0.42, 0.4, 0.42, 0.4),
+        ]
+        for offset in (-0.24, 0.0, 0.24):
+            ops.append(("line", offset, -0.32, offset, 0.4))
+        return ops
+    if kind == "veil":
+        ops = [("line", -0.42, -0.4, 0.42, -0.4)]
+        for offset in (-0.3, -0.1, 0.1, 0.3):
+            ops.append(("line", offset, -0.4, offset + 0.05, 0.36))
+        return ops
+    if kind == "brazier":
+        return [
+            ("polyline", ((-0.34, 0.08), (-0.2, 0.34), (0.2, 0.34), (0.34, 0.08), (-0.34, 0.08)), "floor"),
+            ("ellipse", 0.0, 0.06, 0.34, 0.12, "none"),
+            ("polygon", ((0.0, -0.42), (-0.18, -0.04), (0.0, 0.04), (0.18, -0.04)), "ink"),
+        ]
+    if kind == "pedestal":
+        return [
+            ("ellipse", 0.0, -0.26, 0.32, 0.1, "none"),
+            ("rect", -0.24, -0.26, 0.24, 0.2, "floor"),
+            ("polyline", ((-0.38, 0.2), (0.38, 0.2), (0.28, 0.4), (-0.28, 0.4), (-0.38, 0.2)), "floor"),
+        ]
+    if kind == "chain":
+        return [
+            ("ellipse", -0.24, -0.24, 0.14, 0.25, "none"),
+            ("ellipse", 0.0, 0.0, 0.14, 0.25, "none"),
+            ("ellipse", 0.24, 0.24, 0.14, 0.25, "none"),
+        ]
+    if kind == "pentagram":
+        return [
+            ("ellipse", 0.0, 0.0, 0.44, 0.44, "none"),
+            ("polyline", ((0.0, -0.4), (0.235, 0.32), (-0.38, -0.13), (0.38, -0.13), (-0.235, 0.32), (0.0, -0.4)), "none"),
+        ]
+    if kind == "magic_swirl":
+        points = tuple(
+            (
+                math.cos(index * math.tau * 2.0 / 24) * (0.06 + index * 0.014),
+                math.sin(index * math.tau * 2.0 / 24) * (0.06 + index * 0.014),
+            )
+            for index in range(25)
+        )
+        return [("polyline", points, "none")]
+    if kind == "will_o_wisp":
+        return [
+            ("ellipse", 0.06, -0.08, 0.19, 0.24, "none"),
+            ("ellipse", -0.24, 0.16, 0.07, 0.07, "ink"),
+            ("ellipse", -0.38, 0.3, 0.04, 0.04, "ink"),
+            ("line", 0.0, 0.16, 0.0, 0.37),
+        ]
+    if kind == "fog_bank":
+        return [
+            ("polyline", tuple((index * 0.12 - 0.42, 0.18 + math.sin(index * 0.8) * 0.07) for index in range(8)), "none"),
+            ("polyline", tuple((index * 0.12 - 0.42, 0.0 + math.sin(index * 0.8 + 1.2) * 0.07) for index in range(8)), "none"),
+            ("polyline", tuple((index * 0.12 - 0.42, -0.18 + math.sin(index * 0.8 + 2.4) * 0.07) for index in range(8)), "none"),
+        ]
+    if kind == "spider_web":
+        ops = [
+            ("ellipse", 0.0, 0.0, 0.16, 0.16, "none"),
+            ("ellipse", 0.0, 0.0, 0.3, 0.3, "none"),
+            ("ellipse", 0.0, 0.0, 0.43, 0.43, "none"),
+        ]
+        for index in range(8):
+            angle = index * math.tau / 8
+            ops.append(("line", 0.0, 0.0, math.cos(angle) * 0.43, math.sin(angle) * 0.43))
+        return ops
+    if kind == "guano_pile":
+        return [
+            ("ellipse", -0.2, 0.12, 0.07, 0.05, "ink"),
+            ("ellipse", 0.1, 0.16, 0.08, 0.05, "ink"),
+            ("ellipse", 0.0, -0.08, 0.08, 0.06, "ink"),
+            ("ellipse", 0.25, -0.14, 0.05, 0.04, "ink"),
+            ("ellipse", -0.28, -0.18, 0.05, 0.04, "ink"),
+        ]
+    if kind == "mould_patch":
+        return [
+            ("ellipse", -0.18, 0.04, 0.19, 0.13, "none"),
+            ("ellipse", 0.12, -0.08, 0.18, 0.15, "none"),
+            ("ellipse", 0.22, 0.2, 0.13, 0.11, "none"),
+            ("ellipse", -0.22, -0.22, 0.1, 0.08, "none"),
+            ("ellipse", -0.05, 0.28, 0.12, 0.09, "none"),
+        ]
+    if kind == "slime_pool":
+        return [
+            ("ellipse", 0.0, 0.0, 0.44, 0.28, "none"),
+            ("polyline", ((-0.3, 0.0), (-0.14, -0.08), (0.02, 0.04), (0.18, -0.06), (0.32, 0.02)), "none"),
+            ("ellipse", -0.18, 0.1, 0.05, 0.04, "ink"),
+            ("ellipse", 0.2, 0.12, 0.04, 0.03, "ink"),
+        ]
+    if kind == "crystal_cluster":
+        return [
+            ("polygon", ((-0.38, 0.34), (-0.26, -0.22), (-0.1, 0.34)), "floor"),
+            ("polygon", ((-0.14, 0.38), (0.04, -0.42), (0.22, 0.38)), "floor"),
+            ("polygon", ((0.12, 0.34), (0.32, -0.14), (0.44, 0.34)), "floor"),
+        ]
+    if kind == "broken_pot":
+        return [
+            ("polyline", ((-0.34, 0.2), (-0.2, -0.22), (0.18, -0.3), (0.34, 0.2), (0.1, 0.38), (-0.34, 0.2)), "floor"),
+            ("line", -0.2, -0.22, -0.06, -0.02),
+            ("line", -0.06, -0.02, 0.12, -0.16),
+            ("line", 0.12, -0.16, 0.22, 0.12),
+        ]
+    if kind == "skeleton_remains":
+        ops = [
+            ("ellipse", -0.25, -0.18, 0.13, 0.16, "none"),
+            ("line", -0.12, -0.06, 0.3, 0.25),
+            ("line", -0.02, 0.02, -0.18, 0.32),
+            ("line", 0.1, 0.1, -0.08, 0.4),
+        ]
+        for offset in (0.0, 0.1, 0.2):
+            ops.append(("line", -0.05 + offset, 0.08 + offset * 0.75, 0.14 + offset, 0.0 + offset * 0.75))
+        return ops
+    if kind == "skull_pile":
+        return [
+            ("ellipse", -0.2, 0.12, 0.15, 0.14, "none"),
+            ("ellipse", 0.18, 0.12, 0.15, 0.14, "none"),
+            ("ellipse", 0.0, -0.16, 0.16, 0.15, "none"),
+            ("line", -0.26, 0.12, -0.14, 0.12),
+            ("line", 0.12, 0.12, 0.24, 0.12),
+            ("line", -0.06, -0.16, 0.06, -0.16),
+        ]
+    if kind == "rat_swarm":
+        return [
+            ("ellipse", -0.22, 0.08, 0.13, 0.07, "ink"),
+            ("ellipse", 0.12, -0.12, 0.14, 0.08, "ink"),
+            ("ellipse", 0.2, 0.22, 0.11, 0.06, "ink"),
+            ("polyline", ((-0.34, 0.1), (-0.45, 0.2), (-0.38, 0.3)), "none"),
+            ("polyline", ((0.24, -0.1), (0.42, -0.2), (0.36, -0.32)), "none"),
+        ]
+    if kind == "snake":
+        return [
+            ("polyline", ((-0.44, 0.18), (-0.24, -0.18), (0.0, 0.18), (0.24, -0.18), (0.42, 0.04)), "none"),
+            ("polygon", ((0.42, 0.04), (0.3, -0.06), (0.34, 0.16)), "ink"),
+        ]
+    if kind == "spider":
+        ops = [("ellipse", 0.0, 0.08, 0.16, 0.2, "none"), ("ellipse", 0.0, -0.2, 0.1, 0.1, "none")]
+        for index in range(4):
+            y_offset = -0.14 + index * 0.16
+            ops.append(("polyline", ((-0.1, y_offset), (-0.32, y_offset - 0.11), (-0.42, y_offset + 0.03)), "none"))
+            ops.append(("polyline", ((0.1, y_offset), (0.32, y_offset - 0.11), (0.42, y_offset + 0.03)), "none"))
+        return ops
+    if kind == "earthworm":
+        return [
+            ("polyline", tuple((index * 0.1 - 0.4, math.sin(index * 1.7) * 0.16) for index in range(9)), "none"),
+            ("line", 0.4, math.sin(13.6) * 0.16, 0.48, math.sin(13.6) * 0.16),
+        ]
     return []
 
 
@@ -23149,6 +24366,8 @@ def svg_for_symbol(
                     y + s * 0.12,
                     ink,
                 )
+        elif kind == "barricade":
+            parts.extend(svg_vector_symbol_parts(kind, x, y, s, ink, floor, width))
         elif kind == "portcullis":
             for offset in (-0.18, 0, 0.18):
                 ellipse(x + s * offset, y, s * 0.035, s * 0.035, ink)
@@ -24115,7 +25334,8 @@ def draw_tk_grid(canvas: tk.Canvas, settings: dict[str, Any], zoom: float) -> No
     width = settings["width"] * c
     height = settings["height"] * c
     if settings.get("mapMode") == "Hexmap":
-        draw_tk_hex_grid(canvas, settings, zoom)
+        if settings.get("showMainGrid", True):
+            draw_tk_hex_grid(canvas, settings, zoom)
         return
     if settings.get("showSubGrid", True):
         step = normalize_snap_step(settings.get("snapStep", 1.0))
@@ -25639,12 +26859,9 @@ def draw_tk_floor_grid(
     canvas: tk.Canvas, settings: dict[str, Any], obj: dict[str, Any], zoom: float
 ) -> None:
     c = settings["cellSize"] * zoom
-    for gx1, gy1, gx2, gy2 in floor_grid_segments(
-        obj,
-        c,
-        include_boundary=settings.get("showFloorOutlines", True),
-    ):
-        canvas.create_line(gx1, gy1, gx2, gy2, fill=settings["gridColor"])
+    for segments, color in floor_grid_layers(settings, obj, c):
+        for gx1, gy1, gx2, gy2 in segments:
+            canvas.create_line(gx1, gy1, gx2, gy2, fill=color)
 
 
 def texture_fill_color(settings: dict[str, Any], texture: str) -> str:
@@ -26303,6 +27520,7 @@ DOOR_SYMBOLS = {
     "collapse_barrier",
     "barricade",
     "force_barrier",
+    "iron_gate",
 }
 
 HAZARD_SYMBOLS = {
@@ -26441,6 +27659,8 @@ def draw_tk_door(
                 fill=ink,
                 outline=ink,
             )
+    elif kind == "barricade":
+        draw_tk_vector_symbol(canvas, kind, x, y, s, ink, floor, w)
     elif kind == "portcullis":
         for offset in (-0.18, 0, 0.18):
             canvas.create_oval(
@@ -26673,7 +27893,8 @@ def draw_pillow_grid(draw, settings: dict[str, Any], scale: int) -> None:
     width = settings["width"] * cell
     height = settings["height"] * cell
     if settings.get("mapMode") == "Hexmap":
-        draw_pillow_hex_grid(draw, settings, scale)
+        if settings.get("showMainGrid", True):
+            draw_pillow_hex_grid(draw, settings, scale)
         return
     if settings.get("showSubGrid", True):
         step = normalize_snap_step(settings.get("snapStep", 1.0))
@@ -26919,13 +28140,12 @@ def draw_pillow_floor_fill(
 def draw_pillow_floor_grid(
     draw, settings: dict[str, Any], obj: dict[str, Any], scale: int
 ) -> None:
+    if not settings.get("exportGrid", True):
+        return
     cell = settings["cellSize"] * scale
-    for gx1, gy1, gx2, gy2 in floor_grid_segments(
-        obj,
-        cell,
-        include_boundary=settings.get("showFloorOutlines", True),
-    ):
-        draw.line((gx1, gy1, gx2, gy2), fill=settings["gridColor"], width=max(1, scale))
+    for segments, color in floor_grid_layers(settings, obj, cell):
+        for gx1, gy1, gx2, gy2 in segments:
+            draw.line((gx1, gy1, gx2, gy2), fill=color, width=max(1, scale))
 
 
 def draw_pillow_floor_boundary_mask(
@@ -27990,6 +29210,8 @@ def draw_pillow_door(
                 ),
                 fill=ink,
             )
+    elif kind == "barricade":
+        draw_pillow_vector_symbol(draw, kind, x, y, s, ink, floor, width)
     elif kind == "portcullis":
         for offset in (-0.18, 0, 0.18):
             draw.ellipse(

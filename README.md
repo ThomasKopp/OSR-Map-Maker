@@ -107,7 +107,20 @@ For larger schema migrations, the app can create backups in `.osr_map_backups`.
 
 ## The Workspace
 
-The main window has four major areas.
+The main window is built around a command bar, a contextual tool-options bar,
+the canvas, a movable toolbar, dockable panels, and a status bar.
+
+### Command Bar and Tool Options
+
+The command bar keeps global actions within reach: New, Load, Save, Undo, Redo,
+Zoom, Fit, Search, Command, and Export. Use `Search` to jump to maps, objects,
+rooms, symbols, markers, and zones. Use `Command` or `Ctrl+K` to run commands,
+select tools and symbols, open export profiles, jump to objects, or switch maps
+without hunting through menus.
+
+The tool-options bar sits below the command bar. It changes with the active tool
+and contains drawing defaults such as snap behavior, cave smoothing, text font
+and size, shape stroke width, symbol size, and random symbol variant behavior.
 
 ### Canvas
 
@@ -124,53 +137,77 @@ Useful canvas gestures:
 - Click or drag with `Select` to choose objects.
 - Use `Shift` with `Select` to build a multi-selection.
 - Drag on empty space with `Select` to create a selection rectangle.
-- Use the middle or right mouse button to pan.
+- Use the middle mouse button to pan. Right-click opens a context menu for the
+  canvas position or selected object.
 - Hold Space for temporary panning.
-- Use the mouse wheel or arrow-up/arrow-down keys to zoom.
+- Use the mouse wheel or arrow-up/arrow-down keys to zoom between 25 and 400
+  percent. The zoom menu includes presets up to 400 percent.
 
 ### Floating or Docked Toolbar
 
 The toolbar contains basic drawing tools, grouped tool sections, recent tools,
 tool option controls, and shortcuts to common actions. It can be floating, docked
-to the top, or docked to the left with `View > Toolbar Dock`.
+to the top, or docked to the left with `View > Toolbar Dock`. Toggle it with
+`View > Left Toolbar`.
 
 Each tool button is keyboard focusable. Double-click a tool button to open tool
 options for that tool.
 
-### Inspector
+### Docked Inspector Panels
 
-The inspector on the right is divided into grouped tabs:
+The right inspector is a scrollable stack of independent panels: Symbols,
+Colors/Style, Layers, Selection, History, Navigator, Export, Objects, Map, and
+Rooms. Every panel can be collapsed or hidden. Drag the handle at a panel's
+lower edge to adjust its height independently; panel heights and inspector
+width are restored with the saved layout.
 
-- `Build`: map settings, style, grid, procedural actions, export defaults.
-- `Inspect`: selected object properties and multi-selection controls.
-- `Campaign`: room forms, room lists, tables, reports, and handouts.
-- `Export`: export profiles, frames, layouts, and VTT-related options.
-- `Project`: maps, layers, objects, navigation, history, review, and validation.
+`View > Compact Mode` replaces the inspector with a narrow canvas-side strip
+for Layers, Selection, Symbols, Navigator, and Export. Choosing an icon restores
+the inspector, opens the requested panel, scrolls it into view, and moves
+keyboard focus to its first control.
 
-The inspector width is resizable and saved in project settings. `View > Compact
-Mode` hides the inspector for small screens.
+### Workspace Presets and Panels
+
+Use `View > Workspace` to switch between focused layouts:
+
+- `Drawing`: layers, selection, history, minimap, and toolbar.
+- `Symbols`: symbol browser, colors/style, layers, selection, navigator, minimap,
+  toolbar, and color picker.
+- `Campaign`: room notes, navigator, objects, selection, map, and toolbar.
+- `Export/VTT`: export, navigator, map, layers, and minimap.
+- `Print`: export, map, navigator, layers, and minimap.
+
+Workspace changes also move keyboard focus to the most useful control, such as
+the active drawing tool, symbol search, room form, or export format.
+
+Use `View > Panels` to show or hide individual dock panels. `View > Minimap`,
+`View > Minimap Docked`, and `View > Color Picker` control the floating helper
+panels. `View > Save Current Layout`, `Restore Saved Layout`, and `Reset to
+Drawing Layout` let you keep a personal arrangement across sessions.
 
 ### Status Bar
 
-The status bar shows the active tool, grid position, selected object count, zoom
-level, and save state. Toast messages and validation warnings also appear during
-workflows that do not need a modal dialog.
+The status bar continuously shows coordinate, grid cell, zoom, active tool,
+layer, selection count, snap mode, save/autosave state, and validation warning
+count. Click Zoom to choose a preset, Warnings to open validation, or Save to
+refresh autosave state. Toast messages report short success, warning, and error
+outcomes without interrupting work.
 
 ## Your First Map
 
 1. Start the app with `python osr_map_maker.py`.
 2. Use `File > Project Settings` to set the project title and author.
-3. In the `Build` tab, set map width, height, cell size, and cell scale.
+3. In the `Map` panel, set map width, height, cell size, and cell scale.
 4. Choose a visual style such as Blueprint, Print, Parchment, or Dark VTT.
 5. Press `r` or select `Room`, then drag a rectangle on the canvas.
 6. Press `c` or select `Corridor`, then drag from one room edge to another.
-7. Select a door symbol from the `Symbols` tab and click on a wall.
+7. Select a door symbol from the `Symbols` panel and click on a wall.
 8. Press `n` or select `Number`, then click inside a room.
-9. Open the `Campaign` tab and fill in room notes, monsters, treasure, or
+9. Open the `Rooms` panel and fill in room notes, monsters, treasure, or
    read-aloud text.
 10. Save with `File > Save As`.
-11. Export with `File > Export` or use `File > Player Export` for a player-safe
-   version.
+11. Export with `Export > Export Image` or use `Export > Player Export` for a
+    player-safe version.
 
 ## Drawing Tools
 
@@ -189,13 +226,15 @@ The built-in basic tools are:
 | `i` | Circle | Draw circle or ellipse shape overlays |
 | `p` | Polygon | Place polygon points and close the shape at the first point |
 | `l` | Line | Draw straight line shapes |
+| - | Freehand | Sketch freehand linework |
+| - | Brush | Paint freehand filled areas |
 | `t` | Text | Place exportable text |
 | `n` | Number | Place room numbers using the configured numbering pattern |
 | `m` | Note | Place non-exportable GM notes |
 | `d` | Measure | Measure distance, path length, and area |
 
-Additional tools include freehand drawing and brush workflows for sketching
-caves, water, wall style, floor markings, or difficult terrain.
+Freehand and brush workflows are useful for sketching caves, water, wall style,
+floor markings, or difficult terrain.
 
 ### Rooms, Corridors, Rounds, and Caves
 
@@ -256,7 +295,7 @@ The Measure tool tracks:
 - Polygon area when enough points exist.
 - Real-world distance based on cell scale and unit.
 
-Configure scale in the `Build` tab with `Cell scale` and `Cell scale unit`.
+Configure scale in the `Map` panel with `Cell scale` and `Cell scale unit`.
 
 ## Selecting and Editing Objects
 
@@ -298,19 +337,19 @@ Handles vary by object type:
 
 ### Snapping and Guides
 
-The `Build` tab controls snapping:
+The `Map` panel controls snapping:
 
 - Snap to grid.
 - Snap step: 1 cell, 1/2 cell, or 1/4 cell.
 - Snap to object edges.
 - Main grid and subgrid visibility.
-- Coordinates, zones, ruler, print grid, and tooltips.
+- Coordinates, zones, ruler, print grid, UI tooltips, and symbol hover previews.
 
 Smart guides help align selected objects to edges, centers, and equal spacing.
 
 ## Symbols and Custom Assets
 
-Symbols live in the `Symbols` tab and in the tool menus. They are organized into
+Symbols live in the `Symbols` panel and in the tool menus. They are organized into
 groups such as:
 
 - Doors.
@@ -333,7 +372,7 @@ The symbol browser supports:
 - Drag-and-drop from browser to map.
 - Symbol group reordering.
 - Hover preview popovers with variants, tags, legend name, and default size.
-- Optional hover tooltips, controlled by `View > Tooltips` or the `Build` tab.
+- Optional hover tooltips, controlled by `View > Tooltips` or the `Map` panel.
 
 ### Symbol Properties
 
@@ -356,7 +395,7 @@ These roles are used by Foundry, Roll20, and Fantasy Grounds JSON exports.
 
 ### Custom Symbols
 
-Custom symbols can be imported from PNG or SVG. Use the `Symbols` tab actions:
+Custom symbols can be imported from PNG or SVG. Use the `Symbols` panel actions:
 
 - `PNG`: import a PNG custom symbol.
 - `SVG`: import an SVG custom symbol.
@@ -382,7 +421,7 @@ the generated legend.
 
 ## Rooms and Campaign Notes
 
-The `Campaign` tab turns a map into a usable adventure document. Room-like
+The `Rooms` panel turns a map into a usable adventure document. Room-like
 objects can store structured notes:
 
 - Room number.
@@ -450,7 +489,7 @@ Layer features include:
 
 ### Object List
 
-The Objects tab provides:
+The Objects panel provides:
 
 - Search.
 - Type filter.
@@ -485,8 +524,14 @@ The Navigator stores:
 - Export frames.
 - Floor links.
 
+Jump markers are navigation aids rather than selectable map objects. Select one
+in the Navigator to rename, recolor, delete, or move it. To move a marker,
+hover the desired grid position on the map and choose `Move marker to cursor`;
+you can also right-click that map position and choose `Move selected marker here`.
+If the Navigator has been hidden, restore it from `View > Panels > Navigator`.
+
 Linkable symbols such as stairs, portals, ladders, slides, teleporters, party
-starts, and escape routes can target another map. The Nav tab can follow links
+starts, and escape routes can target another map. The Navigator panel can follow links
 and highlight broken targets.
 
 ### Zones
@@ -497,7 +542,7 @@ can optionally respect the active zone.
 
 ## Map Settings and Visual Style
 
-The `Build` tab contains core map settings:
+The `Map` panel contains core map settings:
 
 - Title.
 - Width and height.
@@ -558,7 +603,7 @@ Texture fills render in Tk, Pillow, and SVG/PDF export paths where supported.
 
 ## Procedural Tools
 
-The `Build` tab includes procedural actions:
+The `Map` panel includes procedural actions:
 
 - Random rooms.
 - Random corridors.
@@ -609,11 +654,11 @@ layers and objects unless filtered by export settings.
 
 ### VTT JSON Exports
 
-Use the File menu:
+Use the Export menu:
 
-- `File > Foundry Scene JSON`.
-- `File > Roll20 Page JSON`.
-- `File > Fantasy Grounds JSON`.
+- `Export > Foundry Scene JSON`.
+- `Export > Roll20 Page JSON`.
+- `Export > Fantasy Grounds JSON`.
 
 These JSON exports are intended as structured handoff data. They include map
 dimensions, grid information, walls, doors, lights, notes, fog, encounter starts,
@@ -621,7 +666,8 @@ and session metadata where relevant.
 
 ## Exporting
 
-Open the export dialog with `File > Export`.
+Open the export dialog with `Export > Export Image`, the command-bar `Export`
+menu, or the command palette.
 
 Supported image/document formats:
 
@@ -725,7 +771,7 @@ when history commits occur.
 
 ## Keyboard Shortcuts
 
-Open `View > Shortcuts` or use the `Shortcuts` button in the Build tab to edit
+Open `View > Shortcuts` or use the `Shortcuts` button in the Map panel to edit
 shortcuts. Changes are rebound immediately after saving.
 
 Default shortcuts:
@@ -743,6 +789,8 @@ Default shortcuts:
 | `i` | Circle shape tool |
 | `p` | Polygon shape tool |
 | `l` | Line shape tool |
+| - | Freehand tool |
+| - | Brush tool |
 | `t` | Text tool |
 | `n` | Number tool |
 | `m` | Note tool |
@@ -823,7 +871,7 @@ raster export quality may be limited.
 
 Use the warning in the symbol browser or run `Tools > Validate Project`. Then:
 
-1. Select the custom symbol in the `Symbols` tab.
+1. Select the custom symbol in the `Symbols` panel.
 2. Use `Repair` to search for the file in a folder.
 3. Or use validation repair actions to remove missing symbols and placed
    instances.
@@ -846,10 +894,11 @@ Reduce export scale, switch from PNG to JPEG/WebP where transparency is not
 needed, export a named frame instead of the full map, or use PDF atlas tiling for
 large print maps.
 
-### Tooltips are distracting
+### Tooltips or symbol previews are distracting
 
-Turn them off with `View > Tooltips` or the `Tooltips` checkbox in the `Build`
-tab. This disables both small text tooltips and symbol hover previews.
+Use the separate `View > UI tooltips` and `View > Symbol previews` switches, or
+the matching controls in the `Map` panel. Text tooltips and symbol hover
+previews can be enabled independently.
 
 ### Quality script cannot find optional tools
 

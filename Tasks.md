@@ -1,5 +1,279 @@
 # UI-Verbesserungsvorschlaege fuer OSR Map Maker
 
+## Aktueller UI/UX-Umsetzungsplan: Werkzeuge immer griffbereit
+
+Stand: 2026-06-26
+
+Ziel: OSR Map Maker so umbauen, dass Nutzerinnen und Nutzer im jeweiligen
+Arbeitskontext sofort die passenden Werkzeuge, Optionen und Rueckmeldungen
+sehen. Die Karte bleibt im Zentrum; Panels, Toolbar, Optionen und Command
+Palette sollen sich an der aktuellen Aufgabe orientieren: Zeichnen, Symbole
+platzieren, Auswahl bearbeiten, Kampagneninformationen pflegen oder exportieren.
+
+### Ausgangslage aus der Code-Sichtung
+
+- Es gibt bereits Workspaces in `WORKSPACE_PRESETS`, dockbare Panels in
+  `WORKSPACE_PANEL_TITLES`, eine globale Command Bar, eine kontextuelle
+  Tool-Options-Bar, Toolbar, Minimap/Navigator, Command Palette und Statusleiste.
+- Die vorhandene UI ist funktional breit, aber einige Werkzeuge sind noch auf
+  mehrere Orte verteilt: Toolbar, Optionsleiste, rechte/freie Panels,
+  Menues, Kontextmenues und Dialoge konkurrieren miteinander.
+- Dock-Panels sind technisch als eigene Fenster umgesetzt. Das ist flexibel,
+  kann aber im Standardlayout mehr Suchaufwand erzeugen als ein klarer
+  Arbeitsbereich mit sichtbarer Seitenleiste.
+- Der beste naechste Schritt ist deshalb kein kompletter Neustart, sondern eine
+  kontextbewusste Neuordnung der bestehenden Bausteine.
+
+### Leitprinzipien
+
+- Canvas zuerst: Die Karte ist immer der Hauptarbeitsbereich.
+- Kontext statt Vollstaendigkeit: Sichtbar sind zuerst die Aktionen, die zur
+  aktuellen Aufgabe, Auswahl und zum aktiven Werkzeug passen.
+- Ein Werkzeug, ein Ort: Jede haeufige Aktion hat einen bevorzugten UI-Ort;
+  Menues und Command Palette bleiben schnelle Zweitwege.
+- Keine versteckten Voraussetzungen: Wenn ein Werkzeug Layer, Snap, Farbe,
+  Groesse, Exportziel oder Auswahl braucht, steht die Option direkt daneben.
+- Ruhig und kompakt: Panels zeigen klare Arbeitsgruppen, keine tiefen
+  Verschachtelungen und keine langen Hilfetexte im Hauptfenster.
+
+## Phase 1: Standardlayout und Werkzeugzugriff klaeren
+
+- [x] Default-Workspace "Drawing" neu anordnen.
+      Links eine kompakte Werkzeugleiste, Mitte Canvas, rechts eine sichtbare
+      Arbeitsleiste mit `Layers`, `Selection` und `History`. `Navigator` bleibt
+      als Minimap oder kleines Panel verfuegbar. Ziel: Raum, Korridor, Tuer,
+      Nummer, Layerwechsel und Undo sind ohne Fensterjagd erreichbar.
+
+- [x] Toolbar zu einer echten Aufgabenleiste verdichten.
+      In `_build_toolbar()` die Toolgruppen visuell staerker trennen:
+      Auswahl, Raeume/Korridore, Formen/Linien, Text/Notizen, Messen, letzte
+      Werkzeuge. Die aktive Gruppe und das aktive Werkzeug muessen auf einen
+      Blick sichtbar sein. Labels kurz halten, Tooltips mit Shortcut anzeigen.
+
+- [x] Tool-Options-Bar priorisieren.
+      In `rebuild_contextual_tool_options()` zuerst die wirklich relevanten
+      Optionen des aktiven Werkzeugs zeigen. Immer sichtbar: aktiver Layer,
+      Snap, wichtigste Groesse/Farbe/Variante. Weniger wichtige Optionen in ein
+      kleines "More"-Menue auslagern.
+
+- [x] Command Bar entlasten.
+      Oben nur globale Aktionen lassen: New, Load, Save, Undo, Redo, Zoom/Fit,
+      Search/Command, Export. Details wie Exportvarianten, Spezialansichten und
+      Layoutoptionen in passende Panels oder Menues verschieben.
+
+### Akzeptanzkriterien Phase 1
+
+- [x] Ein neuer Nutzer kann in unter 60 Sekunden einen Raum, einen Korridor,
+      eine Tuer, eine Raumnummer und einen Layerwechsel finden.
+- [x] Das aktive Werkzeug ist in Toolbar, Optionsleiste und Statusleiste
+      konsistent sichtbar.
+- [x] Keine Standardansicht startet mit vielen frei schwebenden Fenstern, die
+      den Canvas verdecken.
+
+## Phase 2: Kontextuelle Panels und Auswahlfluss
+
+- [x] Unterpanels individuell in der Hoehe anpassbar machen.
+      Jedes sichtbare Panel besitzt an seiner Unterkante einen Ziehgriff; die
+      eingestellte Hoehe bleibt beim Ein-/Ausklappen und nach Neustarts erhalten.
+- [x] Selection-Panel als Arbeitszentrale fuer markierte Objekte ausbauen.
+      Bei Auswahl automatisch `Selection` sichtbar machen und dort zuerst
+      haeufige Aktionen anbieten: Layer wechseln, Lock, Hide/Show, Duplicate,
+      Delete, Align, Group, Player-visible, Export. Detailfelder bleiben darunter
+      in Sektionen.
+
+- [x] Layers-Panel naeher an den Kartenbau bringen.
+      Jede Layer-Zeile soll Sichtbarkeit, Lock, Name, Opacity und Objektanzahl
+      direkt zeigen. Haeufige Aktionen kommen als Icon-Leiste an den Panelrand:
+      Neu, Duplizieren, Loeschen, Hoch/Runter, Alle sperren/entsperren.
+
+- [x] History-Panel als Sicherheitsnetz nutzbar machen.
+      Der Verlauf soll direkt zeigen, was rueckgaengig gemacht wird. Undo/Redo
+      bleiben global in der Command Bar, aber das Panel erklaert die letzten
+      Schritte mit kurzer Beschreibung und aktuellem Zustand.
+
+- [x] Symbol-Workflow fokussieren.
+      Beim Symbolwerkzeug automatisch den `Symbols`-Workspace oder das
+      Symbolpanel sichtbar machen. Symbolsuche, Favoriten, zuletzt genutzt und
+      Groesse/Variante muessen direkt neben dem Platzieren erreichbar sein.
+
+- [x] Kontextmenues vervollstaendigen.
+      Rechtsklick auf Canvas, Auswahl, Layer, Symbol und Map-Tab soll jeweils
+      die naechstliegenden Aktionen anbieten. Ziel: weniger dauerhafte Buttons,
+      aber schnellere lokale Bedienung.
+
+### Akzeptanzkriterien Phase 2
+
+- [x] Nach Auswahl eines Objekts sind Bearbeiten, Layerwechsel und Sichtbarkeit
+      ohne Menues erreichbar.
+- [x] Beim Wechsel auf ein Symbolwerkzeug sind Symbolbrowser und Symboloptionen
+      sichtbar oder mit einem Klick erreichbar.
+- [x] Rechtsklicks fuehlen sich kontextpassend an und duplizieren nicht einfach
+      nur die Hauptmenues.
+
+## Phase 3: Workspace-Automatik und progressive Komplexitaet
+
+- [x] Workspace-Wechsel smarter machen.
+      `apply_workspace_preset()` soll nicht nur Panels ein-/ausblenden, sondern
+      auch den jeweils besten Fokus setzen: Drawing -> Toolbar/Selection,
+      Symbols -> Symbolsuche, Campaign -> Rooms/Navigator, Export/VTT -> Export.
+
+- [x] Erste optionale Auto-Switch-Regeln einfuehren.
+      Umgesetzt: Auswahl blendet `Selection` ein, Symbolwerkzeuge blenden
+      `Symbols` ein, Shape-Werkzeuge blenden `Colors/Style` ein. Die Automatik
+      ist ueber `View > Auto Context Panels` abschaltbar. Offen fuer spaeter:
+      Exportframe-Auswahl -> `Export`, Room-Objekte -> `Rooms`/`Selection`.
+
+- [x] Kompaktmodus als echte Arbeitsansicht gestalten.
+      `compactMode` soll Panels nicht nur verstecken, sondern eine kleine
+      wiederherstellbare Panel-Leiste anzeigen: Layers, Selection, Symbols,
+      Navigator, Export. So bleibt der Canvas gross, ohne dass Werkzeuge
+      verschwinden.
+
+- [x] Layout-Reset und Layout-Speichern klarer machen.
+      View-Menue und Command Palette sollen eindeutige Aktionen enthalten:
+      "Reset to Drawing Layout", "Save Current Layout", "Restore Saved Layout".
+      Status/Toast bestaetigen ohne stoerende Dialoge.
+
+### Akzeptanzkriterien Phase 3
+
+- [x] Ein Workspace-Wechsel bringt den Tastaturfokus an eine sinnvolle Stelle.
+- [x] Auto-Switching hilft beim ersten Arbeiten, laesst sich aber deaktivieren.
+- [x] Kompaktmodus bleibt produktiv und macht keine Kernwerkzeuge unsichtbar.
+
+## Phase 4: Visuelle Klarheit und Bedienbarkeit
+
+- [x] UI-Sprache vereinheitlichen.
+      Entweder konsequent Englisch beibehalten oder eine deutsche Lokalisierung
+      planen. Kurzfristig: gleiche Begriffe fuer Tool, Layer, Map, Export,
+      Selection, History, Symbol verwenden.
+
+- [x] Icon- und Buttonsystem konsolidieren.
+      `GLOBAL_ACTION_ICONS` und Toolicons konsistent einsetzen. Haefige Aktionen
+      bekommen Icon + Tooltip; Textbuttons bleiben fuer Dialog- und
+      Sonderaktionen.
+
+- [x] Fokus, Tastatur und DPI pruefen.
+      Toolbar, Command Palette, Panels, Symbolbrowser und Selection-Felder
+      muessen per Tastatur bedienbar bleiben. Buttontexte duerfen bei 125 und
+      150 Prozent Skalierung nicht abgeschnitten werden.
+
+- [x] Statusleiste als Live-Kontext nutzen.
+      `refresh_status_fields()` und `update_status()` sollen immer Werkzeug,
+      Layer, Koordinate, Auswahl, Snap, Zoom, Speicherstatus und Warnungen
+      zeigen. Klickbare Bereiche fuer Zoom, Validation und Autosave pruefen.
+
+- [x] Leere Zustaende verbessern.
+      Panels wie `Selection`, `Symbols`, `History`, `Objects` und `Export`
+      brauchen kurze, handlungsorientierte Empty States mit der jeweils
+      naheliegenden Aktion, aber ohne lange Erklaertexte.
+
+### Akzeptanzkriterien Phase 4
+
+- [x] Die Standardansicht wirkt ruhig, nicht wie eine Sammlung offener Dialoge.
+- [x] Keine Buttonlabels laufen bei groesserer Skalierung aus ihren Containern.
+- [x] Die Statusleiste beantwortet jederzeit: Was mache ich gerade, wo bin ich,
+      worauf wirkt die naechste Aktion?
+
+## Phase 5: Test- und Review-Runde
+
+- [x] Mini-Usability-Szenarien manuell testen.
+      Szenario 1: Neue Karte -> Raum -> Korridor -> Tuer -> Nummer -> Undo.
+      Szenario 2: Symbol suchen -> platzieren -> Groesse/Farbe aendern.
+      Szenario 3: Objekt auswaehlen -> Layer wechseln -> Player-visible setzen.
+      Szenario 4: Export/VTT-Profil waehlen -> Player-Export starten.
+
+- [x] Layout-Regressionen pruefen.
+      Startlayout, Workspace-Wechsel, Layout speichern/laden, Reset, Kompaktmodus,
+      Minimap-Dock und Panel-Sichtbarkeit testen.
+
+- [x] Technische Checks ausfuehren.
+      Nach UI-Codeaenderungen mindestens `python -m py_compile osr_map_maker.py`
+      und die vorhandenen Core-Tests ausfuehren. Bei groesseren Aenderungen
+      `.\scripts\quality.ps1` verwenden, sofern die lokalen Tools verfuegbar sind.
+
+- [x] Dokumentation aktualisieren.
+      `README.md`, `UI_SPEC.md` und dieses `Tasks.md` nach der Umsetzung anpassen,
+      damit Workspaces, Panels, Toolbar und Shortcuts nicht auseinanderlaufen.
+
+### Empfohlene Umsetzungsreihenfolge
+
+1. Standardlayout und Toolbar/Optionsleiste verbessern.
+2. Selection, Layers, History und Symbols als wichtigste Arbeits-Panels
+   kontextbewusst nach vorne holen.
+3. Workspace-Fokus, Auto-Switching und Kompaktmodus ergaenzen.
+4. Visuelle Konsistenz, Tastaturbedienung und DPI-Details polieren.
+5. Vier manuelle Nutzerszenarien plus technische Checks abschliessen.
+
+## Programmdokumentation: Erstellungsplan
+
+Stand: 2026-06-22
+
+Ziel: Eine Programmdokumentation erstellen, die Entwicklern und zukuenftigen
+Maintainerinnen erklaert, wie OSR Map Maker aufgebaut ist, welche Datenfluesse
+es gibt, wo zentrale Funktionen liegen und wie Aenderungen sicher umgesetzt und
+getestet werden.
+
+### Ergebnisartefakte
+
+- [x] Grundstruktur in `DOKUMENTATION.md` anlegen.
+- [x] Bestehende Quellen auswerten: `README.md`, `docs/architecture.md`,
+      `UI_SPEC.md`, Tests und zentrale Python-Module.
+- [x] Detailinhalte pro Kapitel ausarbeiten und mit Code-Referenzen versehen.
+- [x] Datenmodell-Kapitel mit Schemafeldern, Objektarten und Migrationen
+      vervollstaendigen.
+- [x] UI-Kapitel mit Menues, Workspaces, Panels, Canvas-Events und Dialogen
+      vervollstaendigen.
+- [x] Rendering- und Export-Kapitel mit Tk-, Pillow-, SVG-, PDF- und
+      VTT-Pfaden vervollstaendigen.
+- [x] Entwicklungs- und Test-Kapitel mit Qualitaetsbefehlen, Testabdeckung und
+      bekannten Risiken vervollstaendigen.
+- [x] Dokumentation gegen die App pruefen und veraltete oder spekulative
+      Aussagen entfernen.
+
+### Vorgehen
+
+1. Bestandsaufnahme
+   - [x] Repository-Dateien, vorhandene Dokumente und Tests sichten.
+   - [x] Hauptmodul `osr_map_maker.py` nach Funktionsgruppen analysieren.
+   - [x] Facade-Module (`models.py`, `renderers.py`, `project_services.py`,
+         `constants.py`, `symbols.py`, `storage.py`) einordnen.
+
+2. Dokumentationsstruktur
+   - [x] Zielgruppe, Zweck und Abgrenzung definieren.
+   - [x] Architekturueberblick und Modulkarte anlegen.
+   - [x] Kapitel fuer Datenmodell, UI, Rendering, Export, Persistenz,
+         Performance, Tests und Wartung vorbereiten.
+
+3. Inhaltliche Ausarbeitung
+   - [x] Pro Kapitel die wichtigsten Funktionen, Klassen und Datenstrukturen
+         mit relativen Dateipfaden dokumentieren.
+   - [x] Wiederkehrende Datenfluesse beschreiben: App-Start, Projekt laden,
+         Objekt zeichnen, Auswahl bearbeiten, Autosave, Export.
+   - [x] Risiken und Wartungsregeln dokumentieren, besonders fuer neue
+         persistente Felder, Exportprofile, Symboltypen und UI-Aenderungen.
+
+4. Qualitaetssicherung
+   - [x] Markdown-Struktur und interne Links pruefen.
+   - [x] Terminologie vereinheitlichen.
+   - [x] `git diff --check -- DOKUMENTATION.md Tasks.md` ausfuehren.
+   - [x] Optional nach inhaltlichen Code-Aenderungen `.\scripts\quality.ps1`
+         ausfuehren.
+
+### Erste Analyseergebnisse
+
+- `osr_map_maker.py` ist weiterhin das zentrale Modul und enthaelt Tk-App,
+      Datenmodell-Helfer, Validierung, UI-Events, Rendering, Export und
+      Generatorlogik.
+- Die kleineren Python-Dateien sind stabile Import-Fassaden fuer eine
+      schrittweise Modularisierung, keine vollstaendig getrennten
+      Implementierungsmodule.
+- Projekte werden als JSON (`.osrmap.json`) oder komprimiert (`.osrmapz`)
+      gespeichert und beim Laden validiert/migriert.
+- Die wichtigsten technischen Achsen fuer die Dokumentation sind:
+      Datenmodell/Schema, Tkinter-UI, Canvas-Interaktion, Rendering,
+      Export/VTT, Symbolverwaltung, Autosave/Recovery, Performance-Caches und
+      Tests.
+
 Orientierung: Paint.NET wirkt stark, weil die Arbeitsflaeche im Zentrum bleibt,
 Werkzeuge schnell erreichbar sind, Ebenen und Verlauf als eigene Arbeitsfenster
 sichtbar sind und haeufige Aktionen ohne langes Suchen funktionieren. OSR Map

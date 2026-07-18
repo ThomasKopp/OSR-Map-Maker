@@ -43,14 +43,22 @@ belong in the contextual tool-options bar.
 Maps use thumbnail tabs with map name, object count, dirty marker, and a context
 menu. Layers and History remain visible dock panels in normal drawing workspaces.
 History separates undo and redo stacks and shows an empty state when no command
-is available. Object and Navigator lists also show concise empty states.
+is available. Panels are independently height-resizable from their lower edge;
+the inspector itself remains width-resizable. Object and Navigator lists also
+show concise empty states with a nearby action. Compact Mode replaces the
+inspector with a fixed-size vertical strip for Layers, Selection, Symbols,
+Navigator, and Export.
+
+Canvas zoom is clamped from 25 to 400 percent and exposes the upper range through
+the same preset control used for fit modes.
 
 ## Status And Warnings
 
 The status bar shows coordinate, cell, zoom, tool, layer, selection count, snap
 state, save/autosave state, and validation count. Validation warnings are a
 clickable status hint that opens Project Validation. Review comments stay in the
-Review Comments dialog and are not merged into validation warnings.
+Review Comments dialog and are not merged into validation warnings. Zoom opens
+the zoom preset menu; Save updates autosave when the project is dirty.
 
 ## Dialogs
 
@@ -64,7 +72,17 @@ and remain disabled or no-op when no target exists.
 Focusable controls opt into `takefocus` and keep a visible focus ring. Tooltips
 and the Command Palette should expose shortcuts where available. The app clamps
 Tk scaling to at least 1.0 and avoids viewport-based font scaling so text remains
-predictable on 100, 125, and 150 percent displays.
+predictable on 100, 125, and 150 percent displays. Project-level shortcuts must
+not fire while an Entry, Text, Listbox, Treeview, Combobox, or Spinbox owns
+focus. Arrow keys in Search and Command Palette move their result selection
+without leaving the query field.
+
+## Empty States
+
+Selection, Symbols, History, Objects, Navigator, and Export use short,
+action-oriented empty states. Empty states identify the next useful command,
+such as Select All Visible, Clear Filters, Add Export Frame, Save View, or Add
+Marker. They do not contain feature tours or keyboard instructions.
 
 ## Performance Notes
 

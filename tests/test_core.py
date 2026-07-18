@@ -8,6 +8,7 @@ import unittest
 from pathlib import Path
 
 import osr_map_maker as app
+import storage
 
 
 class ProjectModelTests(unittest.TestCase):
@@ -37,18 +38,73 @@ class ProjectModelTests(unittest.TestCase):
         self.assertEqual(validated["objects"][0]["roomStatus"], "undiscovered")
         self.assertIn("encounterTable", validated["campaign"])
 
+    def test_validate_project_preserves_updated_at(self) -> None:
+        project = app.create_project()
+        project["meta"]["updatedAt"] = "2026-01-02T03:04:05+00:00"
+
+        validated = app.validate_project(project)
+
+        self.assertEqual(validated["meta"]["updatedAt"], "2026-01-02T03:04:05+00:00")
+
     def test_validate_settings_preserves_tooltip_preference(self) -> None:
         self.assertTrue(app.validate_settings({})["showTooltips"])
         self.assertFalse(app.validate_settings({"showTooltips": False})["showTooltips"])
+        self.assertTrue(app.validate_settings({})["showSymbolPreviews"])
+        self.assertFalse(
+            app.validate_settings({"showSymbolPreviews": False})["showSymbolPreviews"]
+        )
+
+    def test_popup_overlap_detection_distinguishes_separate_popups(self) -> None:
+        self.assertTrue(app.popup_rectangles_overlap((10, 10, 40, 40), (40, 20, 20, 20)))
+        self.assertFalse(app.popup_rectangles_overlap((10, 10, 20, 20), (30, 10, 20, 20)))
+
+    def test_global_action_icons_support_labels_and_compact_buttons(self) -> None:
+        self.assertEqual(app.icon_label("Undo"), "↶ Undo")
+        self.assertEqual(app.icon_only("Delete"), "×")
+        self.assertEqual(app.icon_only("Unknown action"), "Unknown action")
+
+    def test_new_dungeon_symbols_have_vector_rendering(self) -> None:
+        kinds = {
+            "iron_gate",
+            "veil",
+            "brazier",
+            "pedestal",
+            "chain",
+            "pentagram",
+            "magic_swirl",
+            "will_o_wisp",
+            "fog_bank",
+            "spider_web",
+            "guano_pile",
+            "mould_patch",
+            "slime_pool",
+            "crystal_cluster",
+            "broken_pot",
+            "skeleton_remains",
+            "skull_pile",
+            "rat_swarm",
+            "snake",
+            "spider",
+            "earthworm",
+        }
+
+        self.assertTrue(kinds.issubset(app.SYMBOL_LABELS))
+        for kind in kinds:
+            self.assertTrue(app.vector_symbol_ops(kind), kind)
+            self.assertTrue(app.svg_for_symbol(kind, 20, 20, 24, "#000000", "#ffffff", 1))
+
+    def test_zoom_supports_four_hundred_percent(self) -> None:
+        self.assertEqual(app.MAX_ZOOM, 4.0)
+        self.assertIn("400%", app.ZOOM_PRESET_LABELS)
 
     def test_default_settings_are_already_normalized(self) -> None:
         defaults = app.default_settings()
 
         self.assertEqual(defaults, app.validate_settings(defaults))
 
-    def test_validate_settings_hides_minimap_by_default(self) -> None:
-        self.assertFalse(app.validate_settings({})["showMinimap"])
-        self.assertTrue(app.validate_settings({"showMinimap": True})["showMinimap"])
+    def test_validate_settings_shows_minimap_by_default(self) -> None:
+        self.assertTrue(app.validate_settings({})["showMinimap"])
+        self.assertFalse(app.validate_settings({"showMinimap": False})["showMinimap"])
 
     def test_validate_settings_controls_floor_outlines(self) -> None:
         default = app.validate_settings({})
@@ -64,6 +120,28 @@ class ProjectModelTests(unittest.TestCase):
 
         self.assertTrue(default["smoothCaveCorridors"])
         self.assertFalse(sharp["smoothCaveCorridors"])
+
+    def test_validate_settings_invalid_map_mode_uses_default(self) -> None:
+        self.assertEqual(
+            app.validate_settings({"mapMode": "Not a mode"})["mapMode"], "Dungeon"
+        )
+
+    def test_validate_settings_normalizes_visual_values(self) -> None:
+        settings = app.validate_settings(
+            {
+                "backgroundColor": ["#ffffff"],
+                "gridColor": "abc",
+                "styleTemplate": {"name": "Blueprint"},
+                "defaultTextFont": ["Arial"],
+                "defaultShapeStrokeColor": "not-a-color",
+            }
+        )
+
+        self.assertEqual(settings["backgroundColor"], app.BLUE)
+        self.assertEqual(settings["gridColor"], "#aabbcc")
+        self.assertEqual(settings["styleTemplate"], "Blueprint")
+        self.assertEqual(settings["defaultTextFont"], "Arial")
+        self.assertEqual(settings["defaultShapeStrokeColor"], "#aabbcc")
 
     def test_validate_settings_controls_room_status_overlay(self) -> None:
         default = app.validate_settings({})
@@ -102,7 +180,7 @@ class ProjectModelTests(unittest.TestCase):
         self.assertEqual(settings["minimapY"], 160)
         self.assertFalse(settings["rightPanels"]["layers"]["visible"])
         self.assertFalse(settings["rightPanels"]["layers"]["docked"])
-        self.assertFalse(settings["rightPanels"]["layers"]["collapsed"])
+        self.assertTrue(settings["rightPanels"]["layers"]["collapsed"])
         self.assertEqual(settings["rightPanels"]["layers"]["x"], 44)
 
     def test_validate_settings_preserves_minimap_and_workspace_state(self) -> None:
@@ -137,16 +215,53 @@ class ProjectModelTests(unittest.TestCase):
         layout = app.default_window_layout_settings("Drawing")
 
         self.assertEqual(layout["workspacePreset"], "Drawing")
-        self.assertEqual(layout["toolbarDock"], "floating")
+        self.assertEqual(layout["toolbarDock"], "left")
         self.assertEqual(layout["inspectorWidth"], 420)
         self.assertTrue(layout["showToolbar"])
         self.assertTrue(layout["showMinimap"])
-        self.assertTrue(layout["minimapDocked"])
+        self.assertFalse(layout["minimapDocked"])
+        self.assertFalse(layout["compactMode"])
         self.assertTrue(layout["rightPanels"]["layers"]["visible"])
+        self.assertTrue(layout["rightPanels"]["navigator"]["visible"])
         self.assertFalse(layout["rightPanels"]["symbols"]["visible"])
         self.assertTrue(
-            all(not state["docked"] for state in layout["rightPanels"].values())
+            all(state["docked"] for state in layout["rightPanels"].values())
         )
+
+    def test_move_selected_marker_updates_position_and_history(self) -> None:
+        marker = {"id": "mark-1", "name": "Marker 1", "x": 1.0, "y": 2.0}
+
+        class MarkerMover:
+            def __init__(self) -> None:
+                self.history = []
+                self.rebuilt = False
+                self.redrawn = False
+
+            def selected_nav_item(self):
+                return "marker", marker
+
+            def project_snapshot(self):
+                return {"markers": [marker.copy()]}
+
+            def commit_history(self, before, description):
+                self.history.append((before, description))
+
+            def rebuild_navigator_panel(self):
+                self.rebuilt = True
+
+            def redraw(self):
+                self.redrawn = True
+
+            def show_status(self, _message):
+                raise AssertionError("A selected marker should be movable")
+
+        mover = MarkerMover()
+        app.OSRMapMaker.move_selected_marker(mover, (12.5, 8.0))
+
+        self.assertEqual((marker["x"], marker["y"]), (12.5, 8.0))
+        self.assertEqual(mover.history[0][1], "Move jump marker")
+        self.assertTrue(mover.rebuilt)
+        self.assertTrue(mover.redrawn)
 
     def test_toast_styles_cover_expected_status_types(self) -> None:
         self.assertEqual(
@@ -159,6 +274,131 @@ class ProjectModelTests(unittest.TestCase):
         self.assertEqual(app.normalize_hex_color("123456"), "#123456")
         self.assertEqual(app.normalize_hex_color("not-a-color"), "")
 
+    def test_numeric_inputs_accept_decimal_comma(self) -> None:
+        class FakeTk:
+            def globalgetvar(self, _name: str) -> str:
+                return "0,2"
+
+        class FakeVariable:
+            _name = "fake"
+            _tk = FakeTk()
+
+            def get(self):
+                raise app.tk.TclError('expected floating-point number but got "0,2"')
+
+        self.assertEqual(app.variable_value(FakeVariable()), "0,2")
+        self.assertEqual(app.coerce_float("0,2", 1.0), 0.2)
+        self.assertEqual(app.safe_int("70,8", 1), 70)
+
+    def test_numeric_validation_rejects_non_finite_and_malformed_values(self) -> None:
+        self.assertEqual(app.coerce_float("nan", 2.5), 2.5)
+        self.assertEqual(app.coerce_float("inf", 2.5), 2.5)
+        self.assertEqual(app.safe_int("not a number", 7), 7)
+
+        settings = app.validate_settings(
+            {"width": "invalid", "height": [1], "cellSize": {"value": 20}}
+        )
+
+        self.assertEqual(settings["width"], 70)
+        self.assertEqual(settings["height"], 52)
+        self.assertEqual(settings["cellSize"], 18)
+
+    def test_validate_project_recovers_invalid_optional_metadata(self) -> None:
+        project = app.create_project()
+        project["schemaVersion"] = "invalid"
+        project["meta"] = []
+        project["symbolFavorites"] = 42
+
+        validated = app.validate_project(project)
+
+        self.assertEqual(validated["schemaVersion"], app.CURRENT_SCHEMA_VERSION)
+        self.assertEqual(validated["meta"]["title"], "Imported Dungeon")
+        self.assertEqual(validated["symbolFavorites"], [])
+
+    def test_validate_object_reports_non_text_type_as_validation_error(self) -> None:
+        with self.assertRaisesRegex(ValueError, "invalid type"):
+            app.validate_object({"type": ["room"]}, 3)
+
+    def test_validate_object_normalizes_colors_and_text_alignment(self) -> None:
+        shape = app.validate_object(
+            {
+                "type": "shape",
+                "kind": "rectangle",
+                "strokeColor": "bad",
+                "fillColor": ["#ffffff"],
+            },
+            1,
+        )
+        label = app.validate_object(
+            {"type": "text", "text": "Label", "color": 42, "align": "diagonal"},
+            2,
+        )
+
+        self.assertEqual(shape["strokeColor"], "#bbaadd")
+        self.assertEqual(shape["fillColor"], "")
+        self.assertEqual(label["color"], "")
+        self.assertEqual(label["align"], "center")
+
+    def test_tool_option_text_size_updates_text_and_number_defaults(self) -> None:
+        class FakeVariable:
+            def __init__(self, value):
+                self.value = value
+
+            def get(self):
+                return self.value
+
+            def set(self, value) -> None:
+                self.value = value
+
+        maker = app.OSRMapMaker.__new__(app.OSRMapMaker)
+        maker.project = app.create_project()
+        maker.settings["defaultTextSize"] = 1.0
+        maker.project_snapshot = lambda: copy.deepcopy(maker.project)
+        maker.commit_history = lambda _before, _description: None
+        maker.refresh_toolbar = lambda: None
+        maker.rebuild_contextual_tool_options = lambda: None
+        maker.redraw = lambda: None
+        maker.layer_id_from_name = lambda _name: "text"
+        maker.layer_name = lambda _layer_id: "Text"
+        maker.snap_step_var = FakeVariable("1 cell")
+        maker.snap_objects_var = FakeVariable(False)
+        maker.cave_corridor_smooth_var = FakeVariable(True)
+        maker.text_font_var = FakeVariable(" Courier New ")
+        maker.text_size_var = FakeVariable("0,5")
+        maker.current_layer_var = FakeVariable("Text")
+        maker.shape_line_width_var = FakeVariable("0,2")
+        maker.symbol_size_preset_var = FakeVariable(app.DEFAULT_SYMBOL_SIZE_PRESET)
+        maker.symbol_random_variant_var = FakeVariable(False)
+
+        app.OSRMapMaker.apply_tool_variant_options(maker)
+
+        self.assertEqual(maker.settings["defaultTextFont"], "Courier New")
+        self.assertAlmostEqual(maker.settings["defaultTextSize"], 0.5)
+        self.assertAlmostEqual(maker.settings["defaultShapeLineWidth"], 0.2)
+
+    def test_renumber_rooms_uses_configured_text_size_for_new_labels(self) -> None:
+        maker = app.OSRMapMaker.__new__(app.OSRMapMaker)
+        maker.project = app.create_project()
+        maker.settings["defaultTextSize"] = 0.45
+        maker.settings["numberStart"] = 7
+        room = app.validate_object(app.rect("room", 1, 1, 4, 3), 2)
+        maker.project["objects"].append(room)
+        maker.project_snapshot = lambda: copy.deepcopy(maker.project)
+        maker.sync_campaign_from_rooms = lambda: None
+        maker.commit_history = lambda _before, _description: None
+        maker.redraw = lambda: None
+        maker.show_status = lambda _message: None
+
+        app.OSRMapMaker.renumber_rooms(maker)
+
+        labels = [
+            obj
+            for obj in maker.project["objects"]
+            if obj.get("type") == "text" and obj.get("textRole") == "number"
+        ]
+        self.assertEqual(labels[0]["text"], "7")
+        self.assertAlmostEqual(labels[0]["size"], 0.45)
+
     def test_compressed_project_file_round_trips(self) -> None:
         project = app.create_project()
         project["meta"]["title"] = "Compressed Test"
@@ -167,11 +407,22 @@ class ProjectModelTests(unittest.TestCase):
             app.write_project_data(path, project)
             loaded = app.read_project_file(path)
 
-        self.assertEqual(loaded["meta"]["title"], "Compressed Test")
+            self.assertEqual(loaded["meta"]["title"], "Compressed Test")
         self.assertEqual(
             app.compressed_project_path(Path("map.osrmap.json")),
             Path("map.osrmapz"),
         )
+
+    def test_storage_module_round_trips_compressed_projects(self) -> None:
+        project = app.create_project()
+        project["meta"]["title"] = "Storage Compressed Test"
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "map.osrmapz"
+
+            storage.save_project(path, project)
+            loaded = storage.load_project(path)
+
+        self.assertEqual(loaded["meta"]["title"], "Storage Compressed Test")
 
     def test_embedded_custom_symbol_satisfies_missing_file_validation(self) -> None:
         project = app.create_project()
@@ -779,6 +1030,14 @@ class ProjectModelTests(unittest.TestCase):
             assigned = [value.lower() for value in preset.values() if value]
             self.assertEqual(len(assigned), len(set(assigned)), name)
 
+    def test_basic_tools_are_shortcut_configurable(self) -> None:
+        basic_tools = {tool for tool, _icon, _label in app.BASIC_TOOLS}
+
+        self.assertEqual(basic_tools, set(app.TOOL_ACTIONS))
+        self.assertTrue(set(app.TOOL_ACTIONS.values()).issubset(app.DEFAULT_SHORTCUTS))
+        self.assertEqual(basic_tools, set(app.TOOL_DESCRIPTIONS))
+        self.assertEqual(basic_tools, set(app.CURSOR_BY_TOOL))
+
     def test_review_fields_validate_diff_and_markdown(self) -> None:
         before = app.create_project()
         after = copy.deepcopy(before)
@@ -923,6 +1182,7 @@ class ProjectModelTests(unittest.TestCase):
             "coffin",
             "open_coffin",
             "grave",
+            "barricade",
             "circle_marker",
             "dotted_square_marker",
         ]
@@ -935,6 +1195,18 @@ class ProjectModelTests(unittest.TestCase):
             "table_set", 40, 40, 24, "#000000", "#ffffff", 1
         )
         self.assertTrue(any(part.startswith("<rect") for part in parts))
+
+    def test_barricade_is_distinct_from_a_barred_door(self) -> None:
+        self.assertEqual(app.SYMBOL_LABELS["barricade"], "Barricade")
+        self.assertNotEqual(app.SYMBOL_ICONS["barricade"], app.SYMBOL_ICONS["barred_door"])
+        self.assertIn("blockade", app.SYMBOL_ALIASES["barricade"])
+        self.assertIn(("barricade", "Barricaded"), app.SYMBOL_VARIANT_SETS["door"])
+        self.assertTrue(app.vector_symbol_ops("barricade"))
+
+        parts = app.svg_for_symbol(
+            "barricade", 40, 40, 24, "#000000", "#ffffff", 1
+        )
+        self.assertGreaterEqual(sum(part.startswith("<line") for part in parts), 5)
 
     def test_unrotated_builtin_symbols_draw_directly_on_tk_canvas(self) -> None:
         class RecordingCanvas:
@@ -1103,7 +1375,7 @@ class ProjectModelTests(unittest.TestCase):
 
         self.assertIn("## Contents", report)
         self.assertIn("Symbol Legend", report)
-        self.assertIn("Gefaehrlich", report)
+        self.assertIn("Dangerous", report)
         self.assertIn("Loot Table", report)
         self.assertIn("Map Encounter Table", report)
 
@@ -1372,6 +1644,86 @@ class ProjectModelTests(unittest.TestCase):
         self.assertNotIn((10, 40, 40, 40), segments)
         self.assertIn((20, 10, 20, 40), segments)
         self.assertIn((10, 20, 40, 20), segments)
+
+    def test_floor_grid_segments_use_global_phase_for_half_cell_room(self) -> None:
+        room = app.validate_object(app.rect("room", 0.5, 0.5, 3, 3), 1)
+        segments = app.floor_grid_segments(room, 10)
+
+        vertical_positions = {x1 for x1, _y1, x2, _y2 in segments if x1 == x2}
+        horizontal_positions = {y1 for _x1, y1, _x2, y2 in segments if y1 == y2}
+
+        self.assertEqual(vertical_positions, {10, 20, 30})
+        self.assertEqual(horizontal_positions, {10, 20, 30})
+        self.assertNotIn(5, vertical_positions)
+        self.assertNotIn(5, horizontal_positions)
+
+    def test_concave_floor_grid_does_not_bridge_empty_space(self) -> None:
+        cave_outline = [
+            (0, 0),
+            (40, 0),
+            (40, 10),
+            (10, 10),
+            (10, 30),
+            (40, 30),
+            (40, 40),
+            (0, 40),
+        ]
+
+        segments = app.orthogonal_grid_segments(cave_outline, 10)
+
+        self.assertIn((20, 0, 20, 10), segments)
+        self.assertIn((20, 30, 20, 40), segments)
+        self.assertNotIn((20, 0, 20, 40), segments)
+
+    def test_floor_grid_layers_continue_the_subgrid(self) -> None:
+        settings = app.create_project()["settings"]
+        settings.update({"snapStep": 0.5, "showMainGrid": False, "showSubGrid": True})
+        room = app.validate_object(app.rect("room", 0.5, 0.5, 3, 3), 1)
+
+        layers = app.floor_grid_layers(settings, room, 10)
+
+        self.assertEqual(len(layers), 1)
+        segments, _color = layers[0]
+        self.assertIn((5, 5, 5, 35), segments)
+        self.assertIn((5, 5, 35, 5), segments)
+
+    def test_floor_grid_respects_gridless_exports(self) -> None:
+        project = app.create_project()
+        project["settings"]["exportGrid"] = False
+        room = app.validate_object(app.rect("room", 1, 1, 3, 3), 1)
+
+        self.assertEqual(app.svg_for_floor_grid(project, room, 1), [])
+
+        class RecordingDraw:
+            def __init__(self) -> None:
+                self.lines: list[tuple[tuple[float, ...], dict]] = []
+
+            def line(self, coordinates, **kwargs) -> None:
+                self.lines.append((tuple(coordinates), kwargs))
+
+        draw = RecordingDraw()
+        app.draw_pillow_floor_grid(draw, project["settings"], room, 1)
+        self.assertEqual(draw.lines, [])
+
+    def test_floor_grid_uses_hexes_on_hexmaps(self) -> None:
+        settings = app.create_project()["settings"]
+        settings.update({"mapMode": "Hexmap", "showMainGrid": True})
+        room = app.validate_object(app.rect("room", 1, 1, 4, 4), 1)
+
+        layers = app.floor_grid_layers(settings, room, 10)
+
+        self.assertEqual(len(layers), 1)
+        segments, _color = layers[0]
+        self.assertTrue(segments)
+        self.assertTrue(
+            any(x1 != x2 and y1 != y2 for x1, y1, x2, y2 in segments)
+        )
+        svg_parts = app.svg_grid_lines(settings, 1)
+        self.assertTrue(any(part.startswith("<polygon") for part in svg_parts))
+        self.assertFalse(any(part.startswith("<line") for part in svg_parts))
+        settings["showMainGrid"] = False
+        self.assertEqual(app.floor_grid_layers(settings, room, 10), [])
+        self.assertEqual(app.svg_grid_lines(settings, 1), [])
 
     def test_rotated_room_grid_segments_stay_horizontal_and_vertical(self) -> None:
         room = app.validate_object(
@@ -2059,6 +2411,89 @@ class ProjectModelTests(unittest.TestCase):
         self.assertEqual(len(maker.project["objects"]), len(before["objects"]))
         app.OSRMapMaker.redo(maker)
         self.assertEqual(len(maker.project["objects"]), len(after["objects"]))
+
+    def test_global_shortcuts_skip_text_and_list_controls(self) -> None:
+        class Focus:
+            def __init__(self, widget_class: str) -> None:
+                self.widget_class = widget_class
+
+            def winfo_class(self) -> str:
+                return self.widget_class
+
+        class Maker:
+            def __init__(self, widget_class: str | None) -> None:
+                self.widget_class = widget_class
+
+            def focus_get(self):
+                return Focus(self.widget_class) if self.widget_class else None
+
+        for widget_class in ("Entry", "TEntry", "Text", "Listbox", "Treeview"):
+            self.assertFalse(app.OSRMapMaker.should_handle_zoom_key(Maker(widget_class)))
+        self.assertTrue(app.OSRMapMaker.should_handle_zoom_key(Maker(None)))
+
+    def test_project_lifecycle_clears_edit_history_and_file_state(self) -> None:
+        maker = app.OSRMapMaker.__new__(app.OSRMapMaker)
+        before = app.create_project()
+        after = copy.deepcopy(before)
+        maker.project = before
+        maker.current_file = Path("old.osrmap.json")
+        maker.history = [app.HistoryCommand("Edit", before, after)]
+        maker.future = [app.HistoryCommand("Redo", after, before)]
+        maker.confirm_discard_changes = lambda _action: True
+        maker.bump_project_revision = lambda: None
+        maker.set_selection = lambda ids, primary=None: None
+        maker.sync_vars = lambda: None
+        maker.refresh_symbol_browser = lambda: None
+        maker.refresh_history_panel = lambda: None
+        maker.mark_saved = lambda: None
+        maker.clear_autosave = lambda: None
+        maker.redraw = lambda: None
+
+        app.OSRMapMaker.new_project(maker)
+
+        self.assertIsNone(maker.current_file)
+        self.assertEqual(maker.history, [])
+        self.assertEqual(maker.future, [])
+
+    def test_load_project_clears_edit_history_without_old_file_undo(self) -> None:
+        maker = app.OSRMapMaker.__new__(app.OSRMapMaker)
+        before = app.create_project()
+        after = copy.deepcopy(before)
+        loaded = app.create_project()
+        loaded["meta"]["title"] = "Loaded"
+        maker.project = before
+        maker.current_file = Path("old.osrmap.json")
+        maker.history = [app.HistoryCommand("Edit", before, after)]
+        maker.future = [app.HistoryCommand("Redo", after, before)]
+        maker.recent_projects = []
+        maker.confirm_discard_changes = lambda _action: True
+        maker.bump_project_revision = lambda: None
+        maker.set_selection = lambda ids, primary=None: None
+        maker.sync_vars = lambda: None
+        maker.refresh_symbol_browser = lambda: None
+        maker.refresh_history_panel = lambda: None
+        maker.mark_saved = lambda: None
+        maker.clear_autosave = lambda: None
+        maker.remember_recent_project = lambda _path: None
+        maker.redraw = lambda: None
+        maker.show_error = lambda *_args, **_kwargs: None
+        maker.show_validation_warnings = lambda: None
+        maker.offer_missing_custom_symbol_repair = lambda: None
+        maker.show_status = lambda _message: None
+        maker.show_toast = lambda _message: None
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "loaded.osrmap.json"
+            app.write_project_data(path, loaded)
+
+            app.OSRMapMaker.load_project_path(
+                maker, path, before_action_confirmed=True
+            )
+
+        self.assertEqual(maker.current_file.name, "loaded.osrmap.json")
+        self.assertEqual(maker.project["meta"]["title"], "Loaded")
+        self.assertEqual(maker.history, [])
+        self.assertEqual(maker.future, [])
 
 
 class ExportSmokeTests(unittest.TestCase):
