@@ -7,15 +7,6 @@ __pycache__/
 # Local app/runtime state
 .osr_map_maker/
 
-# Development-only project support files
-tests/
-pytest.ini
-scripts/
-docs/
-examples/
-Tasks.md
-plan.md
-
 # Coverage and report output
 .coverage
 coverage.xml

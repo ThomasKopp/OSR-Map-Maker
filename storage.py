@@ -3,7 +3,12 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from osr_map_maker import now_iso, read_project_file, validate_project, write_project_data
+from osr_map_maker import (
+    now_iso,
+    read_project_file,
+    validate_project,
+    write_project_data,
+)
 
 
 def load_project(path: str | Path) -> dict[str, Any]:

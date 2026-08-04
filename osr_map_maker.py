@@ -261,6 +261,8 @@ def window_title_text(
     map_label = map_name.strip() or "Map"
     file_part = file_label.strip() or "unsaved"
     return f"{marker}{title} - {map_label} - {file_part}{autosave} - OSR Map Maker"
+
+
 EXPORT_FRAME_PRESETS: dict[str, tuple[float, float]] = {
     "Custom": (0.0, 0.0),
     "A4 portrait": (21.0, 29.7),
@@ -1020,10 +1022,7 @@ SYMBOL_LABELS = {
     kind: label for _group, entries in SYMBOL_GROUPS for kind, _icon, label in entries
 }
 SYMBOL_LABELS.update(
-    {
-        legacy: SYMBOL_LABELS[current]
-        for legacy, current in LEGACY_SYMBOL_KINDS.items()
-    }
+    {legacy: SYMBOL_LABELS[current] for legacy, current in LEGACY_SYMBOL_KINDS.items()}
 )
 SYMBOL_ICONS = {
     kind: icon for _group, entries in SYMBOL_GROUPS for kind, icon, _label in entries
@@ -1056,7 +1055,13 @@ SYMBOL_ALIASES = {
     "round_pit": {"pit circle", "circular pit", "pit round"},
     "covered_round_pit": {"covered pit circle", "closed pit circle"},
     "rubble": {"rumble", "debris", "geroell", "geröll", "schutt"},
-    "rubble_pile": {"rubble heap", "rumble pile", "debris pile", "geroellhaufen", "geröllhaufen"},
+    "rubble_pile": {
+        "rubble heap",
+        "rumble pile",
+        "debris pile",
+        "geroellhaufen",
+        "geröllhaufen",
+    },
     "debris_field": {"debris", "scattered rubble", "fallen rocks", "schuttfeld"},
     "rockfall": {"rock fall", "falling rocks", "felseinsturz", "steinschlag"},
     "cave_in": {"cave in", "collapse", "collapsed tunnel", "felseinsturz", "einsturz"},
@@ -1564,7 +1569,9 @@ def project_map_and_object_counts(project: dict[str, Any]) -> tuple[int, int]:
             if isinstance(obj, dict)
         ]
         return len(maps), len(objects)
-    objects = project.get("objects", []) if isinstance(project.get("objects"), list) else []
+    objects = (
+        project.get("objects", []) if isinstance(project.get("objects"), list) else []
+    )
     return 1, len(objects)
 
 
@@ -1575,7 +1582,9 @@ def autosave_recovery_metadata(
 ) -> dict[str, Any]:
     current_maps, current_objects = project_map_and_object_counts(current_project)
     autosave_maps, autosave_objects = project_map_and_object_counts(autosave_data)
-    autosave_meta = autosave_data.get("meta", {}) if isinstance(autosave_data, dict) else {}
+    autosave_meta = (
+        autosave_data.get("meta", {}) if isinstance(autosave_data, dict) else {}
+    )
     current_meta = (
         current_project.get("meta", {}) if isinstance(current_project, dict) else {}
     )
@@ -1638,7 +1647,10 @@ def project_embedded_symbol_bytes(project: dict[str, Any]) -> int:
     for info in project.get("customSymbols", {}).values():
         if not isinstance(info, dict):
             continue
-        records = [info, *[item for item in info.get("variants", []) if isinstance(item, dict)]]
+        records = [
+            info,
+            *[item for item in info.get("variants", []) if isinstance(item, dict)],
+        ]
         for item in records:
             data = str(item.get("embeddedData") or "")
             if data:
@@ -1655,7 +1667,9 @@ def project_embedded_underlay_bytes(project: dict[str, Any]) -> int:
 
 
 def project_embedded_asset_bytes(project: dict[str, Any]) -> int:
-    return project_embedded_symbol_bytes(project) + project_embedded_underlay_bytes(project)
+    return project_embedded_symbol_bytes(project) + project_embedded_underlay_bytes(
+        project
+    )
 
 
 def migration_backup_path(path: Path, schema_version: int) -> Path:
@@ -1792,7 +1806,9 @@ def workspace_panel_visibility(preset_name: Any) -> dict[str, bool]:
     }
 
 
-def default_right_panel_states(preset_name: Any = "Drawing") -> dict[str, dict[str, Any]]:
+def default_right_panel_states(
+    preset_name: Any = "Drawing",
+) -> dict[str, dict[str, Any]]:
     visibility = workspace_panel_visibility(preset_name)
     return {
         key: {
@@ -2178,18 +2194,18 @@ def validate_settings(value: Any) -> dict[str, Any]:
     settings["showZones"] = bool(settings.get("showZones", True))
     settings["showRuler"] = bool(settings.get("showRuler", True))
     settings["showFloorOutlines"] = bool(settings.get("showFloorOutlines", True))
-    settings["smoothCaveCorridors"] = bool(
-        settings.get("smoothCaveCorridors", True)
-    )
+    settings["smoothCaveCorridors"] = bool(settings.get("smoothCaveCorridors", True))
     settings["showMinimap"] = bool(settings.get("showMinimap", False))
     settings["showToolbar"] = bool(settings.get("showToolbar", True))
     settings["showColorPicker"] = bool(settings.get("showColorPicker", False))
-    settings["colorPickerX"] = max(0, min(4000, int(coerce_float(settings.get("colorPickerX"), 120))))
-    settings["colorPickerY"] = max(0, min(4000, int(coerce_float(settings.get("colorPickerY"), 120))))
-    settings["showTooltips"] = bool(settings.get("showTooltips", True))
-    settings["showSymbolPreviews"] = bool(
-        settings.get("showSymbolPreviews", True)
+    settings["colorPickerX"] = max(
+        0, min(4000, int(coerce_float(settings.get("colorPickerX"), 120)))
     )
+    settings["colorPickerY"] = max(
+        0, min(4000, int(coerce_float(settings.get("colorPickerY"), 120)))
+    )
+    settings["showTooltips"] = bool(settings.get("showTooltips", True))
+    settings["showSymbolPreviews"] = bool(settings.get("showSymbolPreviews", True))
     settings["showPerformanceMetrics"] = bool(
         settings.get("showPerformanceMetrics", False)
     )
@@ -2198,10 +2214,18 @@ def validate_settings(value: Any) -> dict[str, Any]:
     settings["toolbarDock"] = str(settings.get("toolbarDock") or "floating")
     if settings["toolbarDock"] not in {"floating", "top", "left"}:
         settings["toolbarDock"] = "floating"
-    settings["toolbarX"] = max(-200, min(4000, int(coerce_float(settings.get("toolbarX"), 8))))
-    settings["toolbarY"] = max(-200, min(4000, int(coerce_float(settings.get("toolbarY"), 8))))
-    settings["minimapX"] = max(-4000, min(4000, int(coerce_float(settings.get("minimapX"), -18))))
-    settings["minimapY"] = max(-4000, min(4000, int(coerce_float(settings.get("minimapY"), -18))))
+    settings["toolbarX"] = max(
+        -200, min(4000, int(coerce_float(settings.get("toolbarX"), 8)))
+    )
+    settings["toolbarY"] = max(
+        -200, min(4000, int(coerce_float(settings.get("toolbarY"), 8)))
+    )
+    settings["minimapX"] = max(
+        -4000, min(4000, int(coerce_float(settings.get("minimapX"), -18)))
+    )
+    settings["minimapY"] = max(
+        -4000, min(4000, int(coerce_float(settings.get("minimapY"), -18)))
+    )
     panel_states = settings.get("rightPanels", {})
     if not isinstance(panel_states, dict):
         panel_states = {}
@@ -2231,9 +2255,7 @@ def validate_settings(value: Any) -> dict[str, Any]:
     settings["hexOrientation"] = str(settings.get("hexOrientation") or "pointy")
     if settings["hexOrientation"] not in HEX_ORIENTATIONS:
         settings["hexOrientation"] = "pointy"
-    settings["hexCoordinateStyle"] = str(
-        settings.get("hexCoordinateStyle") or "axial"
-    )
+    settings["hexCoordinateStyle"] = str(settings.get("hexCoordinateStyle") or "axial")
     if settings["hexCoordinateStyle"] not in {"axial", "offset"}:
         settings["hexCoordinateStyle"] = "axial"
     settings["showHexCoordinates"] = bool(settings.get("showHexCoordinates", False))
@@ -2243,7 +2265,9 @@ def validate_settings(value: Any) -> dict[str, Any]:
     )
     settings["underlaySnap"] = bool(settings.get("underlaySnap", True))
     settings["showPrintProof"] = bool(settings.get("showPrintProof", False))
-    settings["printDpi"] = max(72, min(1200, int(coerce_float(settings.get("printDpi"), 300))))
+    settings["printDpi"] = max(
+        72, min(1200, int(coerce_float(settings.get("printDpi"), 300)))
+    )
     settings["printBleedCells"] = max(
         0.0, min(4.0, coerce_float(settings.get("printBleedCells"), 0.0))
     )
@@ -2262,7 +2286,9 @@ def validate_settings(value: Any) -> dict[str, Any]:
         settings.get("workspacePreset")
     )
     if not settings["rightPanels"]:
-        settings["rightPanels"] = default_right_panel_states(settings["workspacePreset"])
+        settings["rightPanels"] = default_right_panel_states(
+            settings["workspacePreset"]
+        )
     else:
         default_panels = default_right_panel_states(settings["workspacePreset"])
         for key, default_state in default_panels.items():
@@ -2273,11 +2299,11 @@ def validate_settings(value: Any) -> dict[str, Any]:
     settings["snapToObjects"] = bool(settings.get("snapToObjects", False))
     default_font = settings.get("defaultTextFont")
     settings["defaultTextFont"] = (
-        default_font.strip() if isinstance(default_font, str) and default_font.strip() else "Arial"
+        default_font.strip()
+        if isinstance(default_font, str) and default_font.strip()
+        else "Arial"
     )
-    settings["defaultTextSize"] = coerce_text_size(
-        settings.get("defaultTextSize"), 1.0
-    )
+    settings["defaultTextSize"] = coerce_text_size(settings.get("defaultTextSize"), 1.0)
     settings["defaultShapeLineWidth"] = max(
         0.01, coerce_float(settings.get("defaultShapeLineWidth"), 0.12)
     )
@@ -2350,22 +2376,40 @@ def validate_project(value: Any) -> dict[str, Any]:
         and isinstance(value.get("maps"), list)
         and value["maps"]
     ):
-        first_map = next(
+        active_id = str(value.get("activeMapId") or "")
+        source_map = next(
             (
                 item
                 for item in value["maps"]
-                if isinstance(item, dict) and isinstance(item.get("objects"), list)
+                if isinstance(item, dict)
+                and str(item.get("id") or "") == active_id
+                and isinstance(item.get("objects"), list)
             ),
-            {},
+            None,
         )
-        value["objects"] = json_clone(first_map.get("objects", []))
-        value["settings"] = json_clone(
-            first_map.get("settings", value.get("settings", {}))
-        )
-        value["layers"] = json_clone(first_map.get("layers", value.get("layers", [])))
-        value["campaign"] = json_clone(
-            first_map.get("campaign", value.get("campaign", {}))
-        )
+        if source_map is None:
+            source_map = next(
+                (
+                    item
+                    for item in value["maps"]
+                    if isinstance(item, dict) and isinstance(item.get("objects"), list)
+                ),
+                {},
+            )
+        for field, default in (
+            ("objects", []),
+            ("settings", {}),
+            ("layers", []),
+            ("campaign", {}),
+            ("zones", []),
+            ("markers", []),
+            ("views", []),
+            ("exportFrames", []),
+            ("underlays", []),
+            ("printLayouts", []),
+            ("sessionState", {}),
+        ):
+            value[field] = json_clone(source_map.get(field, value.get(field, default)))
     if not isinstance(value.get("objects"), list):
         raise ValueError("This project format is not supported.")
     schema_version = safe_int(value.get("schemaVersion"), 1)
@@ -2382,7 +2426,9 @@ def validate_project(value: Any) -> dict[str, Any]:
     author = meta.get("author")
     created_at = meta.get("createdAt")
     updated_at = meta.get("updatedAt")
-    meta["title"] = title if isinstance(title, str) and title.strip() else "Imported Dungeon"
+    meta["title"] = (
+        title if isinstance(title, str) and title.strip() else "Imported Dungeon"
+    )
     meta["author"] = author if isinstance(author, str) else ""
     meta["createdAt"] = (
         created_at if isinstance(created_at, str) and created_at.strip() else now_iso()
@@ -2582,29 +2628,44 @@ def normalize_inspector_field_value(
 
 def project_validation_warnings(project: dict[str, Any]) -> list[str]:
     warnings: list[str] = []
-    ids: set[str] = set()
-    duplicates: set[str] = set()
-    for obj in project.get("objects", []):
-        obj_id = str(obj.get("id") or "")
-        if obj_id in ids:
-            duplicates.add(obj_id)
-        ids.add(obj_id)
-    for obj_id in sorted(duplicates):
-        warnings.append(f"Duplicate object id: {obj_id}")
     map_ids = {str(item.get("id")) for item in project.get("maps", [])}
-    for obj in project.get("objects", []):
-        if (
-            obj.get("type") == "symbol"
-            and obj.get("targetMapId")
-            and str(obj.get("targetMapId")) not in map_ids
-        ):
-            warnings.append(f"{obj.get('id')}: linked target map does not exist.")
-        if (
-            obj.get("type") == "text"
-            and obj.get("roomId")
-            and str(obj.get("roomId")) not in ids
-        ):
-            warnings.append(f"{obj.get('id')}: linked room does not exist.")
+    active_map_id = str(project.get("activeMapId") or "")
+    maps = project.get("maps") if isinstance(project.get("maps"), list) else []
+    for map_record in maps:
+        if not isinstance(map_record, dict):
+            continue
+        objects = map_record.get("objects", [])
+        if not isinstance(objects, list):
+            continue
+        ids: set[str] = set()
+        duplicates: set[str] = set()
+        for obj in objects:
+            obj_id = str(obj.get("id") or "")
+            if obj_id in ids:
+                duplicates.add(obj_id)
+            ids.add(obj_id)
+        map_prefix = ""
+        if str(map_record.get("id") or "") != active_map_id:
+            map_prefix = f"Map {map_record.get('name') or map_record.get('id')}: "
+        for obj_id in sorted(duplicates):
+            warnings.append(f"{map_prefix}Duplicate object id: {obj_id}")
+        for obj in objects:
+            if (
+                obj.get("type") == "symbol"
+                and obj.get("targetMapId")
+                and str(obj.get("targetMapId")) not in map_ids
+            ):
+                warnings.append(
+                    f"{map_prefix}{obj.get('id')}: linked target map does not exist."
+                )
+            if (
+                obj.get("type") == "text"
+                and obj.get("roomId")
+                and str(obj.get("roomId")) not in ids
+            ):
+                warnings.append(
+                    f"{map_prefix}{obj.get('id')}: linked room does not exist."
+                )
     for _kind, label, path_value in missing_custom_symbol_files(project):
         warnings.append(f"Custom symbol file missing for {label}: {path_value}")
     return warnings
@@ -2721,7 +2782,9 @@ def validate_views(value: Any) -> list[dict[str, Any]]:
                 "name": str(item.get("name") or f"View {index}"),
                 "x": coerce_float(item.get("x")),
                 "y": coerce_float(item.get("y")),
-                "zoom": max(MIN_ZOOM, min(MAX_ZOOM, coerce_float(item.get("zoom"), 0.9))),
+                "zoom": max(
+                    MIN_ZOOM, min(MAX_ZOOM, coerce_float(item.get("zoom"), 0.9))
+                ),
             }
         )
     return views
@@ -2864,9 +2927,7 @@ def validate_underlays(value: Any) -> list[dict[str, Any]]:
                 "width": max(0.25, coerce_float(item.get("width"), 1.0)),
                 "height": max(0.25, coerce_float(item.get("height"), 1.0)),
                 "rotation": coerce_float(item.get("rotation"), 0.0) % 360,
-                "opacity": max(
-                    0.0, min(1.0, coerce_float(item.get("opacity"), 0.45))
-                ),
+                "opacity": max(0.0, min(1.0, coerce_float(item.get("opacity"), 0.45))),
                 "visible": bool(item.get("visible", True)),
                 "locked": bool(item.get("locked", False)),
                 "mode": mode,
@@ -2939,7 +3000,9 @@ def validate_session_state(value: Any) -> dict[str, Any]:
         state[key] = [str(item) for item in items] if isinstance(items, list) else []
     for key in ("lastRolls", "statusLog"):
         items = state.get(key, [])
-        state[key] = [str(item) for item in items[-50:]] if isinstance(items, list) else []
+        state[key] = (
+            [str(item) for item in items[-50:]] if isinstance(items, list) else []
+        )
     state["activeRoomId"] = str(state.get("activeRoomId") or "")
     return state
 
@@ -2971,10 +3034,18 @@ def map_mode_feature_summary(project: dict[str, Any]) -> dict[str, Any]:
     return {
         "mode": mode,
         "hexes": mode == "Hexmap",
-        "terrain": sorted({str(obj.get("terrain")) for obj in objects if obj.get("terrain")}),
-        "districts": sorted({str(obj.get("district")) for obj in objects if obj.get("district")}),
+        "terrain": sorted(
+            {str(obj.get("terrain")) for obj in objects if obj.get("terrain")}
+        ),
+        "districts": sorted(
+            {str(obj.get("district")) for obj in objects if obj.get("district")}
+        ),
         "pois": [
-            {"id": obj.get("id"), "role": obj.get("poiRole"), "name": object_vtt_name(project, obj)}
+            {
+                "id": obj.get("id"),
+                "role": obj.get("poiRole"),
+                "name": object_vtt_name(project, obj),
+            }
             for obj in objects
             if obj.get("poiRole")
         ],
@@ -2995,7 +3066,9 @@ def underlay_alignment_transform(underlay: dict[str, Any]) -> dict[str, float]:
     }
 
 
-def print_layout_plan(project: dict[str, Any], layout: dict[str, Any]) -> dict[str, Any]:
+def print_layout_plan(
+    project: dict[str, Any], layout: dict[str, Any]
+) -> dict[str, Any]:
     frames_by_id = {frame["id"]: frame for frame in project.get("exportFrames", [])}
     selected_frames = [
         frames_by_id[frame_id]
@@ -3075,7 +3148,10 @@ def line_of_sight_blockers(project: dict[str, Any]) -> list[dict[str, Any]]:
             continue
         if obj.get("type") in FLOOR_TYPES:
             segments = vtt_wall_segments_for_object(obj, cell)
-        elif obj.get("type") == "symbol" and symbol_vtt_role(project, effective_symbol_kind(project, obj)) == "Wall":
+        elif (
+            obj.get("type") == "symbol"
+            and symbol_vtt_role(project, effective_symbol_kind(project, obj)) == "Wall"
+        ):
             segments = [vtt_door_segment(obj, cell)]
         else:
             continue
@@ -3145,7 +3221,11 @@ def roll_random_table(project: dict[str, Any], table_name: str, seed: Any = "") 
 
 
 def apply_session_update(
-    project: dict[str, Any], *, reveal_room_id: str = "", hide_object_id: str = "", roll: str = ""
+    project: dict[str, Any],
+    *,
+    reveal_room_id: str = "",
+    hide_object_id: str = "",
+    roll: str = "",
 ) -> dict[str, Any]:
     state = validate_session_state(project.get("sessionState", {}))
     if reveal_room_id and reveal_room_id not in state["revealedRoomIds"]:
@@ -3532,7 +3612,9 @@ def validate_map_record(
         "exportFrames": validate_export_frames(
             record.get("exportFrames", fallback_export_frames or [])
         ),
-        "underlays": validate_underlays(record.get("underlays", fallback_underlays or [])),
+        "underlays": validate_underlays(
+            record.get("underlays", fallback_underlays or [])
+        ),
         "printLayouts": validate_print_layouts(
             record.get("printLayouts", fallback_print_layouts or [])
         ),
@@ -3889,7 +3971,9 @@ def bounds_from_points(
 
 
 def is_polygon_room(obj: dict[str, Any]) -> bool:
-    return obj.get("type") == "room" and len(validate_shape_points(obj.get("points"))) >= 3
+    return (
+        obj.get("type") == "room" and len(validate_shape_points(obj.get("points"))) >= 3
+    )
 
 
 def is_editable_polygon(obj: dict[str, Any] | None) -> bool:
@@ -3935,9 +4019,7 @@ def validate_object(obj: Any, index: int) -> dict[str, Any]:
             else:
                 clean.pop("points", None)
         if obj_type == "cave_corridor":
-            clean["smoothBoundary"] = parse_bool_text(
-                clean.get("smoothBoundary", True)
-            )
+            clean["smoothBoundary"] = parse_bool_text(clean.get("smoothBoundary", True))
             points = validate_shape_points(clean.get("points"))
             if len(points) >= 3:
                 clean["points"] = points
@@ -4815,7 +4897,10 @@ class OSRMapMaker(tk.Tk):
         )
         style.map(
             "TButton",
-            background=[("active", "#e9f2f5"), ("pressed", str(APP_THEME["accent_soft"]))],
+            background=[
+                ("active", "#e9f2f5"),
+                ("pressed", str(APP_THEME["accent_soft"])),
+            ],
         )
 
     def shortcut_for_action(self, action: str) -> str:
@@ -4848,9 +4933,10 @@ class OSRMapMaker(tk.Tk):
 
     def autosave_matches_revision(self) -> bool:
         revision = int(self.__dict__.get("_project_revision", 0))
-        return revision > int(self.__dict__.get("_saved_revision", 0)) and int(
-            self.__dict__.get("_autosave_revision", -1)
-        ) == revision
+        return (
+            revision > int(self.__dict__.get("_saved_revision", 0))
+            and int(self.__dict__.get("_autosave_revision", -1)) == revision
+        )
 
     def update_window_title(self) -> None:
         try:
@@ -5045,19 +5131,25 @@ class OSRMapMaker(tk.Tk):
 
         map_menu = tk.Menu(menu, tearoff=False)
         map_menu.add_command(label="New Map", command=self.add_map)
-        map_menu.add_command(label="New From Template", command=self.add_map_from_template)
+        map_menu.add_command(
+            label="New From Template", command=self.add_map_from_template
+        )
         map_menu.add_command(label="Duplicate Map", command=self.duplicate_map)
         map_menu.add_command(label="Rename Map", command=self.rename_map)
         map_menu.add_command(label="Delete Map", command=self.delete_map)
         map_menu.add_separator()
         map_menu.add_command(label="Folder / Chapter", command=self.edit_map_structure)
-        map_menu.add_command(label="Overlay Floor", command=self.set_floor_overlay_dialog)
+        map_menu.add_command(
+            label="Overlay Floor", command=self.set_floor_overlay_dialog
+        )
         map_menu.add_command(label="Map Scale", command=self.edit_map_scale)
         menu.add_cascade(label="Map", menu=map_menu)
 
         layer_menu = tk.Menu(menu, tearoff=False)
         layer_menu.add_command(label="Add Layer", command=self.add_layer)
-        layer_menu.add_command(label="Duplicate Layer", command=self.duplicate_active_layer)
+        layer_menu.add_command(
+            label="Duplicate Layer", command=self.duplicate_active_layer
+        )
         layer_menu.add_command(label="Delete Layer", command=self.delete_active_layer)
         layer_menu.add_command(
             label="Move Layer Up",
@@ -5072,7 +5164,9 @@ class OSRMapMaker(tk.Tk):
             ),
         )
         layer_menu.add_separator()
-        layer_menu.add_command(label="Lock / Unlock Selection", command=self.toggle_selected_lock)
+        layer_menu.add_command(
+            label="Lock / Unlock Selection", command=self.toggle_selected_lock
+        )
         menu.add_cascade(label="Layer", menu=layer_menu)
 
         tools_menu = tk.Menu(menu, tearoff=False)
@@ -5138,7 +5232,9 @@ class OSRMapMaker(tk.Tk):
 
         help_menu = tk.Menu(menu, tearoff=False)
         help_menu.add_command(label="Shortcuts", command=self.open_shortcuts_dialog)
-        help_menu.add_command(label="Validate Project", command=self.open_validation_dialog)
+        help_menu.add_command(
+            label="Validate Project", command=self.open_validation_dialog
+        )
         menu.add_cascade(label="Help", menu=help_menu)
 
         self.configure(menu=menu)
@@ -5181,9 +5277,7 @@ class OSRMapMaker(tk.Tk):
                 side="left", padx=(0, 2)
             )
 
-        ttk.Separator(top, orient="vertical").grid(
-            row=0, column=2, sticky="ns", padx=8
-        )
+        ttk.Separator(top, orient="vertical").grid(row=0, column=2, sticky="ns", padx=8)
 
         edit_commands = ttk.Frame(top)
         edit_commands.grid(row=0, column=3, sticky="w")
@@ -5223,15 +5317,13 @@ class OSRMapMaker(tk.Tk):
             row=0, column=3
         )
 
-        ttk.Separator(top, orient="vertical").grid(
-            row=0, column=5, sticky="ns", padx=8
-        )
+        ttk.Separator(top, orient="vertical").grid(row=0, column=5, sticky="ns", padx=8)
 
         nav_commands = ttk.Frame(top)
         nav_commands.grid(row=0, column=6, sticky="e")
-        self.command_button(nav_commands, "Search", self.open_global_search, width=8).pack(
-            side="left", padx=(0, 2)
-        )
+        self.command_button(
+            nav_commands, "Search", self.open_global_search, width=8
+        ).pack(side="left", padx=(0, 2))
         self.command_button(
             nav_commands, "Command", self.open_command_palette, width=9
         ).pack(side="left", padx=(0, 2))
@@ -5261,9 +5353,9 @@ class OSRMapMaker(tk.Tk):
         options_bar = ttk.Frame(self, padding=(8, 3))
         options_bar.grid(row=1, column=0, columnspan=2, sticky="ew")
         options_bar.columnconfigure(1, weight=1)
-        ttk.Label(
-            options_bar, text="Tool Options", font=("Segoe UI", 9, "bold")
-        ).grid(row=0, column=0, sticky="w", padx=(0, 8))
+        ttk.Label(options_bar, text="Tool Options", font=("Segoe UI", 9, "bold")).grid(
+            row=0, column=0, sticky="w", padx=(0, 8)
+        )
         self.tool_options_content = ttk.Frame(options_bar)
         self.tool_options_content.grid(row=0, column=1, sticky="ew")
 
@@ -5881,7 +5973,9 @@ class OSRMapMaker(tk.Tk):
             command=lambda: self.export_scene_json("fantasy_grounds"),
         ).grid(row=11, column=0, columnspan=2, sticky="ew", pady=1)
         export_frame_state = ttk.Frame(export_panel)
-        export_frame_state.grid(row=12, column=0, columnspan=2, sticky="ew", pady=(8, 0))
+        export_frame_state.grid(
+            row=12, column=0, columnspan=2, sticky="ew", pady=(8, 0)
+        )
         export_frame_state.columnconfigure(0, weight=1)
         ttk.Label(
             export_frame_state,
@@ -5928,9 +6022,7 @@ class OSRMapMaker(tk.Tk):
             ]
         ):
             button = ttk.Button(campaign_actions, text=label, command=command)
-            button.grid(
-                row=index // 2, column=index % 2, sticky="ew", padx=1, pady=1
-            )
+            button.grid(row=index // 2, column=index % 2, sticky="ew", padx=1, pady=1)
             if index == 0:
                 self.campaign_primary_button = button
 
@@ -6261,9 +6353,7 @@ class OSRMapMaker(tk.Tk):
                 width=width,
                 style="Status.TLabel",
             )
-            label.grid(
-                row=0, column=column, sticky="w", padx=(0, 8)
-            )
+            label.grid(row=0, column=column, sticky="w", padx=(0, 8))
             self.status_labels[str(variable)] = label
             if variable is self.zoom_status_var:
                 label.configure(cursor="hand2")
@@ -6293,9 +6383,7 @@ class OSRMapMaker(tk.Tk):
             textvariable=self.error_status,
             foreground=str(APP_THEME["error"]),
             style="Status.TLabel",
-        ).grid(
-            row=0, column=10, sticky="e"
-        )
+        ).grid(row=0, column=10, sticky="e")
         self.apply_compact_mode()
 
     def dock_panel_key(self, title: str) -> str:
@@ -6635,9 +6723,11 @@ class OSRMapMaker(tk.Tk):
         self.redraw_minimap(full=False)
         self.show_status(f"Workspace: {preset_name}")
         self.after_idle(
-            lambda value=preset_name: self.focus_workspace_target(value)
-            if self.workspace_var.get() == value
-            else None
+            lambda value=preset_name: (
+                self.focus_workspace_target(value)
+                if self.workspace_var.get() == value
+                else None
+            )
         )
 
     def first_focusable_descendant(self, parent: tk.Widget) -> tk.Widget | None:
@@ -6834,7 +6924,9 @@ class OSRMapMaker(tk.Tk):
         except tk.TclError:
             pane.configure(cursor="")
             return
-        cursor = "sb_h_double_arrow" if abs(int(event.x) - int(sash_position)) <= 8 else ""
+        cursor = (
+            "sb_h_double_arrow" if abs(int(event.x) - int(sash_position)) <= 8 else ""
+        )
         pane.configure(cursor=cursor)
 
     def enable_dock_panel_resize(
@@ -6939,10 +7031,12 @@ class OSRMapMaker(tk.Tk):
         handle.bind("<B1-Motion>", drag, add="+")
         handle.bind("<ButtonRelease-1>", stop, add="+")
 
-    def clamp_panel_position(
-        self, panel: tk.Widget, x: int, y: int
-    ) -> tuple[int, int]:
-        parent = panel.master if panel.master is not None else getattr(self, "canvas_frame", None)
+    def clamp_panel_position(self, panel: tk.Widget, x: int, y: int) -> tuple[int, int]:
+        parent = (
+            panel.master
+            if panel.master is not None
+            else getattr(self, "canvas_frame", None)
+        )
         if parent is None:
             return x, y
         parent.update_idletasks()
@@ -7107,7 +7201,9 @@ class OSRMapMaker(tk.Tk):
             or self.symbol_panel_container is None
         ):
             return
-        canvas_width = width if width is not None else self.symbol_scroll_canvas.winfo_width()
+        canvas_width = (
+            width if width is not None else self.symbol_scroll_canvas.winfo_width()
+        )
         canvas_height = (
             height if height is not None else self.symbol_scroll_canvas.winfo_height()
         )
@@ -7296,10 +7392,14 @@ class OSRMapMaker(tk.Tk):
     ) -> None:
         bg = "#d9ecff" if active else "#f7f9fa"
         border = "#2d7fc1" if active else "#b7c3ca"
-        tab = tk.Frame(parent, background=bg, highlightbackground=border, highlightthickness=1)
+        tab = tk.Frame(
+            parent, background=bg, highlightbackground=border, highlightthickness=1
+        )
         tab.grid(row=row, column=column, sticky="ew", padx=2, pady=2)
         tab.columnconfigure(1, weight=1)
-        preview = tk.Canvas(tab, width=48, height=34, background="#ffffff", highlightthickness=0)
+        preview = tk.Canvas(
+            tab, width=48, height=34, background="#ffffff", highlightthickness=0
+        )
         preview.grid(row=0, column=0, rowspan=2, sticky="w", padx=4, pady=4)
         self.draw_map_tab_thumbnail(preview, record)
         name = str(record.get("name") or "Map")
@@ -7331,9 +7431,7 @@ class OSRMapMaker(tk.Tk):
             )
             widget.bind(
                 "<Button-3>",
-                lambda event, value=map_record_id: self.open_map_tab_menu(
-                    event, value
-                ),
+                lambda event, value=map_record_id: self.open_map_tab_menu(event, value),
             )
 
     def draw_map_tab_thumbnail(self, canvas: tk.Canvas, record: dict[str, Any]) -> None:
@@ -7905,9 +8003,7 @@ class OSRMapMaker(tk.Tk):
         self._build_toolbar(toolbox)
 
     def add_tool_option_label(self, parent: ttk.Frame, text: str, column: int) -> int:
-        ttk.Label(parent, text=text).grid(
-            row=0, column=column, sticky="w", padx=(0, 4)
-        )
+        ttk.Label(parent, text=text).grid(row=0, column=column, sticky="w", padx=(0, 4))
         return column + 1
 
     def add_tool_option_combo(
@@ -7973,14 +8069,16 @@ class OSRMapMaker(tk.Tk):
             command=lambda: self.show_dock_panel_by_title("Selection"),
         )
         menu.add_command(
-            label="Show Symbols", command=lambda: self.show_dock_panel_by_title("Symbols")
+            label="Show Symbols",
+            command=lambda: self.show_dock_panel_by_title("Symbols"),
         )
         menu.add_command(
             label="Show Navigator",
             command=lambda: self.show_dock_panel_by_title("Navigator"),
         )
         menu.add_command(
-            label="Show Map Settings", command=lambda: self.show_dock_panel_by_title("Map")
+            label="Show Map Settings",
+            command=lambda: self.show_dock_panel_by_title("Map"),
         )
         menu.add_command(
             label="Show Export", command=lambda: self.show_dock_panel_by_title("Export")
@@ -8103,9 +8201,7 @@ class OSRMapMaker(tk.Tk):
         before = self.project_snapshot()
         self.settings["snapStep"] = SNAP_STEP_LABELS.get(self.snap_step_var.get(), 1.0)
         self.settings["snapToObjects"] = bool(self.snap_objects_var.get())
-        self.settings["smoothCaveCorridors"] = bool(
-            self.cave_corridor_smooth_var.get()
-        )
+        self.settings["smoothCaveCorridors"] = bool(self.cave_corridor_smooth_var.get())
         self.settings["defaultTextFont"] = (
             str(variable_value(self.text_font_var, "Arial")).strip() or "Arial"
         )
@@ -8239,14 +8335,18 @@ class OSRMapMaker(tk.Tk):
         badges = []
         if tool in set(self.project.get("symbolFavorites", [])):
             badges.append("★")
-        if tool in [
-            recent for recent in self.settings.get("recentTools", []) if recent
-        ][:RECENT_TOOL_LIMIT]:
+        if (
+            tool
+            in [recent for recent in self.settings.get("recentTools", []) if recent][
+                :RECENT_TOOL_LIMIT
+            ]
+        ):
             badges.append("↺")
         if is_custom_symbol(self.project, tool):
             badges.append("C")
         if any(
-            kind == tool for kind, _label, _path in missing_custom_symbol_files(self.project)
+            kind == tool
+            for kind, _label, _path in missing_custom_symbol_files(self.project)
         ):
             badges.append("!")
         return f"{icon}\n{''.join(badges)}" if badges else icon
@@ -8591,9 +8691,9 @@ class OSRMapMaker(tk.Tk):
                 pady=4,
             )
             empty_state.columnconfigure(0, weight=1)
-            ttk.Label(empty_state, text="No symbols match. Clear the filters to browse all.").grid(
-                row=0, column=0, sticky="w"
-            )
+            ttk.Label(
+                empty_state, text="No symbols match. Clear the filters to browse all."
+            ).grid(row=0, column=0, sticky="w")
             ttk.Button(
                 empty_state,
                 text="Clear filters",
@@ -8628,7 +8728,9 @@ class OSRMapMaker(tk.Tk):
                 )
             self.symbol_panel_row_count = button_start_row + grid_rows
         if self.symbol_scroll_canvas is not None:
-            self.symbol_scroll_canvas.yview_moveto(scroll_fraction if keep_scroll else 0)
+            self.symbol_scroll_canvas.yview_moveto(
+                scroll_fraction if keep_scroll else 0
+            )
             self.symbol_scroll_canvas.after_idle(self.refresh_symbol_scroll_region)
 
     def reset_symbol_browser_filters(self) -> None:
@@ -8788,10 +8890,13 @@ class OSRMapMaker(tk.Tk):
         custom = is_custom_symbol(self.project, tool)
         favorite = tool in set(self.project.get("symbolFavorites", []))
         missing = any(
-            kind == tool for kind, _label, _path in missing_custom_symbol_files(self.project)
+            kind == tool
+            for kind, _label, _path in missing_custom_symbol_files(self.project)
         )
         menu = tk.Menu(self, tearoff=0)
-        menu.add_command(label="Use symbol", command=lambda value=tool: self.select_tool(value))
+        menu.add_command(
+            label="Use symbol", command=lambda value=tool: self.select_tool(value)
+        )
         menu.add_command(
             label="Show options",
             command=lambda value=tool: self.open_tool_options(value),
@@ -9480,9 +9585,7 @@ class OSRMapMaker(tk.Tk):
                 content = json.dumps(self.project, separators=(",", ":"))
                 self.autosave_file.write_text(content, encoding="utf-8")
                 asset_bytes = project_embedded_asset_bytes(self.project)
-                last_version = int(
-                    self.__dict__.get("_autosave_version_revision", -1)
-                )
+                last_version = int(self.__dict__.get("_autosave_version_revision", -1))
                 write_version = (
                     asset_bytes < EMBEDDED_SYMBOL_COMPRESS_THRESHOLD
                     or last_version < 0
@@ -9773,9 +9876,7 @@ class OSRMapMaker(tk.Tk):
         self.settings["showZones"] = bool(self.zone_overlay_var.get())
         self.settings["showRuler"] = bool(self.ruler_overlay_var.get())
         self.settings["showFloorOutlines"] = bool(self.floor_outline_var.get())
-        self.settings["smoothCaveCorridors"] = bool(
-            self.cave_corridor_smooth_var.get()
-        )
+        self.settings["smoothCaveCorridors"] = bool(self.cave_corridor_smooth_var.get())
         self.settings["showRoomStatus"] = bool(self.room_status_var.get())
         self.settings["showTooltips"] = bool(self.tooltip_var.get())
         self.settings["showSymbolPreviews"] = bool(self.symbol_preview_var.get())
@@ -10716,9 +10817,9 @@ class OSRMapMaker(tk.Tk):
             for layer in self.project.get("layers", default_layers())
             if layer["id"] != "background"
         ]
-        ttk.Label(
-            self.layers_frame, text="Layers", font=("Segoe UI", 11, "bold")
-        ).grid(row=0, column=0, sticky="w")
+        ttk.Label(self.layers_frame, text="Layers", font=("Segoe UI", 11, "bold")).grid(
+            row=0, column=0, sticky="w"
+        )
         combo = ttk.Combobox(
             self.layers_frame,
             textvariable=self.current_layer_var,
@@ -10759,7 +10860,11 @@ class OSRMapMaker(tk.Tk):
         layer_id = active_layer
         layers = self.project.get("layers", [])
         active_index = next(
-            (index for index, layer in enumerate(layers) if layer.get("id") == layer_id),
+            (
+                index
+                for index, layer in enumerate(layers)
+                if layer.get("id") == layer_id
+            ),
             -1,
         )
         action_specs = [
@@ -10828,11 +10933,20 @@ class OSRMapMaker(tk.Tk):
         layer_id = str(layer.get("id") or "")
         bg = "#d9ecff" if active else "#f7f9fa"
         border = "#2d7fc1" if active else "#c7d0d5"
-        item = tk.Frame(parent, background=bg, highlightbackground=border, highlightthickness=1)
+        item = tk.Frame(
+            parent, background=bg, highlightbackground=border, highlightthickness=1
+        )
         item.layer_id = layer_id  # type: ignore[attr-defined]
         item.grid(row=row, column=0, sticky="ew", pady=2)
         item.columnconfigure(2, weight=1)
-        thumb = tk.Canvas(item, width=32, height=24, background="#ffffff", highlightthickness=1, highlightbackground="#b7c3ca")
+        thumb = tk.Canvas(
+            item,
+            width=32,
+            height=24,
+            background="#ffffff",
+            highlightthickness=1,
+            highlightbackground="#b7c3ca",
+        )
         thumb.grid(row=0, column=0, rowspan=2, padx=4, pady=4)
         self.draw_layer_thumbnail(thumb, layer_id)
         name = tk.Label(
@@ -10887,7 +11001,9 @@ class OSRMapMaker(tk.Tk):
         spin.bind("<FocusOut>", lambda _e: self.apply_layer_states())
         ToolTip(spin, "Layer opacity from 0 to 1", self.tooltips_enabled)
         for widget in (item, thumb, name, meta):
-            widget.bind("<Button-1>", lambda _e, value=layer_id: self.select_layer(value))
+            widget.bind(
+                "<Button-1>", lambda _e, value=layer_id: self.select_layer(value)
+            )
             widget.bind(
                 "<ButtonPress-3>",
                 lambda event, value=layer_id: self.on_layer_context_menu(event, value),
@@ -10919,7 +11035,9 @@ class OSRMapMaker(tk.Tk):
             if max(w, h) <= 1.2:
                 canvas.create_oval(left, top, left + 4, top + 4, fill=fill, outline="")
             else:
-                canvas.create_rectangle(left, top, left + 7, top + 5, fill=fill, outline="")
+                canvas.create_rectangle(
+                    left, top, left + 7, top + 5, fill=fill, outline=""
+                )
 
     def select_layer(self, layer_id: str) -> None:
         if layer_id == "background":
@@ -10931,7 +11049,11 @@ class OSRMapMaker(tk.Tk):
     def on_layer_context_menu(self, event: tk.Event, layer_id: str) -> str:
         self.select_layer(layer_id)
         layer = next(
-            (item for item in self.project.get("layers", []) if item.get("id") == layer_id),
+            (
+                item
+                for item in self.project.get("layers", [])
+                if item.get("id") == layer_id
+            ),
             None,
         )
         if not layer:
@@ -10965,7 +11087,9 @@ class OSRMapMaker(tk.Tk):
         menu.add_separator()
         menu.add_command(label="Add layer", command=self.add_layer)
         if not is_background:
-            menu.add_command(label="Duplicate layer", command=self.duplicate_active_layer)
+            menu.add_command(
+                label="Duplicate layer", command=self.duplicate_active_layer
+            )
             menu.add_command(
                 label="Move up",
                 command=lambda value=layer_id: self.move_layer(value, -1),
@@ -10997,7 +11121,11 @@ class OSRMapMaker(tk.Tk):
 
     def toggle_layer_visibility(self, layer_id: str) -> None:
         layer = next(
-            (item for item in self.project.get("layers", []) if item.get("id") == layer_id),
+            (
+                item
+                for item in self.project.get("layers", [])
+                if item.get("id") == layer_id
+            ),
             None,
         )
         if not layer:
@@ -11011,7 +11139,11 @@ class OSRMapMaker(tk.Tk):
 
     def toggle_layer_lock(self, layer_id: str) -> None:
         layer = next(
-            (item for item in self.project.get("layers", []) if item.get("id") == layer_id),
+            (
+                item
+                for item in self.project.get("layers", [])
+                if item.get("id") == layer_id
+            ),
             None,
         )
         if not layer:
@@ -11024,7 +11156,9 @@ class OSRMapMaker(tk.Tk):
         self.redraw()
 
     def unique_layer_name(self, base: str) -> str:
-        names = {str(layer.get("name") or "") for layer in self.project.get("layers", [])}
+        names = {
+            str(layer.get("name") or "") for layer in self.project.get("layers", [])
+        }
         if base not in names:
             return base
         index = 2
@@ -11047,7 +11181,13 @@ class OSRMapMaker(tk.Tk):
         before = self.project_snapshot()
         layer_id = self.unique_layer_id(name)
         self.project.setdefault("layers", []).append(
-            {"id": layer_id, "name": name, "visible": True, "locked": False, "opacity": 1.0}
+            {
+                "id": layer_id,
+                "name": name,
+                "visible": True,
+                "locked": False,
+                "opacity": 1.0,
+            }
         )
         self.current_layer_var.set(name)
         self.commit_history(before, "Add layer")
@@ -11057,7 +11197,11 @@ class OSRMapMaker(tk.Tk):
     def duplicate_active_layer(self) -> None:
         source_id = self.layer_id_from_name(self.current_layer_var.get())
         source = next(
-            (layer for layer in self.project.get("layers", []) if layer.get("id") == source_id),
+            (
+                layer
+                for layer in self.project.get("layers", [])
+                if layer.get("id") == source_id
+            ),
             None,
         )
         if not source:
@@ -11087,7 +11231,11 @@ class OSRMapMaker(tk.Tk):
             self.show_status("This layer cannot be deleted.")
             return
         layer = next(
-            (item for item in self.project.get("layers", []) if item.get("id") == layer_id),
+            (
+                item
+                for item in self.project.get("layers", [])
+                if item.get("id") == layer_id
+            ),
             None,
         )
         if not layer:
@@ -11105,7 +11253,9 @@ class OSRMapMaker(tk.Tk):
             return
         before = self.project_snapshot()
         self.project["layers"] = [
-            item for item in self.project.get("layers", []) if item.get("id") != layer_id
+            item
+            for item in self.project.get("layers", [])
+            if item.get("id") != layer_id
         ]
         self.project["objects"] = [
             obj
@@ -11113,7 +11263,11 @@ class OSRMapMaker(tk.Tk):
             if obj.get("layer", normalize_layer_id(None, obj.get("type"))) != layer_id
         ]
         next_layer = next(
-            (item for item in self.project.get("layers", []) if item.get("id") != "background"),
+            (
+                item
+                for item in self.project.get("layers", [])
+                if item.get("id") != "background"
+            ),
             self.project.get("layers", [{}])[0],
         )
         self.current_layer_var.set(str(next_layer.get("name") or "Symbols"))
@@ -11190,13 +11344,17 @@ class OSRMapMaker(tk.Tk):
 
     def set_all_layers_locked(self, locked: bool) -> None:
         layers = self.project.get("layers", [])
-        if not layers or all(bool(layer.get("locked", False)) == locked for layer in layers):
+        if not layers or all(
+            bool(layer.get("locked", False)) == locked for layer in layers
+        ):
             self.show_status("All layers already have that lock state.")
             return
         before = self.project_snapshot()
         for layer in layers:
             layer["locked"] = locked
-        self.commit_history(before, "Lock all layers" if locked else "Unlock all layers")
+        self.commit_history(
+            before, "Lock all layers" if locked else "Unlock all layers"
+        )
         self.rebuild_layers_panel()
         self.refresh_object_list()
         self.redraw()
@@ -11488,7 +11646,9 @@ class OSRMapMaker(tk.Tk):
             return
         self.error_status.set(f"{len(warnings)} project warning(s)")
         self.validation_status_var.set(f"Warnings: {len(warnings)}")
-        self.show_status("Project has validation warnings. Open Validation for details.")
+        self.show_status(
+            "Project has validation warnings. Open Validation for details."
+        )
         self.show_toast(f"{len(warnings)} validation warning(s)", "warning")
 
     def open_validation_dialog(self) -> None:
@@ -12114,7 +12274,9 @@ class OSRMapMaker(tk.Tk):
         return base
 
     def status_layer_label(self) -> str:
-        layer = self.current_layer_var.get() if hasattr(self, "current_layer_var") else ""
+        layer = (
+            self.current_layer_var.get() if hasattr(self, "current_layer_var") else ""
+        )
         return layer or "-"
 
     def refresh_status_fields(self, zoom_text: str) -> None:
@@ -12170,9 +12332,7 @@ class OSRMapMaker(tk.Tk):
                 base = self.measurement_status()
             else:
                 selection = (
-                    f" | {len(self.selected_ids)} selected"
-                    if self.selected_ids
-                    else ""
+                    f" | {len(self.selected_ids)} selected" if self.selected_ids else ""
                 )
                 current_file = (
                     self.current_file.name if self.current_file else "unsaved"
@@ -12242,9 +12402,7 @@ class OSRMapMaker(tk.Tk):
         self.room_status_var.set(self.settings.get("showRoomStatus", True))
         self.minimap_visible_var.set(self.settings.get("showMinimap", True))
         self.minimap_docked_var.set(self.settings.get("minimapDocked", False))
-        self.minimap_transparent_var.set(
-            self.settings.get("minimapTransparent", False)
-        )
+        self.minimap_transparent_var.set(self.settings.get("minimapTransparent", False))
         self.workspace_var.set(self.settings.get("workspacePreset", "Drawing"))
         self.toolbar_visible_var.set(self.settings.get("showToolbar", True))
         self.color_picker_visible_var.set(self.settings.get("showColorPicker", False))
@@ -12496,7 +12654,9 @@ class OSRMapMaker(tk.Tk):
             self.selected_object() and self.selected_object().get("targetMapId")
         )
         if linked:
-            menu.add_command(label="Follow floor link", command=self.follow_selected_link)
+            menu.add_command(
+                label="Follow floor link", command=self.follow_selected_link
+            )
         menu.add_separator()
         menu.add_command(
             label="Delete",
@@ -13638,8 +13798,7 @@ class OSRMapMaker(tk.Tk):
         return {
             item["id"]
             for item in self.current_object_index().objects_by_group.get(str(group), [])
-            if self.is_object_visible(item)
-            and not self.is_object_locked(item)
+            if self.is_object_visible(item) and not self.is_object_locked(item)
         }
 
     def toggle_hit_selection(self, obj: dict[str, Any]) -> None:
@@ -13926,9 +14085,9 @@ class OSRMapMaker(tk.Tk):
         for obj in object_index.object_by_id.values():
             if not self.is_object_visible(obj) or self.is_object_locked(obj):
                 continue
-            bx, by, bw, bh = (
-                object_index.bounds_by_id.get(str(obj.get("id"))) or bounds(obj)
-            )
+            bx, by, bw, bh = object_index.bounds_by_id.get(
+                str(obj.get("id"))
+            ) or bounds(obj)
             if bx <= right and bx + bw >= left and by <= bottom and by + bh >= top:
                 selected.add(obj["id"])
         if selected:
@@ -13982,9 +14141,7 @@ class OSRMapMaker(tk.Tk):
             self._pending_redraw_refresh_panels or refresh_panels
         )
         self._pending_redraw_refresh_minimap = (
-            self._pending_redraw_refresh_minimap
-            or refresh_minimap
-            or refresh_panels
+            self._pending_redraw_refresh_minimap or refresh_minimap or refresh_panels
         )
         if self.redraw_after_id is not None:
             return
@@ -14045,7 +14202,9 @@ class OSRMapMaker(tk.Tk):
                 preview_project = json_clone(self.project)
                 preview_project["settings"]["exportAudience"] = "Player"
             context = render_context(preview_project)
-            static_signature = tk_static_canvas_signature(preview_project, scale, context)
+            static_signature = tk_static_canvas_signature(
+                preview_project, scale, context
+            )
             if self._static_canvas_signature != static_signature:
                 self.canvas.delete(CANVAS_STATIC_TAG)
                 self.canvas._image_refs = []
@@ -14062,7 +14221,9 @@ class OSRMapMaker(tk.Tk):
                     getattr(self.canvas, "_image_refs", [])
                 )
                 self._static_canvas_signature = static_signature
-            self.canvas._image_refs = list(getattr(self.canvas, "_static_image_refs", []))
+            self.canvas._image_refs = list(
+                getattr(self.canvas, "_static_image_refs", [])
+            )
             static_layer_ids = {
                 str(layer.get("id") or "")
                 for layer in preview_project.get("layers", [])
@@ -14503,10 +14664,7 @@ class OSRMapMaker(tk.Tk):
         signature = self.object_list_data_signature(
             layer_values, search, type_filter, layer_filter
         )
-        if (
-            not force
-            and self.__dict__.get("_object_list_signature") == signature
-        ):
+        if not force and self.__dict__.get("_object_list_signature") == signature:
             self.sync_object_list_selection()
             return
         self.object_list_ids = []
@@ -15470,9 +15628,7 @@ class OSRMapMaker(tk.Tk):
                 self.selection_frame,
                 text="Select all visible",
                 command=self.select_all_visible_objects,
-            ).grid(
-                row=1, column=0, columnspan=2, sticky="ew", pady=(4, 0)
-            )
+            ).grid(row=1, column=0, columnspan=2, sticky="ew", pady=(4, 0))
             return
         row = self._selection_overview_panel(0, [obj])
         ttk.Label(self.selection_frame, text=obj["type"]).grid(
@@ -15601,7 +15757,9 @@ class OSRMapMaker(tk.Tk):
             section = self.selection_field_section(field)
             grouped_fields.setdefault(section, []).append(field)
         section_order = list(self.selection_section_order())
-        section_order.extend(section for section in grouped_fields if section not in section_order)
+        section_order.extend(
+            section for section in grouped_fields if section not in section_order
+        )
         for section in section_order:
             section_fields = grouped_fields.get(section, [])
             if not section_fields:
@@ -15612,9 +15770,7 @@ class OSRMapMaker(tk.Tk):
                 self._selection_field_row(row, obj, field)
                 row += 1
 
-    def _selection_overview_panel(
-        self, row: int, objects: list[dict[str, Any]]
-    ) -> int:
+    def _selection_overview_panel(self, row: int, objects: list[dict[str, Any]]) -> int:
         if not objects:
             return row
         panel = ttk.LabelFrame(self.selection_frame, text="Properties", padding=6)
@@ -15649,7 +15805,8 @@ class OSRMapMaker(tk.Tk):
         player_visible = sum(1 for obj in objects if obj.get("playerVisible", True))
         ttk.Label(panel, text="Export").grid(row=3, column=0, sticky="w")
         ttk.Label(
-            panel, text=f"{exportable}/{len(objects)} export, {player_visible}/{len(objects)} player"
+            panel,
+            text=f"{exportable}/{len(objects)} export, {player_visible}/{len(objects)} player",
         ).grid(row=3, column=1, sticky="w")
         color = self.selection_overview_color(objects)
         if color:
@@ -16496,9 +16653,7 @@ class OSRMapMaker(tk.Tk):
                 pass
         self.color_picker_window = None
 
-    def save_color_picker_window_geometry(
-        self, event: tk.Event | None = None
-    ) -> None:
+    def save_color_picker_window_geometry(self, event: tk.Event | None = None) -> None:
         window = getattr(self, "color_picker_window", None)
         if window is None:
             return
@@ -20342,7 +20497,10 @@ def project_layer_visible(
     project: dict[str, Any], layer_id: str, context: RenderContext | None = None
 ) -> bool:
     if context is not None:
-        return layer_id not in context.layer_opacity_by_id or layer_id in context.visible_layer_ids
+        return (
+            layer_id not in context.layer_opacity_by_id
+            or layer_id in context.visible_layer_ids
+        )
     index = project_layer_index(project)
     return layer_id not in index.by_id or layer_id in index.visible_ids
 
@@ -20422,9 +20580,7 @@ def vtt_wall_segments_for_object(
         ]
     return [
         (x1, y1, x2, y2)
-        for (x1, y1), (x2, y2) in zip(
-            points, points[1:] + points[:1], strict=True
-        )
+        for (x1, y1), (x2, y2) in zip(points, points[1:] + points[:1], strict=True)
     ]
 
 
@@ -21291,7 +21447,11 @@ def custom_symbol_source_cache_token(
         return ("path", source_type, path_cache_token(path))
     embedded = str(info.get("embeddedData") or "")
     if embedded:
-        return ("embedded", source_type, hashlib.sha1(embedded.encode("utf-8")).hexdigest())
+        return (
+            "embedded",
+            source_type,
+            hashlib.sha1(embedded.encode("utf-8")).hexdigest(),
+        )
     return ""
 
 
@@ -21849,9 +22009,9 @@ def floor_grid_segments(
         result = segments
     else:
         result = [
-        segment
-        for segment in segments
-        if not is_polygon_boundary_grid_segment(segment, polygon)
+            segment
+            for segment in segments
+            if not is_polygon_boundary_grid_segment(segment, polygon)
         ]
     cache_put(
         _FLOOR_GRID_SEGMENTS_CACHE,
@@ -21938,7 +22098,9 @@ def floor_hex_grid_segments(
             points = hex_points(center_x, center_y, radius, orientation)
             for index, start in enumerate(points):
                 result.extend(
-                    clip_segment_to_polygon(start, points[(index + 1) % len(points)], polygon)
+                    clip_segment_to_polygon(
+                        start, points[(index + 1) % len(points)], polygon
+                    )
                 )
     return result
 
@@ -22146,7 +22308,9 @@ def selection_handles(obj: dict[str, Any]) -> list[tuple[str, float, float]]:
         ]
         rotation = math.radians(floor_rotation(obj) - 90)
         reach = max(w, h) * 0.7
-        handles.append(("rotate", cx + math.cos(rotation) * reach, cy + math.sin(rotation) * reach))
+        handles.append(
+            ("rotate", cx + math.cos(rotation) * reach, cy + math.sin(rotation) * reach)
+        )
         return handles
     if obj["type"] in RESIZABLE_TYPES or is_box_shape(obj):
         x, y, w, h = bounds(obj)
@@ -22369,11 +22533,16 @@ def simplify_collinear_polygon(
 ) -> list[tuple[float, float]]:
     cleaned: list[tuple[float, float]] = []
     for point in points:
-        if not cleaned or math.hypot(point[0] - cleaned[-1][0], point[1] - cleaned[-1][1]) > eps:
+        if (
+            not cleaned
+            or math.hypot(point[0] - cleaned[-1][0], point[1] - cleaned[-1][1]) > eps
+        ):
             cleaned.append(point)
-    if len(cleaned) > 1 and math.hypot(
-        cleaned[0][0] - cleaned[-1][0], cleaned[0][1] - cleaned[-1][1]
-    ) <= eps:
+    if (
+        len(cleaned) > 1
+        and math.hypot(cleaned[0][0] - cleaned[-1][0], cleaned[0][1] - cleaned[-1][1])
+        <= eps
+    ):
         cleaned.pop()
     if len(cleaned) < 4:
         return cleaned
@@ -22543,7 +22712,9 @@ def raster_boundary_cycles(
                 if len(cycle) >= 3:
                     cycles.append(cycle)
                 break
-            candidates = [candidate for candidate in outgoing.get(end, []) if candidate in unused]
+            candidates = [
+                candidate for candidate in outgoing.get(end, []) if candidate in unused
+            ]
             if not candidates:
                 break
             edge = choose_boundary_edge(edge, candidates)
@@ -22629,7 +22800,9 @@ def merged_floor_polygon_points(
     ]
     if len(polygons) < 2:
         return None
-    return shapely_merged_polygon_points(polygons) or raster_merged_polygon_points(polygons)
+    return shapely_merged_polygon_points(polygons) or raster_merged_polygon_points(
+        polygons
+    )
 
 
 def merged_floor_wall_type(objects: list[dict[str, Any]]) -> str:
@@ -22675,8 +22848,17 @@ def merged_floor_object(objects: list[dict[str, Any]]) -> dict[str, Any] | None:
         source = floors[0]
     result["wallType"] = wall_type
     if "wallThickness" in source:
-        result["wallThickness"] = max(0.02, coerce_float(source.get("wallThickness"), 0.16))
-    for key in ("terrain", "district", "poiRole", "textureFill", "export", "playerVisible"):
+        result["wallThickness"] = max(
+            0.02, coerce_float(source.get("wallThickness"), 0.16)
+        )
+    for key in (
+        "terrain",
+        "district",
+        "poiRole",
+        "textureFill",
+        "export",
+        "playerVisible",
+    ):
         if key in source:
             result[key] = json_clone(source[key])
     result["layer"] = merged_floor_layer(floors, has_room)
@@ -22737,7 +22919,8 @@ def shared_exact_floor_edges(
     grouped = [
         obj
         for obj in objects
-        if obj.get("floorMergeGroup") and obj.get("type") in {"room", "corridor"}
+        if obj.get("floorMergeGroup")
+        and obj.get("type") in {"room", "corridor"}
         and not is_polygon_room(obj)
         and not has_floor_rotation(obj)
     ]
@@ -23119,7 +23302,9 @@ def svg_for_floor_objects_grouped(
     project: dict[str, Any], objects: list[dict[str, Any]], scale: int
 ) -> list[str]:
     parts: list[str] = []
-    renderers: list[tuple[str, Callable[[dict[str, Any], dict[str, Any], int], list[str]]]] = []
+    renderers: list[
+        tuple[str, Callable[[dict[str, Any], dict[str, Any], int], list[str]]]
+    ] = []
     if project["settings"].get("showFloorOutlines", True):
         renderers.append(("outline", svg_for_floor_outline))
     renderers.extend([("fill", svg_for_floor_fill), ("grid", svg_for_floor_grid)])
@@ -23352,7 +23537,9 @@ def svg_for_floor_fill(
     cell = settings["cellSize"] * scale
     floor = settings["floorColor"]
     mask_boundary = not settings.get("showFloorOutlines", True)
-    stroke = f' stroke="{floor}" stroke-width="{max(1, scale * 2)}"' if mask_boundary else ""
+    stroke = (
+        f' stroke="{floor}" stroke-width="{max(1, scale * 2)}"' if mask_boundary else ""
+    )
     obj_type = obj.get("type")
     if obj_type == "diagonal_corridor":
         return [
@@ -23360,9 +23547,7 @@ def svg_for_floor_fill(
         ]
     if is_polygon_room(obj):
         linejoin = (
-            f' stroke-linejoin="{floor_boundary_linejoin(obj)}"'
-            if stroke
-            else ""
+            f' stroke-linejoin="{floor_boundary_linejoin(obj)}"' if stroke else ""
         )
         return [
             f'<polygon points="{svg_points(floor_polygon_points(obj, cell))}" fill="{floor}"{stroke}{linejoin}/>'
@@ -23520,11 +23705,7 @@ def svg_for_shape(
         f' fill-opacity="{opacity:.3f}"' if opacity < 0.999 and fill != "none" else ""
     )
     dash_attr = svg_shape_dash(obj, width)
-    linecap = (
-        ' stroke-linecap="round"'
-        if shape_line_style(obj) == "dot"
-        else ' stroke-linecap="round"'
-    )
+    linecap = ' stroke-linecap="round"'
     kind = obj.get("kind")
     if kind == "line":
         x1, y1 = obj["x"] * cell, obj["y"] * cell
@@ -23779,7 +23960,14 @@ def vector_arc_points(
 
 def vector_dotted_circle_ops() -> list[tuple[Any, ...]]:
     return [
-        ("ellipse", math.cos(index * math.tau / 14) * 0.38, math.sin(index * math.tau / 14) * 0.38, 0.035, 0.035, "ink")
+        (
+            "ellipse",
+            math.cos(index * math.tau / 14) * 0.38,
+            math.sin(index * math.tau / 14) * 0.38,
+            0.035,
+            0.035,
+            "ink",
+        )
         for index in range(14)
     ]
 
@@ -23792,7 +23980,9 @@ def vector_dotted_square_ops() -> list[tuple[Any, ...]]:
     for point in points:
         if point not in unique:
             unique.append(point)
-    return [("rect", x - 0.025, y - 0.025, x + 0.025, y + 0.025, "ink") for x, y in unique]
+    return [
+        ("rect", x - 0.025, y - 0.025, x + 0.025, y + 0.025, "ink") for x, y in unique
+    ]
 
 
 def vector_stair_ops(label: str = "") -> list[tuple[Any, ...]]:
@@ -23934,7 +24124,11 @@ def vector_symbol_ops(kind: str) -> list[tuple[Any, ...]]:
     if kind == "chair":
         return [
             ("rect", -0.22, -0.12, 0.22, 0.25, "none"),
-            ("polyline", ((-0.22, -0.12), (-0.16, -0.34), (0.16, -0.34), (0.22, -0.12)), "none"),
+            (
+                "polyline",
+                ((-0.22, -0.12), (-0.16, -0.34), (0.16, -0.34), (0.22, -0.12)),
+                "none",
+            ),
         ]
     if kind == "stool":
         return [
@@ -23990,11 +24184,20 @@ def vector_symbol_ops(kind: str) -> list[tuple[Any, ...]]:
             ("text", "$", 0.0, 0.04, 0.62),
         ]
     if kind == "table_long":
-        return [("rect", -0.46, -0.13, 0.46, 0.13, "none"), ("text", "t", 0.0, 0.0, 0.32)]
+        return [
+            ("rect", -0.46, -0.13, 0.46, 0.13, "none"),
+            ("text", "t", 0.0, 0.0, 0.32),
+        ]
     if kind == "table_square":
-        return [("rect", -0.34, -0.34, 0.34, 0.34, "none"), ("text", "t", 0.0, 0.0, 0.42)]
+        return [
+            ("rect", -0.34, -0.34, 0.34, 0.34, "none"),
+            ("text", "t", 0.0, 0.0, 0.42),
+        ]
     if kind == "table_round":
-        return [("ellipse", 0.0, 0.0, 0.35, 0.35, "none"), ("text", "t", 0.0, 0.0, 0.42)]
+        return [
+            ("ellipse", 0.0, 0.0, 0.35, 0.35, "none"),
+            ("text", "t", 0.0, 0.0, 0.42),
+        ]
     if kind == "table_set":
         return vector_table_set_ops()
     if kind == "cage":
@@ -24004,19 +24207,50 @@ def vector_symbol_ops(kind: str) -> list[tuple[Any, ...]]:
             ops.append(("line", -0.4, offset, 0.4, offset))
         return ops
     if kind in {"coffin", "sarcophagus", "open_coffin"}:
-        outer = ((-0.2, -0.44), (0.2, -0.44), (0.34, -0.22), (0.28, 0.42), (-0.28, 0.42), (-0.34, -0.22))
+        outer = (
+            (-0.2, -0.44),
+            (0.2, -0.44),
+            (0.34, -0.22),
+            (0.28, 0.42),
+            (-0.28, 0.42),
+            (-0.34, -0.22),
+        )
         ops = [("polygon", outer, "floor")]
         if kind == "sarcophagus":
             ops.append(("rect", -0.14, -0.24, 0.14, 0.22, "none"))
         elif kind == "open_coffin":
-            ops.append(("polyline", ((-0.12, -0.32), (0.12, -0.32), (0.2, 0.26), (-0.2, 0.26), (-0.12, -0.32)), "none"))
+            ops.append(
+                (
+                    "polyline",
+                    (
+                        (-0.12, -0.32),
+                        (0.12, -0.32),
+                        (0.2, 0.26),
+                        (-0.2, 0.26),
+                        (-0.12, -0.32),
+                    ),
+                    "none",
+                )
+            )
             ops.append(("line", 0.24, -0.3, 0.4, 0.22))
         else:
             ops.append(("line", -0.18, -0.32, 0.18, 0.32))
         return ops
     if kind == "grave":
         return [
-            ("polygon", ((-0.24, 0.38), (-0.24, -0.08), (-0.18, -0.28), (0.0, -0.42), (0.18, -0.28), (0.24, -0.08), (0.24, 0.38)), "floor"),
+            (
+                "polygon",
+                (
+                    (-0.24, 0.38),
+                    (-0.24, -0.08),
+                    (-0.18, -0.28),
+                    (0.0, -0.42),
+                    (0.18, -0.28),
+                    (0.24, -0.08),
+                    (0.24, 0.38),
+                ),
+                "floor",
+            ),
             ("line", -0.1, -0.12, 0.1, -0.12),
             ("line", 0.0, -0.24, 0.0, 0.08),
         ]
@@ -24049,7 +24283,11 @@ def vector_symbol_ops(kind: str) -> list[tuple[Any, ...]]:
         return [
             ("rect", -0.42, -0.2, 0.42, 0.2, "none"),
             ("ellipse", -0.18, -0.02, 0.09, 0.12, "none"),
-            ("polygon", ((0.12, -0.12), (0.26, -0.12), (0.34, 0.12), (0.04, 0.12)), "floor"),
+            (
+                "polygon",
+                ((0.12, -0.12), (0.26, -0.12), (0.34, 0.12), (0.04, 0.12)),
+                "floor",
+            ),
             ("line", 0.18, -0.28, 0.18, -0.12),
         ]
     if kind == "weapon_rack":
@@ -24064,7 +24302,11 @@ def vector_symbol_ops(kind: str) -> list[tuple[Any, ...]]:
         return [
             ("line", 0.0, -0.4, 0.0, 0.38),
             ("line", -0.24, -0.18, 0.24, -0.18),
-            ("polygon", ((-0.2, -0.12), (0.2, -0.12), (0.14, 0.18), (0.0, 0.3), (-0.14, 0.18)), "floor"),
+            (
+                "polygon",
+                ((-0.2, -0.12), (0.2, -0.12), (0.14, 0.18), (0.0, 0.3), (-0.14, 0.18)),
+                "floor",
+            ),
         ]
     if kind == "supply_crates":
         return [
@@ -24082,7 +24324,19 @@ def vector_symbol_ops(kind: str) -> list[tuple[Any, ...]]:
         ]
     if kind == "iron_gate":
         ops = [
-            ("polyline", ((-0.42, 0.4), (-0.42, -0.1), (-0.3, -0.34), (0.0, -0.44), (0.3, -0.34), (0.42, -0.1), (0.42, 0.4)), "none"),
+            (
+                "polyline",
+                (
+                    (-0.42, 0.4),
+                    (-0.42, -0.1),
+                    (-0.3, -0.34),
+                    (0.0, -0.44),
+                    (0.3, -0.34),
+                    (0.42, -0.1),
+                    (0.42, 0.4),
+                ),
+                "none",
+            ),
             ("line", -0.42, 0.4, 0.42, 0.4),
         ]
         for offset in (-0.24, 0.0, 0.24):
@@ -24095,15 +24349,27 @@ def vector_symbol_ops(kind: str) -> list[tuple[Any, ...]]:
         return ops
     if kind == "brazier":
         return [
-            ("polyline", ((-0.34, 0.08), (-0.2, 0.34), (0.2, 0.34), (0.34, 0.08), (-0.34, 0.08)), "floor"),
+            (
+                "polyline",
+                ((-0.34, 0.08), (-0.2, 0.34), (0.2, 0.34), (0.34, 0.08), (-0.34, 0.08)),
+                "floor",
+            ),
             ("ellipse", 0.0, 0.06, 0.34, 0.12, "none"),
-            ("polygon", ((0.0, -0.42), (-0.18, -0.04), (0.0, 0.04), (0.18, -0.04)), "ink"),
+            (
+                "polygon",
+                ((0.0, -0.42), (-0.18, -0.04), (0.0, 0.04), (0.18, -0.04)),
+                "ink",
+            ),
         ]
     if kind == "pedestal":
         return [
             ("ellipse", 0.0, -0.26, 0.32, 0.1, "none"),
             ("rect", -0.24, -0.26, 0.24, 0.2, "floor"),
-            ("polyline", ((-0.38, 0.2), (0.38, 0.2), (0.28, 0.4), (-0.28, 0.4), (-0.38, 0.2)), "floor"),
+            (
+                "polyline",
+                ((-0.38, 0.2), (0.38, 0.2), (0.28, 0.4), (-0.28, 0.4), (-0.38, 0.2)),
+                "floor",
+            ),
         ]
     if kind == "chain":
         return [
@@ -24114,7 +24380,18 @@ def vector_symbol_ops(kind: str) -> list[tuple[Any, ...]]:
     if kind == "pentagram":
         return [
             ("ellipse", 0.0, 0.0, 0.44, 0.44, "none"),
-            ("polyline", ((0.0, -0.4), (0.235, 0.32), (-0.38, -0.13), (0.38, -0.13), (-0.235, 0.32), (0.0, -0.4)), "none"),
+            (
+                "polyline",
+                (
+                    (0.0, -0.4),
+                    (0.235, 0.32),
+                    (-0.38, -0.13),
+                    (0.38, -0.13),
+                    (-0.235, 0.32),
+                    (0.0, -0.4),
+                ),
+                "none",
+            ),
         ]
     if kind == "magic_swirl":
         points = tuple(
@@ -24134,9 +24411,30 @@ def vector_symbol_ops(kind: str) -> list[tuple[Any, ...]]:
         ]
     if kind == "fog_bank":
         return [
-            ("polyline", tuple((index * 0.12 - 0.42, 0.18 + math.sin(index * 0.8) * 0.07) for index in range(8)), "none"),
-            ("polyline", tuple((index * 0.12 - 0.42, 0.0 + math.sin(index * 0.8 + 1.2) * 0.07) for index in range(8)), "none"),
-            ("polyline", tuple((index * 0.12 - 0.42, -0.18 + math.sin(index * 0.8 + 2.4) * 0.07) for index in range(8)), "none"),
+            (
+                "polyline",
+                tuple(
+                    (index * 0.12 - 0.42, 0.18 + math.sin(index * 0.8) * 0.07)
+                    for index in range(8)
+                ),
+                "none",
+            ),
+            (
+                "polyline",
+                tuple(
+                    (index * 0.12 - 0.42, 0.0 + math.sin(index * 0.8 + 1.2) * 0.07)
+                    for index in range(8)
+                ),
+                "none",
+            ),
+            (
+                "polyline",
+                tuple(
+                    (index * 0.12 - 0.42, -0.18 + math.sin(index * 0.8 + 2.4) * 0.07)
+                    for index in range(8)
+                ),
+                "none",
+            ),
         ]
     if kind == "spider_web":
         ops = [
@@ -24146,7 +24444,9 @@ def vector_symbol_ops(kind: str) -> list[tuple[Any, ...]]:
         ]
         for index in range(8):
             angle = index * math.tau / 8
-            ops.append(("line", 0.0, 0.0, math.cos(angle) * 0.43, math.sin(angle) * 0.43))
+            ops.append(
+                ("line", 0.0, 0.0, math.cos(angle) * 0.43, math.sin(angle) * 0.43)
+            )
         return ops
     if kind == "guano_pile":
         return [
@@ -24167,7 +24467,17 @@ def vector_symbol_ops(kind: str) -> list[tuple[Any, ...]]:
     if kind == "slime_pool":
         return [
             ("ellipse", 0.0, 0.0, 0.44, 0.28, "none"),
-            ("polyline", ((-0.3, 0.0), (-0.14, -0.08), (0.02, 0.04), (0.18, -0.06), (0.32, 0.02)), "none"),
+            (
+                "polyline",
+                (
+                    (-0.3, 0.0),
+                    (-0.14, -0.08),
+                    (0.02, 0.04),
+                    (0.18, -0.06),
+                    (0.32, 0.02),
+                ),
+                "none",
+            ),
             ("ellipse", -0.18, 0.1, 0.05, 0.04, "ink"),
             ("ellipse", 0.2, 0.12, 0.04, 0.03, "ink"),
         ]
@@ -24179,7 +24489,18 @@ def vector_symbol_ops(kind: str) -> list[tuple[Any, ...]]:
         ]
     if kind == "broken_pot":
         return [
-            ("polyline", ((-0.34, 0.2), (-0.2, -0.22), (0.18, -0.3), (0.34, 0.2), (0.1, 0.38), (-0.34, 0.2)), "floor"),
+            (
+                "polyline",
+                (
+                    (-0.34, 0.2),
+                    (-0.2, -0.22),
+                    (0.18, -0.3),
+                    (0.34, 0.2),
+                    (0.1, 0.38),
+                    (-0.34, 0.2),
+                ),
+                "floor",
+            ),
             ("line", -0.2, -0.22, -0.06, -0.02),
             ("line", -0.06, -0.02, 0.12, -0.16),
             ("line", 0.12, -0.16, 0.22, 0.12),
@@ -24192,7 +24513,15 @@ def vector_symbol_ops(kind: str) -> list[tuple[Any, ...]]:
             ("line", 0.1, 0.1, -0.08, 0.4),
         ]
         for offset in (0.0, 0.1, 0.2):
-            ops.append(("line", -0.05 + offset, 0.08 + offset * 0.75, 0.14 + offset, 0.0 + offset * 0.75))
+            ops.append(
+                (
+                    "line",
+                    -0.05 + offset,
+                    0.08 + offset * 0.75,
+                    0.14 + offset,
+                    0.0 + offset * 0.75,
+                )
+            )
         return ops
     if kind == "skull_pile":
         return [
@@ -24213,19 +24542,55 @@ def vector_symbol_ops(kind: str) -> list[tuple[Any, ...]]:
         ]
     if kind == "snake":
         return [
-            ("polyline", ((-0.44, 0.18), (-0.24, -0.18), (0.0, 0.18), (0.24, -0.18), (0.42, 0.04)), "none"),
+            (
+                "polyline",
+                (
+                    (-0.44, 0.18),
+                    (-0.24, -0.18),
+                    (0.0, 0.18),
+                    (0.24, -0.18),
+                    (0.42, 0.04),
+                ),
+                "none",
+            ),
             ("polygon", ((0.42, 0.04), (0.3, -0.06), (0.34, 0.16)), "ink"),
         ]
     if kind == "spider":
-        ops = [("ellipse", 0.0, 0.08, 0.16, 0.2, "none"), ("ellipse", 0.0, -0.2, 0.1, 0.1, "none")]
+        ops = [
+            ("ellipse", 0.0, 0.08, 0.16, 0.2, "none"),
+            ("ellipse", 0.0, -0.2, 0.1, 0.1, "none"),
+        ]
         for index in range(4):
             y_offset = -0.14 + index * 0.16
-            ops.append(("polyline", ((-0.1, y_offset), (-0.32, y_offset - 0.11), (-0.42, y_offset + 0.03)), "none"))
-            ops.append(("polyline", ((0.1, y_offset), (0.32, y_offset - 0.11), (0.42, y_offset + 0.03)), "none"))
+            ops.append(
+                (
+                    "polyline",
+                    (
+                        (-0.1, y_offset),
+                        (-0.32, y_offset - 0.11),
+                        (-0.42, y_offset + 0.03),
+                    ),
+                    "none",
+                )
+            )
+            ops.append(
+                (
+                    "polyline",
+                    ((0.1, y_offset), (0.32, y_offset - 0.11), (0.42, y_offset + 0.03)),
+                    "none",
+                )
+            )
         return ops
     if kind == "earthworm":
         return [
-            ("polyline", tuple((index * 0.1 - 0.4, math.sin(index * 1.7) * 0.16) for index in range(9)), "none"),
+            (
+                "polyline",
+                tuple(
+                    (index * 0.1 - 0.4, math.sin(index * 1.7) * 0.16)
+                    for index in range(9)
+                ),
+                "none",
+            ),
             ("line", 0.4, math.sin(13.6) * 0.16, 0.48, math.sin(13.6) * 0.16),
         ]
     return []
@@ -24238,7 +24603,12 @@ def svg_vector_symbol_parts(
     for op in vector_symbol_ops(kind):
         op_type = op[0]
         if op_type == "line":
-            x1, y1, x2, y2 = (x + op[1] * s, y + op[2] * s, x + op[3] * s, y + op[4] * s)
+            x1, y1, x2, y2 = (
+                x + op[1] * s,
+                y + op[2] * s,
+                x + op[3] * s,
+                y + op[4] * s,
+            )
             parts.append(
                 f'<line x1="{x1:.2f}" y1="{y1:.2f}" x2="{x2:.2f}" y2="{y2:.2f}" stroke="{ink}" stroke-width="{width}" stroke-linecap="round" stroke-linejoin="round"/>'
             )
@@ -24453,10 +24823,20 @@ def svg_for_symbol(
         line(x + s * 0.18, y + s * 0.18, x + s * 0.38, y)
     elif kind in {"pillar", "rock_column", "boulder", "boulder_cluster"}:
         if kind == "boulder_cluster":
-            for ox, oy, radius in ((-0.18, 0.08, 0.22), (0.14, -0.1, 0.26), (0.28, 0.2, 0.16)):
+            for ox, oy, radius in (
+                (-0.18, 0.08, 0.22),
+                (0.14, -0.1, 0.26),
+                (0.28, 0.2, 0.16),
+            ):
                 ellipse(x + s * ox, y + s * oy, s * radius, s * radius, ink)
         else:
-            ellipse(x, y, s * (0.36 if kind == "boulder" else 0.3), s * (0.28 if kind == "boulder" else 0.3), ink)
+            ellipse(
+                x,
+                y,
+                s * (0.36 if kind == "boulder" else 0.3),
+                s * (0.28 if kind == "boulder" else 0.3),
+                ink,
+            )
         if kind == "rock_column":
             text("x", factor=0.6)
     elif kind == "statue":
@@ -24533,7 +24913,14 @@ def svg_for_symbol(
             ]
         )
         polygon(points, floor)
-    elif kind in {"rubble", "rubble_pile", "debris_field", "rockfall", "cave_in", "depression"}:
+    elif kind in {
+        "rubble",
+        "rubble_pile",
+        "debris_field",
+        "rockfall",
+        "cave_in",
+        "depression",
+    }:
         if kind == "cave_in":
             rect(x - s * 0.42, y - s * 0.26, x + s * 0.42, y + s * 0.26)
             line(x - s * 0.34, y - s * 0.18, x + s * 0.34, y + s * 0.18)
@@ -24549,7 +24936,13 @@ def svg_for_symbol(
                 s * (0.04 + 0.02 * (index % 2)),
                 ink if kind != "depression" else floor,
             )
-    elif kind in {"crevasse", "cracked_ground", "sinkhole", "elevated_ledge", "natural_chimney"}:
+    elif kind in {
+        "crevasse",
+        "cracked_ground",
+        "sinkhole",
+        "elevated_ledge",
+        "natural_chimney",
+    }:
         if kind == "sinkhole":
             for radius in (0.42, 0.27, 0.12):
                 ellipse(x, y, s * radius, s * radius)
@@ -24888,7 +25281,11 @@ def spatial_index_query(
     y: float,
     bucket_size: float = 8.0,
 ) -> list[dict[str, Any]]:
-    return list(index.get((spatial_index_cell(x, bucket_size), spatial_index_cell(y, bucket_size)), []))
+    return list(
+        index.get(
+            (spatial_index_cell(x, bucket_size), spatial_index_cell(y, bucket_size)), []
+        )
+    )
 
 
 def topmost_hit_object(
@@ -25128,7 +25525,10 @@ def render_tk(
     skip_layer_ids = skip_layer_ids or set()
     renderable_objects = []
     for obj in project["objects"]:
-        if obj.get("layer", normalize_layer_id(None, obj.get("type"))) in skip_layer_ids:
+        if (
+            obj.get("layer", normalize_layer_id(None, obj.get("type")))
+            in skip_layer_ids
+        ):
             continue
         if not should_render_object(
             project, obj, for_export=preview_for_export, context=context
@@ -25362,11 +25762,15 @@ def draw_tk_grid(canvas: tk.Canvas, settings: dict[str, Any], zoom: float) -> No
         draw_tk_coordinates(canvas, settings, zoom)
 
 
-def hex_points(cx: float, cy: float, radius: float, orientation: str) -> list[tuple[float, float]]:
+def hex_points(
+    cx: float, cy: float, radius: float, orientation: str
+) -> list[tuple[float, float]]:
     offset = 0 if orientation == "pointy" else math.pi / 6
     return [
-        (cx + math.cos(offset + math.tau * index / 6) * radius,
-         cy + math.sin(offset + math.tau * index / 6) * radius)
+        (
+            cx + math.cos(offset + math.tau * index / 6) * radius,
+            cy + math.sin(offset + math.tau * index / 6) * radius,
+        )
         for index in range(6)
     ]
 
@@ -25401,9 +25805,12 @@ def draw_tk_hex_grid(canvas: tk.Canvas, settings: dict[str, Any], zoom: float) -
 
 def underlay_source_cache_key(underlay: dict[str, Any]) -> str:
     if underlay.get("embeddedData"):
-        return "embedded:" + hashlib.sha1(
-            str(underlay.get("embeddedData") or "").encode("utf-8")
-        ).hexdigest()
+        return (
+            "embedded:"
+            + hashlib.sha1(
+                str(underlay.get("embeddedData") or "").encode("utf-8")
+            ).hexdigest()
+        )
     path = Path(str(underlay.get("path") or ""))
     return "path:" + stable_cache_hash(path_cache_token(path))
 
@@ -26014,7 +26421,9 @@ def draw_tk_selection(
     multi_select: bool = False,
 ) -> None:
     c = settings["cellSize"] * zoom
-    selection_color = "#5aa7d6" if multi_select else settings.get("selectionColor", SELECT)
+    selection_color = (
+        "#5aa7d6" if multi_select else settings.get("selectionColor", SELECT)
+    )
     if is_polygon_room(obj):
         points = floor_polygon_points(obj, c)
         canvas.create_line(
@@ -26283,7 +26692,7 @@ def draw_tk_rotation_indicator(
         fill=ink,
         width=max(1, int(cell * 0.08)),
         arrow="last",
-        )
+    )
 
 
 def tk_builtin_symbol_photo_image(
@@ -26545,7 +26954,7 @@ def draw_tk_builtin_symbol_rotated(
     obj: dict[str, Any],
     cell: float,
     settings: dict[str, Any],
-    ) -> None:
+) -> None:
     x, y, size = obj["x"] * cell, obj["y"] * cell, obj.get("size", 1) * cell
     kind = effective_symbol_kind(project, obj)
     rotation = float(obj.get("rotation", 0)) % 360
@@ -26787,9 +27196,7 @@ def draw_tk_floor_fill(
             smooth=floor_boundary_is_smooth(obj),
         )
     elif obj_type == "round":
-        canvas.create_oval(
-            x, y, x + w, y + h, fill=floor, outline=outline, width=width
-        )
+        canvas.create_oval(x, y, x + w, y + h, fill=floor, outline=outline, width=width)
     elif obj_type in {"cave", "cave_corridor"}:
         canvas.create_polygon(
             flatten_points(floor_polygon_points(obj, c)),
@@ -26850,9 +27257,7 @@ def draw_tk_floor_boundary_mask(
             smooth=floor_boundary_is_smooth(obj),
         )
     else:
-        canvas.create_rectangle(
-            x, y, x + w, y + h, fill="", outline=floor, width=width
-        )
+        canvas.create_rectangle(x, y, x + w, y + h, fill="", outline=floor, width=width)
 
 
 def draw_tk_floor_grid(
@@ -27397,7 +27802,13 @@ def draw_tk_symbol(
                 outline=ink,
                 fill=ink if kind != "depression" else floor,
             )
-    elif kind in {"crevasse", "cracked_ground", "sinkhole", "elevated_ledge", "natural_chimney"}:
+    elif kind in {
+        "crevasse",
+        "cracked_ground",
+        "sinkhole",
+        "elevated_ledge",
+        "natural_chimney",
+    }:
         if kind == "sinkhole":
             for radius in (0.42, 0.27, 0.12):
                 canvas.create_oval(
@@ -27789,7 +28200,9 @@ def render_static_layer_image(
     )
     for obj in layer_project["objects"]:
         if obj.get("type") not in FLOOR_TYPES:
-            draw_pillow_object(layer_draw, layer_project, layer_project["settings"], obj, scale)
+            draw_pillow_object(
+                layer_draw, layer_project, layer_project["settings"], obj, scale
+            )
     if len(_STATIC_LAYER_IMAGE_CACHE) > 16:
         _STATIC_LAYER_IMAGE_CACHE.clear()
     _STATIC_LAYER_IMAGE_CACHE[key] = image.copy()
@@ -27827,7 +28240,9 @@ def render_pillow(
     }
     if target is not None and static_layer_ids and Image is not None:
         for layer_id in sorted(static_layer_ids):
-            cached = render_static_layer_image(project, str(layer_id), scale, include_legend)
+            cached = render_static_layer_image(
+                project, str(layer_id), scale, include_legend
+            )
             if cached is None:
                 continue
             opacity = project_layer_opacity(project, str(layer_id), context)
@@ -29043,7 +29458,13 @@ def draw_pillow_symbol(
                 outline=ink,
                 fill=ink if kind != "depression" else floor,
             )
-    elif kind in {"crevasse", "cracked_ground", "sinkhole", "elevated_ledge", "natural_chimney"}:
+    elif kind in {
+        "crevasse",
+        "cracked_ground",
+        "sinkhole",
+        "elevated_ledge",
+        "natural_chimney",
+    }:
         if kind == "sinkhole":
             for radius in (0.42, 0.27, 0.12):
                 draw.ellipse(

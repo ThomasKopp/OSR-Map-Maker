@@ -55,8 +55,12 @@ class ProjectModelTests(unittest.TestCase):
         )
 
     def test_popup_overlap_detection_distinguishes_separate_popups(self) -> None:
-        self.assertTrue(app.popup_rectangles_overlap((10, 10, 40, 40), (40, 20, 20, 20)))
-        self.assertFalse(app.popup_rectangles_overlap((10, 10, 20, 20), (30, 10, 20, 20)))
+        self.assertTrue(
+            app.popup_rectangles_overlap((10, 10, 40, 40), (40, 20, 20, 20))
+        )
+        self.assertFalse(
+            app.popup_rectangles_overlap((10, 10, 20, 20), (30, 10, 20, 20))
+        )
 
     def test_global_action_icons_support_labels_and_compact_buttons(self) -> None:
         self.assertEqual(app.icon_label("Undo"), "↶ Undo")
@@ -91,7 +95,9 @@ class ProjectModelTests(unittest.TestCase):
         self.assertTrue(kinds.issubset(app.SYMBOL_LABELS))
         for kind in kinds:
             self.assertTrue(app.vector_symbol_ops(kind), kind)
-            self.assertTrue(app.svg_for_symbol(kind, 20, 20, 24, "#000000", "#ffffff", 1))
+            self.assertTrue(
+                app.svg_for_symbol(kind, 20, 20, 24, "#000000", "#ffffff", 1)
+            )
 
     def test_zoom_supports_four_hundred_percent(self) -> None:
         self.assertEqual(app.MAX_ZOOM, 4.0)
@@ -264,9 +270,7 @@ class ProjectModelTests(unittest.TestCase):
         self.assertTrue(mover.redrawn)
 
     def test_toast_styles_cover_expected_status_types(self) -> None:
-        self.assertEqual(
-            {"info", "success", "warning", "error"}, set(app.TOAST_STYLES)
-        )
+        self.assertEqual({"info", "success", "warning", "error"}, set(app.TOAST_STYLES))
         self.assertEqual(app.TOAST_STYLES["success"]["foreground"], "#ffffff")
 
     def test_hex_color_normalization_expands_short_values(self) -> None:
@@ -683,7 +687,9 @@ class ProjectModelTests(unittest.TestCase):
 
         self.assertFalse(any("group" in obj for obj in maker.project["objects"]))
 
-    def test_cave_corridor_validates_as_corridor_floor_without_room_fields(self) -> None:
+    def test_cave_corridor_validates_as_corridor_floor_without_room_fields(
+        self,
+    ) -> None:
         tunnel = app.validate_object(app.rect("cave_corridor", 1, 2, 5, 1), 1)
 
         self.assertEqual(tunnel["type"], "cave_corridor")
@@ -716,7 +722,9 @@ class ProjectModelTests(unittest.TestCase):
         self.assertEqual(room["layer"], "rooms")
         self.assertEqual(room["roomStatus"], "undiscovered")
         self.assertEqual(len(room["points"]), 4)
-        self.assertEqual((room["x"], room["y"], room["width"], room["height"]), (1, 1, 4, 3))
+        self.assertEqual(
+            (room["x"], room["y"], room["width"], room["height"]), (1, 1, 4, 3)
+        )
         self.assertEqual(
             app.floor_polygon_points(room, 10),
             [(10, 10), (50, 10), (40, 30), (10, 40)],
@@ -998,7 +1006,10 @@ class ProjectModelTests(unittest.TestCase):
             app.OSRMapMaker.run_autosave(maker)
             versions_after_interval = sorted(maker.autosave_versions_dir.glob("*.json"))
 
-        self.assertEqual(app.project_embedded_underlay_bytes(maker.project), app.EMBEDDED_SYMBOL_COMPRESS_THRESHOLD + 1)
+        self.assertEqual(
+            app.project_embedded_underlay_bytes(maker.project),
+            app.EMBEDDED_SYMBOL_COMPRESS_THRESHOLD + 1,
+        )
         self.assertEqual(len(versions_after_small_steps), 1)
         self.assertEqual(len(versions_after_interval), 2)
 
@@ -1010,9 +1021,9 @@ class ProjectModelTests(unittest.TestCase):
             app.normalize_inspector_field_value("export", "nein")[1], False
         )
         self.assertEqual(
-            app.normalize_inspector_field_value(
-                "manualEntries", "Torch\nRope; Chalk"
-            )[1],
+            app.normalize_inspector_field_value("manualEntries", "Torch\nRope; Chalk")[
+                1
+            ],
             ["Torch", "Rope", "Chalk"],
         )
         self.assertEqual(app.normalize_inspector_field_value("opacity", "2")[1], 2.0)
@@ -1125,10 +1136,7 @@ class ProjectModelTests(unittest.TestCase):
         )
         self.assertIn(
             "covered_round_pit",
-            [
-                item["id"]
-                for item in app.symbol_variant_options(project, "covered_pit")
-            ],
+            [item["id"] for item in app.symbol_variant_options(project, "covered_pit")],
         )
         self.assertIn("barred", app.symbol_search_blob(project, "door", "Door"))
         self.assertIn(
@@ -1191,21 +1199,19 @@ class ProjectModelTests(unittest.TestCase):
             self.assertIn(kind, app.SYMBOL_LABELS)
             self.assertTrue(app.vector_symbol_ops(kind), kind)
 
-        parts = app.svg_for_symbol(
-            "table_set", 40, 40, 24, "#000000", "#ffffff", 1
-        )
+        parts = app.svg_for_symbol("table_set", 40, 40, 24, "#000000", "#ffffff", 1)
         self.assertTrue(any(part.startswith("<rect") for part in parts))
 
     def test_barricade_is_distinct_from_a_barred_door(self) -> None:
         self.assertEqual(app.SYMBOL_LABELS["barricade"], "Barricade")
-        self.assertNotEqual(app.SYMBOL_ICONS["barricade"], app.SYMBOL_ICONS["barred_door"])
+        self.assertNotEqual(
+            app.SYMBOL_ICONS["barricade"], app.SYMBOL_ICONS["barred_door"]
+        )
         self.assertIn("blockade", app.SYMBOL_ALIASES["barricade"])
         self.assertIn(("barricade", "Barricaded"), app.SYMBOL_VARIANT_SETS["door"])
         self.assertTrue(app.vector_symbol_ops("barricade"))
 
-        parts = app.svg_for_symbol(
-            "barricade", 40, 40, 24, "#000000", "#ffffff", 1
-        )
+        parts = app.svg_for_symbol("barricade", 40, 40, 24, "#000000", "#ffffff", 1)
         self.assertGreaterEqual(sum(part.startswith("<line") for part in parts), 5)
 
     def test_unrotated_builtin_symbols_draw_directly_on_tk_canvas(self) -> None:
@@ -1351,6 +1357,120 @@ class ProjectModelTests(unittest.TestCase):
         )
         self.assertEqual(active_record["objects"][-1]["id"], active_symbol["id"])
         self.assertEqual(validated["maps"][1]["name"], "Lower Level")
+
+    def test_validate_project_maps_only_uses_active_map_as_root_mirror(self) -> None:
+        project = {
+            "schemaVersion": app.CURRENT_SCHEMA_VERSION,
+            "activeMapId": "map-two",
+            "maps": [
+                {
+                    "id": "map-one",
+                    "name": "Level One",
+                    "objects": [
+                        {
+                            "type": "room",
+                            "id": "room-one",
+                            "x": 1,
+                            "y": 1,
+                            "width": 2,
+                            "height": 2,
+                        }
+                    ],
+                },
+                {
+                    "id": "map-two",
+                    "name": "Level Two",
+                    "objects": [
+                        {
+                            "type": "room",
+                            "id": "room-two",
+                            "x": 8,
+                            "y": 8,
+                            "width": 3,
+                            "height": 3,
+                        }
+                    ],
+                    "zones": [
+                        {
+                            "id": "zone-two",
+                            "name": "Vault",
+                            "x": 8,
+                            "y": 8,
+                            "width": 3,
+                            "height": 3,
+                        }
+                    ],
+                    "markers": [{"id": "marker-two", "name": "Entry", "x": 8, "y": 8}],
+                    "exportFrames": [
+                        {
+                            "id": "frame-two",
+                            "name": "Vault",
+                            "x": 7,
+                            "y": 7,
+                            "width": 5,
+                            "height": 5,
+                        }
+                    ],
+                },
+            ],
+        }
+
+        validated = app.validate_project(project)
+        active_map = next(item for item in validated["maps"] if item["id"] == "map-two")
+
+        self.assertEqual(validated["objects"][0]["id"], "room-two")
+        self.assertEqual(active_map["objects"][0]["id"], "room-two")
+        self.assertEqual(active_map["zones"][0]["id"], "zone-two")
+        self.assertEqual(active_map["markers"][0]["id"], "marker-two")
+        self.assertEqual(active_map["exportFrames"][0]["id"], "frame-two")
+
+    def test_validate_project_warns_about_inactive_map_references(self) -> None:
+        project = app.create_project()
+        inactive_map = copy.deepcopy(project["maps"][0])
+        inactive_map["id"] = "map-two"
+        inactive_map["name"] = "Lower Level"
+        inactive_map["objects"] = [
+            {
+                "type": "room",
+                "id": "duplicate-room",
+                "x": 1,
+                "y": 1,
+                "width": 2,
+                "height": 2,
+            },
+            {
+                "type": "room",
+                "id": "duplicate-room",
+                "x": 4,
+                "y": 1,
+                "width": 2,
+                "height": 2,
+            },
+            {
+                "type": "symbol",
+                "kind": "stairs_up",
+                "x": 2,
+                "y": 2,
+                "targetMapId": "missing-map",
+            },
+        ]
+        project["maps"].append(inactive_map)
+
+        validated = app.validate_project(project)
+
+        self.assertTrue(
+            any(
+                "Map Lower Level: Duplicate object id: duplicate-room" in warning
+                for warning in validated["validationWarnings"]
+            )
+        )
+        self.assertTrue(
+            any(
+                "Map Lower Level:" in warning
+                and "linked target map does not exist" in warning
+                for warning in validated["validationWarnings"]
+            )
+        )
 
     def test_measurement_summary_reports_distance_path_and_area(self) -> None:
         settings = app.validate_settings({"cellScale": 5, "cellScaleUnit": "ft."})
@@ -1715,9 +1835,7 @@ class ProjectModelTests(unittest.TestCase):
         self.assertEqual(len(layers), 1)
         segments, _color = layers[0]
         self.assertTrue(segments)
-        self.assertTrue(
-            any(x1 != x2 and y1 != y2 for x1, y1, x2, y2 in segments)
-        )
+        self.assertTrue(any(x1 != x2 and y1 != y2 for x1, y1, x2, y2 in segments))
         svg_parts = app.svg_grid_lines(settings, 1)
         self.assertTrue(any(part.startswith("<polygon") for part in svg_parts))
         self.assertFalse(any(part.startswith("<line") for part in svg_parts))
@@ -1893,9 +2011,9 @@ class ProjectModelTests(unittest.TestCase):
                 app.validate_object(app.symbol(kind, index, index % 8, 1), index)
             )
         legend = project["objects"][0]
-        base_height = (
-            legend["y"] + legend["height"] + 1
-        ) * project["settings"]["cellSize"]
+        base_height = (legend["y"] + legend["height"] + 1) * project["settings"][
+            "cellSize"
+        ]
         _width, actual_height = app.canvas_size(project, 1)
 
         self.assertGreater(actual_height, base_height)
@@ -2428,7 +2546,9 @@ class ProjectModelTests(unittest.TestCase):
                 return Focus(self.widget_class) if self.widget_class else None
 
         for widget_class in ("Entry", "TEntry", "Text", "Listbox", "Treeview"):
-            self.assertFalse(app.OSRMapMaker.should_handle_zoom_key(Maker(widget_class)))
+            self.assertFalse(
+                app.OSRMapMaker.should_handle_zoom_key(Maker(widget_class))
+            )
         self.assertTrue(app.OSRMapMaker.should_handle_zoom_key(Maker(None)))
 
     def test_project_lifecycle_clears_edit_history_and_file_state(self) -> None:
@@ -2486,9 +2606,7 @@ class ProjectModelTests(unittest.TestCase):
             path = Path(tmp) / "loaded.osrmap.json"
             app.write_project_data(path, loaded)
 
-            app.OSRMapMaker.load_project_path(
-                maker, path, before_action_confirmed=True
-            )
+            app.OSRMapMaker.load_project_path(maker, path, before_action_confirmed=True)
 
         self.assertEqual(maker.current_file.name, "loaded.osrmap.json")
         self.assertEqual(maker.project["meta"]["title"], "Loaded")

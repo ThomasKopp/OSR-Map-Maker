@@ -197,12 +197,13 @@ class PerformanceSmokeTests(unittest.TestCase):
         maker._pending_redraw_refresh_minimap = False
         scheduled: list[tuple[int, object]] = []
         flushed: list[tuple[bool, bool]] = []
-        maker.after = (
-            lambda delay, callback: scheduled.append((delay, callback)) or "after_1"
+        maker.after = lambda delay, callback: (
+            scheduled.append((delay, callback)) or "after_1"
         )
         maker.redraw = (
-            lambda refresh_panels=True, refresh_minimap=True, cancel_pending=True:
-            flushed.append((refresh_panels, refresh_minimap))
+            lambda refresh_panels=True, refresh_minimap=True, cancel_pending=True: (
+                flushed.append((refresh_panels, refresh_minimap))
+            )
         )
         maker.redraw_interaction_overlays = lambda: flushed.append((False, False))
         maker.update_status = lambda: None
@@ -221,8 +222,8 @@ class PerformanceSmokeTests(unittest.TestCase):
         maker.minimap_visible_var = type("Var", (), {"get": lambda self: True})()
         scheduled: list[tuple[int, object]] = []
         flushed: list[bool] = []
-        maker.after = (
-            lambda delay, callback: scheduled.append((delay, callback)) or "mini_1"
+        maker.after = lambda delay, callback: (
+            scheduled.append((delay, callback)) or "mini_1"
         )
         maker.after_cancel = lambda _after_id: None
         maker.redraw_minimap = lambda full=True: flushed.append(full)
@@ -306,7 +307,9 @@ class PerformanceSmokeTests(unittest.TestCase):
 
         first = app.tk_static_layer_signature(project, "rooms", 1.0, context)
         room["x"] = 3
-        second = app.tk_static_layer_signature(project, "rooms", 1.0, app.render_context(project))
+        second = app.tk_static_layer_signature(
+            project, "rooms", 1.0, app.render_context(project)
+        )
 
         self.assertNotEqual(first, second)
 
@@ -356,7 +359,9 @@ class PerformanceSmokeTests(unittest.TestCase):
         self.assertEqual(third.bounds_by_id[room["id"]][0], 8)
         self.assertEqual(app.OSRMapMaker.selected_objects(maker), [room])
 
-    def test_object_list_refresh_skips_rebuild_when_only_selection_changes(self) -> None:
+    def test_object_list_refresh_skips_rebuild_when_only_selection_changes(
+        self,
+    ) -> None:
         class Var:
             def __init__(self, value):
                 self.value = value
@@ -421,7 +426,9 @@ class PerformanceSmokeTests(unittest.TestCase):
         app.OSRMapMaker.refresh_object_list(maker)
 
         self.assertEqual(maker.object_listbox.deletes, 1)
-        self.assertIn(maker.object_list_ids.index(room["id"]), maker.object_listbox.selected)
+        self.assertIn(
+            maker.object_list_ids.index(room["id"]), maker.object_listbox.selected
+        )
 
     def test_object_list_refresh_shows_empty_state(self) -> None:
         class Var:
