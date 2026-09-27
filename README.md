@@ -32,6 +32,7 @@ from the same project data you edit in the desktop UI.
 - [Troubleshooting](#troubleshooting)
 - [Development](#development)
 - [Architecture Notes](#architecture-notes)
+- [GUI Smoke Test](docs/gui-smoke.md)
 
 ## Quick Start
 
@@ -54,8 +55,10 @@ To verify the project in a development checkout:
 .\scripts\quality.ps1
 ```
 
-The quality script compiles the main modules, runs the test suite, and runs
-`ruff` and `mypy` when those tools are installed.
+The quality script compiles the main modules, runs the test suite, and then
+runs mandatory `ruff` and `mypy` checks. Prepare a development checkout once
+with `./scripts/setup-dev.ps1`; a missing checker intentionally fails the
+pipeline instead of silently reducing coverage.
 
 ## Installing Optional Dependencies
 
@@ -75,6 +78,18 @@ Install the common development set with:
 ```powershell
 python -m pip install pillow pytest ruff mypy
 ```
+
+The repository also contains an installable package definition. From a fresh
+Python 3.11+ checkout use `python -m pip install .[dev]`, then start with
+`osr-map-maker`. To create a portable Windows executable on a build machine,
+run `./scripts/build-portable.ps1`. The Help > About / Diagnostics dialog shows
+the application/schema versions and whether raster and optional SVG support are
+available.
+
+The portable build writes its temporary PyInstaller files to `build/` and the
+executable to `dist/` (or the path supplied with `-Output`). The build runner
+also works on profile-less CI hosts; this changes only PyInstaller's temporary
+build home, never the application's runtime configuration.
 
 SVG custom symbols remain stored in the project even if `cairosvg` is not
 installed. Without it, the app falls back to a simpler symbol representation.
@@ -104,6 +119,12 @@ Project files include:
 The current project schema is migrated and validated on load. Older legacy
 symbol names such as `secret`, `pit`, and `column` are migrated automatically.
 For larger schema migrations, the app can create backups in `.osr_map_backups`.
+
+To protect an already open project from malformed archives and accidental huge
+rasters, loading defaults to 128 MiB compressed / 256 MiB expanded data and
+raster exports to 80 megapixels. Advanced users can set `OSR_MAP_MAX_FILE_MIB`,
+`OSR_MAP_MAX_EXPANDED_MIB` and `OSR_MAP_MAX_EXPORT_MP` before starting the app.
+An over-limit raster is rejected with a smaller-scale or tiled/atlas suggestion.
 
 ## The Workspace
 
@@ -391,7 +412,8 @@ Symbols can store:
 - GM notes, clues, secrets, rumors, handout text, and links.
 
 The app includes VTT roles for doors, walls, lights, hazards, spawns, and notes.
-These roles are used by Foundry, Roll20, and Fantasy Grounds JSON exports.
+These roles are used by Foundry and Roll20 JSON exports. The Fantasy Grounds
+image XML sidecar exports square-grid and line-of-sight metadata.
 
 ### Custom Symbols
 
@@ -658,11 +680,12 @@ Use the Export menu:
 
 - `Export > Foundry Scene JSON`.
 - `Export > Roll20 Page JSON`.
-- `Export > Fantasy Grounds JSON`.
+- `Export > Fantasy Grounds Image XML`.
 
-These JSON exports are intended as structured handoff data. They include map
-dimensions, grid information, walls, doors, lights, notes, fog, encounter starts,
-and session metadata where relevant.
+These structured exports are intended as handoff data. Foundry and Roll20 JSON
+include map dimensions, grid information, walls, doors, lights, notes, fog,
+encounter starts and session metadata where relevant. Fantasy Grounds uses its
+native image XML sidecar for the square grid and LOS occluders.
 
 ## Exporting
 
@@ -714,9 +737,20 @@ can use presets such as A4, Letter, Foundry Scene, and Roll20 Page sizes.
 
 ### Batch Export
 
-`File > Batch Export` creates multiple standard outputs in one pass, such as GM,
+`Export > Batch Export` creates multiple standard outputs in one pass, such as GM,
 Player, and gridless PNG exports. Batch export uses profiles and filename
 templates to keep repeated exports consistent.
+
+The preview lists every destination with its planned action. For existing files,
+choose `Rename` (the default), `Skip`, or `Overwrite`. Duplicate names within the
+same batch always receive unique numeric suffixes. `Export planned files` uses
+that reviewed plan; if a destination changes afterward, that job reports an error
+instead of replacing the changed file. Use `Refresh plan` to review it again.
+
+Each image is written to a temporary file before replacing its destination.
+Failures do not remove earlier successful exports or prevent the remaining jobs
+from running. The dialog keeps a result list with saved, skipped, and failed
+files. Exporting preserves the active project, map, and unsaved-change status.
 
 ### Legend Export
 
@@ -819,19 +853,35 @@ The shortcut editor warns about conflicts and can reset values to defaults.
 
 ## Autosave and Recovery
 
-Autosave protects unsaved work. The app stores autosave versions with timestamps
-and offers recovery on startup when a newer autosave exists.
+Project saves (JSON and compressed archives) and autosaves are written to a
+temporary file in the destination directory, flushed, closed, and then atomically
+replaced. A failed write preserves the previous destination file. Failed saves
+leave changes unsaved and keep recovery snapshots; autosave failures are reported
+and retried at the next interval.
 
-Recovery metadata includes:
+If the opened project file is changed or deleted externally, saving opens a
+conflict dialog. Choose `Save a copy`, `Reload`, `Overwrite explicitly`, or
+`Cancel`. Reload asks whether to save local changes to a separate file first;
+cancelling either decision keeps the local work. Deleted files cannot be reloaded.
+The destination is checked again immediately before publishing the saved file.
 
-- Current project title.
-- Autosave title.
-- Last updated timestamp.
-- Map count.
-- Object count.
+Each project has a persistent identity, and each editing session writes to its
+own recovery directory. Saving, closing, or changing projects clears only that
+session's snapshots. Other projects and other instances of the same project keep
+their recovery files. Timestamped versions are pruned within each session.
 
-Autosave versions are pruned to avoid unlimited growth. Unsaved changes are
-checked before closing, loading, or creating a new project.
+Recovery is offered at startup and is also available through
+`File > Recover Autosave`. The list shows project title, snapshot time, session,
+and readability. The newest readable snapshot is selected automatically. A
+damaged newest snapshot remains visible, but does not block recovery of an older
+valid version. Validation warnings are shown separately from unreadable files.
+
+`Recover` opens the selected snapshot as an unsaved project in a new session.
+Save it to choose a project file. Source snapshots remain available until
+explicitly discarded; `Discard selected snapshot` deletes only the selected
+file, and `Cancel` keeps all snapshots. Legacy autosaves from earlier app versions
+remain discoverable. Unsaved changes are checked before closing, loading,
+creating a project, or opening the recovery picker.
 
 ## Example Projects
 
@@ -900,10 +950,12 @@ Use the separate `View > UI tooltips` and `View > Symbol previews` switches, or
 the matching controls in the `Map` panel. Text tooltips and symbol hover
 previews can be enabled independently.
 
-### Quality script cannot find optional tools
+### Quality script cannot find a checker
 
-`scripts/quality.ps1` uses `ruff` and `mypy` only when installed. Missing
-optional tools do not prevent syntax checks and tests from running.
+`scripts/quality.ps1` deliberately fails when Ruff or Mypy is missing. Run
+`./scripts/setup-dev.ps1` (or `python -m pip install .[dev]`) in a connected
+environment, then repeat the quality check. The JUnit test report is written to
+`artifacts/quality/pytest.xml`.
 
 ## Development
 

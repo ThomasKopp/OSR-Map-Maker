@@ -1,0 +1,164 @@
+{
+  "name": "Example VTT Export",
+  "width": 360,
+  "height": 288,
+  "mapMode": "Dungeon",
+  "padding": 0,
+  "grid": {
+    "type": 1,
+    "size": 18,
+    "distance": 10.0,
+    "units": "ft.",
+    "hexOrientation": "pointy"
+  },
+  "walls": [
+    {
+      "c": [
+        36.0,
+        36.0,
+        144.0,
+        36.0
+      ],
+      "move": 1,
+      "sight": 1,
+      "sound": 1,
+      "door": 0,
+      "ds": 0,
+      "objectId": "obj_63add0d11c5a"
+    },
+    {
+      "c": [
+        144.0,
+        36.0,
+        144.0,
+        126.0
+      ],
+      "move": 1,
+      "sight": 1,
+      "sound": 1,
+      "door": 0,
+      "ds": 0,
+      "objectId": "obj_63add0d11c5a"
+    },
+    {
+      "c": [
+        144.0,
+        126.0,
+        36.0,
+        126.0
+      ],
+      "move": 1,
+      "sight": 1,
+      "sound": 1,
+      "door": 0,
+      "ds": 0,
+      "objectId": "obj_63add0d11c5a"
+    },
+    {
+      "c": [
+        36.0,
+        126.0,
+        36.0,
+        36.0
+      ],
+      "move": 1,
+      "sight": 1,
+      "sound": 1,
+      "door": 0,
+      "ds": 0,
+      "objectId": "obj_63add0d11c5a"
+    },
+    {
+      "c": [
+        83.25,
+        36.0,
+        96.75,
+        36.0
+      ],
+      "move": 1,
+      "sight": 1,
+      "sound": 1,
+      "door": 1,
+      "ds": 0,
+      "objectId": "obj_e546c47ffafb"
+    }
+  ],
+  "lights": [
+    {
+      "x": 90.0,
+      "y": 90.0,
+      "dim": 20,
+      "bright": 10,
+      "color": "#4398bd",
+      "objectId": "obj_1a359edf5284"
+    }
+  ],
+  "notes": [
+    {
+      "x": 54.0,
+      "y": 72.0,
+      "text": "Spawn: Party Start",
+      "objectId": "obj_82abc006cb6c"
+    }
+  ],
+  "fog": [
+    {
+      "objectId": "obj_63add0d11c5a",
+      "revealed": false,
+      "bounds": [
+        2.0,
+        2.0,
+        6.0,
+        5.0
+      ]
+    }
+  ],
+  "lineOfSight": [
+    {
+      "objectId": "obj_63add0d11c5a",
+      "segments": [
+        [
+          36.0,
+          36.0,
+          144.0,
+          36.0
+        ],
+        [
+          144.0,
+          36.0,
+          144.0,
+          126.0
+        ],
+        [
+          144.0,
+          126.0,
+          36.0,
+          126.0
+        ],
+        [
+          36.0,
+          126.0,
+          36.0,
+          36.0
+        ]
+      ]
+    }
+  ],
+  "encounterStarts": [
+    {
+      "objectId": "obj_82abc006cb6c",
+      "x": 3.0,
+      "y": 4.0,
+      "tokens": 4,
+      "faction": "Party"
+    }
+  ],
+  "session": {
+    "mode": "GM",
+    "activeRoomId": "",
+    "revealedRoomIds": [],
+    "hiddenObjectIds": [],
+    "lastRolls": [],
+    "statusLog": []
+  }
+}

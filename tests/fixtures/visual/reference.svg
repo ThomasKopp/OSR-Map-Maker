@@ -1,0 +1,99 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="192" viewBox="0 0 256 192">
+<title>Untitled Dungeon</title>
+<desc>Exported from OSR Map Maker with editable CSS classes, object ids, layers, and room statuses.</desc>
+<style>.osm-object{vector-effect:non-scaling-stroke}.type-room,.type-round,.type-cave{isolation:isolate}.status-dangerous{--room-status:#b9413f}.status-secured{--room-status:#3f8f5b}.layer-notes{opacity:.75}</style>
+<rect width="100%" height="100%" fill="#4398bd"/>
+<g transform="translate(0.00,0.00)">
+<line x1="0.00" y1="0" x2="0.00" y2="192.00" stroke="#aad0e1" stroke-width="1"/>
+<line x1="16.00" y1="0" x2="16.00" y2="192.00" stroke="#aad0e1" stroke-width="1"/>
+<line x1="32.00" y1="0" x2="32.00" y2="192.00" stroke="#aad0e1" stroke-width="1"/>
+<line x1="48.00" y1="0" x2="48.00" y2="192.00" stroke="#aad0e1" stroke-width="1"/>
+<line x1="64.00" y1="0" x2="64.00" y2="192.00" stroke="#aad0e1" stroke-width="1"/>
+<line x1="80.00" y1="0" x2="80.00" y2="192.00" stroke="#aad0e1" stroke-width="1"/>
+<line x1="96.00" y1="0" x2="96.00" y2="192.00" stroke="#aad0e1" stroke-width="1"/>
+<line x1="112.00" y1="0" x2="112.00" y2="192.00" stroke="#aad0e1" stroke-width="1"/>
+<line x1="128.00" y1="0" x2="128.00" y2="192.00" stroke="#aad0e1" stroke-width="1"/>
+<line x1="144.00" y1="0" x2="144.00" y2="192.00" stroke="#aad0e1" stroke-width="1"/>
+<line x1="160.00" y1="0" x2="160.00" y2="192.00" stroke="#aad0e1" stroke-width="1"/>
+<line x1="176.00" y1="0" x2="176.00" y2="192.00" stroke="#aad0e1" stroke-width="1"/>
+<line x1="192.00" y1="0" x2="192.00" y2="192.00" stroke="#aad0e1" stroke-width="1"/>
+<line x1="208.00" y1="0" x2="208.00" y2="192.00" stroke="#aad0e1" stroke-width="1"/>
+<line x1="224.00" y1="0" x2="224.00" y2="192.00" stroke="#aad0e1" stroke-width="1"/>
+<line x1="240.00" y1="0" x2="240.00" y2="192.00" stroke="#aad0e1" stroke-width="1"/>
+<line x1="256.00" y1="0" x2="256.00" y2="192.00" stroke="#aad0e1" stroke-width="1"/>
+<line x1="0" y1="0.00" x2="256.00" y2="0.00" stroke="#aad0e1" stroke-width="1"/>
+<line x1="0" y1="16.00" x2="256.00" y2="16.00" stroke="#aad0e1" stroke-width="1"/>
+<line x1="0" y1="32.00" x2="256.00" y2="32.00" stroke="#aad0e1" stroke-width="1"/>
+<line x1="0" y1="48.00" x2="256.00" y2="48.00" stroke="#aad0e1" stroke-width="1"/>
+<line x1="0" y1="64.00" x2="256.00" y2="64.00" stroke="#aad0e1" stroke-width="1"/>
+<line x1="0" y1="80.00" x2="256.00" y2="80.00" stroke="#aad0e1" stroke-width="1"/>
+<line x1="0" y1="96.00" x2="256.00" y2="96.00" stroke="#aad0e1" stroke-width="1"/>
+<line x1="0" y1="112.00" x2="256.00" y2="112.00" stroke="#aad0e1" stroke-width="1"/>
+<line x1="0" y1="128.00" x2="256.00" y2="128.00" stroke="#aad0e1" stroke-width="1"/>
+<line x1="0" y1="144.00" x2="256.00" y2="144.00" stroke="#aad0e1" stroke-width="1"/>
+<line x1="0" y1="160.00" x2="256.00" y2="160.00" stroke="#aad0e1" stroke-width="1"/>
+<line x1="0" y1="176.00" x2="256.00" y2="176.00" stroke="#aad0e1" stroke-width="1"/>
+<line x1="0" y1="192.00" x2="256.00" y2="192.00" stroke="#aad0e1" stroke-width="1"/>
+<g id="visual-reference-002-outline" class="osm-object type-room layer-rooms status-undiscovered" data-object-id="visual-reference-002" data-type="room" data-layer="rooms">
+<title>room</title>
+<desc>visual-reference-002</desc>
+<polygon points="40.73,19.55 118.72,44.89 103.27,92.45 25.28,67.11" fill="#4398bd"/>
+</g>
+<g id="visual-reference-003-outline" class="osm-object type-diagonal_corridor layer-corridors" data-object-id="visual-reference-003" data-type="diagonal_corridor" data-layer="corridors">
+<title>diagonal_corridor</title>
+<desc>visual-reference-003</desc>
+<polygon points="36.28,121.12 185.12,139.72 187.72,118.88 38.88,100.28" fill="#4398bd"/>
+</g>
+<g id="visual-reference-002-fill" class="osm-object type-room layer-rooms status-undiscovered" data-object-id="visual-reference-002" data-type="room" data-layer="rooms">
+<title>room</title>
+<desc>visual-reference-002</desc>
+<polygon points="41.37,20.81 117.46,45.54 102.63,91.19 26.54,66.46" fill="#ffffff"/>
+</g>
+<g id="visual-reference-003-fill" class="osm-object type-diagonal_corridor layer-corridors" data-object-id="visual-reference-003" data-type="diagonal_corridor" data-layer="corridors">
+<title>diagonal_corridor</title>
+<desc>visual-reference-003</desc>
+<polygon points="37.40,120.25 184.25,138.60 186.60,119.75 39.75,101.40" fill="#ffffff"/>
+</g>
+<g id="visual-reference-002-grid" class="osm-object type-room layer-rooms status-undiscovered" data-object-id="visual-reference-002" data-type="room" data-layer="rooms">
+<title>room</title>
+<desc>visual-reference-002</desc>
+<line x1="32.00" y1="49.66" x2="32.00" y2="68.24" stroke="#4398bd" stroke-width="1"/>
+<line x1="48.00" y1="22.97" x2="48.00" y2="73.44" stroke="#4398bd" stroke-width="1"/>
+<line x1="64.00" y1="28.17" x2="64.00" y2="78.64" stroke="#4398bd" stroke-width="1"/>
+<line x1="80.00" y1="33.36" x2="80.00" y2="83.83" stroke="#4398bd" stroke-width="1"/>
+<line x1="96.00" y1="38.56" x2="96.00" y2="89.03" stroke="#4398bd" stroke-width="1"/>
+<line x1="112.00" y1="43.76" x2="112.00" y2="62.34" stroke="#4398bd" stroke-width="1"/>
+<line x1="37.74" y1="32.00" x2="75.80" y2="32.00" stroke="#4398bd" stroke-width="1"/>
+<line x1="32.54" y1="48.00" x2="116.66" y2="48.00" stroke="#4398bd" stroke-width="1"/>
+<line x1="27.34" y1="64.00" x2="111.46" y2="64.00" stroke="#4398bd" stroke-width="1"/>
+<line x1="68.20" y1="80.00" x2="106.26" y2="80.00" stroke="#4398bd" stroke-width="1"/>
+</g>
+<g id="visual-reference-003-grid" class="osm-object type-diagonal_corridor layer-corridors" data-object-id="visual-reference-003" data-type="diagonal_corridor" data-layer="corridors">
+<title>diagonal_corridor</title>
+<desc>visual-reference-003</desc>
+<line x1="48.00" y1="102.43" x2="48.00" y2="121.57" stroke="#4398bd" stroke-width="1"/>
+<line x1="64.00" y1="104.43" x2="64.00" y2="123.57" stroke="#4398bd" stroke-width="1"/>
+<line x1="80.00" y1="106.43" x2="80.00" y2="125.57" stroke="#4398bd" stroke-width="1"/>
+<line x1="96.00" y1="108.43" x2="96.00" y2="127.57" stroke="#4398bd" stroke-width="1"/>
+<line x1="112.00" y1="110.43" x2="112.00" y2="129.57" stroke="#4398bd" stroke-width="1"/>
+<line x1="128.00" y1="112.43" x2="128.00" y2="131.57" stroke="#4398bd" stroke-width="1"/>
+<line x1="144.00" y1="114.43" x2="144.00" y2="133.57" stroke="#4398bd" stroke-width="1"/>
+<line x1="160.00" y1="116.43" x2="160.00" y2="135.57" stroke="#4398bd" stroke-width="1"/>
+<line x1="176.00" y1="118.43" x2="176.00" y2="137.57" stroke="#4398bd" stroke-width="1"/>
+<line x1="38.43" y1="112.00" x2="124.59" y2="112.00" stroke="#4398bd" stroke-width="1"/>
+<line x1="99.41" y1="128.00" x2="185.57" y2="128.00" stroke="#4398bd" stroke-width="1"/>
+</g>
+<g id="visual-reference-004" class="osm-object type-symbol layer-symbols kind-torch" data-object-id="visual-reference-004" data-type="symbol" data-layer="symbols">
+<title>symbol</title>
+<desc>visual-reference-004</desc>
+<g opacity="0.550">
+<text x="160.00" y="48.00" fill="#4398bd" font-size="14" font-family="Arial" font-weight="bold" text-anchor="middle" dominant-baseline="middle">TO</text>
+</g>
+</g>
+<g id="visual-reference-005" class="osm-object type-text layer-text" data-object-id="visual-reference-005" data-type="text" data-layer="text">
+<title>text</title>
+<desc>visual-reference-005</desc>
+<text x="80.00" y="64.00" fill="#4398bd" font-size="16.00" font-family="Arial" text-anchor="middle">R1</text>
+</g>
+</g>
+</svg>

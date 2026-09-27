@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from rendering import visual_image_difference
+
 from osr_map_maker import (
     add_export_page_chrome,
     canvas_size,
@@ -26,4 +28,5 @@ __all__ = [
     "save_export_image",
     "save_svg",
     "static_layer_cache_stats",
+    "visual_image_difference",
 ]

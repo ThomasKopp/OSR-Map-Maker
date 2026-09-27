@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from validation import validate_project_document
+from geometry import point_in_polygon, points_bounds, quadratic_curve_points, rects_overlap, rotate_xy
+
 from osr_map_maker import (
     CURRENT_SCHEMA_VERSION,
     bounds,
@@ -9,7 +12,7 @@ from osr_map_maker import (
     diagonal_corridor,
     export_project_for_frame,
     fog_of_war_masks,
-    fantasy_grounds_data,
+    fantasy_grounds_xml,
     foundry_scene_data,
     generated_dungeon_objects,
     hex_coordinate_label,
@@ -42,7 +45,7 @@ __all__ = [
     "diagonal_corridor",
     "export_project_for_frame",
     "fog_of_war_masks",
-    "fantasy_grounds_data",
+    "fantasy_grounds_xml",
     "foundry_scene_data",
     "generated_dungeon_objects",
     "hex_coordinate_label",
@@ -63,5 +66,11 @@ __all__ = [
     "symbol",
     "text_obj",
     "validate_object",
+    "validate_project_document",
+    "point_in_polygon",
+    "points_bounds",
+    "quadratic_curve_points",
+    "rects_overlap",
+    "rotate_xy",
     "validate_project",
 ]

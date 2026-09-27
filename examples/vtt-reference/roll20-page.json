@@ -1,0 +1,136 @@
+{
+  "name": "Example VTT Export",
+  "page": {
+    "width": 20,
+    "height": 16,
+    "grid_type": "square",
+    "scale_number": 10.0,
+    "scale_units": "ft.",
+    "cell_px": 18,
+    "hex_orientation": "pointy"
+  },
+  "objects": [
+    {
+      "id": "reference-004",
+      "type": "symbol",
+      "name": "Party Start",
+      "x": 45.0,
+      "y": 63.0
+    },
+    {
+      "id": "reference-005",
+      "type": "legend",
+      "name": "legend",
+      "x": 36,
+      "y": 306
+    }
+  ],
+  "walls": [
+    {
+      "x1": 36.0,
+      "y1": 36.0,
+      "x2": 144.0,
+      "y2": 36.0,
+      "objectId": "reference-001"
+    },
+    {
+      "x1": 144.0,
+      "y1": 36.0,
+      "x2": 144.0,
+      "y2": 126.0,
+      "objectId": "reference-001"
+    },
+    {
+      "x1": 144.0,
+      "y1": 126.0,
+      "x2": 36.0,
+      "y2": 126.0,
+      "objectId": "reference-001"
+    },
+    {
+      "x1": 36.0,
+      "y1": 126.0,
+      "x2": 36.0,
+      "y2": 36.0,
+      "objectId": "reference-001"
+    }
+  ],
+  "doors": [
+    {
+      "x1": 83.25,
+      "y1": 36.0,
+      "x2": 96.75,
+      "y2": 36.0,
+      "secret": false,
+      "objectId": "reference-002"
+    }
+  ],
+  "lights": [
+    {
+      "x": 90.0,
+      "y": 90.0,
+      "radius": 20,
+      "objectId": "reference-003"
+    }
+  ],
+  "fog": [
+    {
+      "objectId": "reference-001",
+      "revealed": false,
+      "bounds": [
+        2.0,
+        2.0,
+        6.0,
+        5.0
+      ]
+    }
+  ],
+  "line_of_sight": [
+    {
+      "objectId": "reference-001",
+      "segments": [
+        [
+          36.0,
+          36.0,
+          144.0,
+          36.0
+        ],
+        [
+          144.0,
+          36.0,
+          144.0,
+          126.0
+        ],
+        [
+          144.0,
+          126.0,
+          36.0,
+          126.0
+        ],
+        [
+          36.0,
+          126.0,
+          36.0,
+          36.0
+        ]
+      ]
+    }
+  ],
+  "encounter_starts": [
+    {
+      "objectId": "reference-004",
+      "x": 3.0,
+      "y": 4.0,
+      "tokens": 4,
+      "faction": "Party"
+    }
+  ],
+  "session": {
+    "mode": "GM",
+    "activeRoomId": "",
+    "revealedRoomIds": [],
+    "hiddenObjectIds": [],
+    "lastRolls": [],
+    "statusLog": []
+  }
+}

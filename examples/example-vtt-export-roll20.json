@@ -1,0 +1,136 @@
+{
+  "name": "Example VTT Export",
+  "page": {
+    "width": 20,
+    "height": 16,
+    "grid_type": "square",
+    "scale_number": 10.0,
+    "scale_units": "ft.",
+    "cell_px": 18,
+    "hex_orientation": "pointy"
+  },
+  "objects": [
+    {
+      "id": "obj_82abc006cb6c",
+      "type": "symbol",
+      "name": "Party Start",
+      "x": 45.0,
+      "y": 63.0
+    },
+    {
+      "id": "obj_7ac1901c98cb",
+      "type": "legend",
+      "name": "legend",
+      "x": 36,
+      "y": 306
+    }
+  ],
+  "walls": [
+    {
+      "x1": 36.0,
+      "y1": 36.0,
+      "x2": 144.0,
+      "y2": 36.0,
+      "objectId": "obj_63add0d11c5a"
+    },
+    {
+      "x1": 144.0,
+      "y1": 36.0,
+      "x2": 144.0,
+      "y2": 126.0,
+      "objectId": "obj_63add0d11c5a"
+    },
+    {
+      "x1": 144.0,
+      "y1": 126.0,
+      "x2": 36.0,
+      "y2": 126.0,
+      "objectId": "obj_63add0d11c5a"
+    },
+    {
+      "x1": 36.0,
+      "y1": 126.0,
+      "x2": 36.0,
+      "y2": 36.0,
+      "objectId": "obj_63add0d11c5a"
+    }
+  ],
+  "doors": [
+    {
+      "x1": 83.25,
+      "y1": 36.0,
+      "x2": 96.75,
+      "y2": 36.0,
+      "secret": false,
+      "objectId": "obj_e546c47ffafb"
+    }
+  ],
+  "lights": [
+    {
+      "x": 90.0,
+      "y": 90.0,
+      "radius": 20,
+      "objectId": "obj_1a359edf5284"
+    }
+  ],
+  "fog": [
+    {
+      "objectId": "obj_63add0d11c5a",
+      "revealed": false,
+      "bounds": [
+        2.0,
+        2.0,
+        6.0,
+        5.0
+      ]
+    }
+  ],
+  "line_of_sight": [
+    {
+      "objectId": "obj_63add0d11c5a",
+      "segments": [
+        [
+          36.0,
+          36.0,
+          144.0,
+          36.0
+        ],
+        [
+          144.0,
+          36.0,
+          144.0,
+          126.0
+        ],
+        [
+          144.0,
+          126.0,
+          36.0,
+          126.0
+        ],
+        [
+          36.0,
+          126.0,
+          36.0,
+          36.0
+        ]
+      ]
+    }
+  ],
+  "encounter_starts": [
+    {
+      "objectId": "obj_82abc006cb6c",
+      "x": 3.0,
+      "y": 4.0,
+      "tokens": 4,
+      "faction": "Party"
+    }
+  ],
+  "session": {
+    "mode": "GM",
+    "activeRoomId": "",
+    "revealedRoomIds": [],
+    "hiddenObjectIds": [],
+    "lastRolls": [],
+    "statusLog": []
+  }
+}

@@ -445,7 +445,7 @@ darf keinen History-Eintrag erzeugen.
 - SVG
 - Foundry Scene JSON
 - Roll20 Page JSON
-- Fantasy Grounds JSON
+- Fantasy Grounds Image XML
 
 ### 9.4 Exportprofile und Scopes
 
@@ -480,12 +480,34 @@ Wichtige Funktionen:
 `open_export_dialog` rendert eine gedrosselte Vorschau. `render_image` erstellt
 die Pillow-Ausgabe, `save_svg` den Vektorpfad und `save_export_image` schreibt
 Raster/PDF. `export_scene_json` nutzt je nach Ziel `foundry_scene_data`,
-`roll20_page_data` oder `fantasy_grounds_data`. Batch-Export erzeugt Jobs ueber
+`roll20_page_data` oder `fantasy_grounds_xml`. Batch-Export erzeugt Jobs ueber
 `default_batch_export_jobs` und `batch_export_targets`.
+
+`plan_batch_export` prueft Zielpfade und erzeugt einen sichtbaren Ausfuehrungsplan.
+Vorhandene Dateien werden je nach Auswahl umbenannt, uebersprungen oder ersetzt;
+Namenskollisionen innerhalb eines Batches erhalten immer eindeutige Suffixe.
+`execute_batch_export` protokolliert jedes Ergebnis und setzt nach Einzelfehlern
+fort. `save_batch_image` schreibt atomar und prueft vor dem Ersetzen, ob die
+Zieldatei seit der Vorschau geaendert wurde. Die Ergebnisliste bleibt offen.
+Projekt, aktive Karte und Dirty-State bleiben beim Export erhalten.
 
 ## 10. Persistenz, Autosave und Recovery
 
 ### 10.1 Projektpersistenz
+
+`write_project_data()` schreibt JSON und ZIP zuerst in eine temporaere Datei
+im Zielverzeichnis, fuehrt Flush und `fsync` aus, schliesst die Datei und ersetzt
+das Ziel mit `os.replace`. Fehler erhalten die bisherige Zieldatei. Erst nach
+erfolgreichem Speichern werden Zeitstempel, Saved-State und Recovery-Bereinigung
+uebernommen. Die GUI meldet Speicherfehler und verhindert dann das Schliessen
+ueber den Speichern-beim-Schliessen-Ablauf.
+
+`read_project_with_fingerprint()` ermittelt SHA-256 aus denselben Bytes, die
+geladen werden. Die GUI merkt Dateipfad und Fingerabdruck und erkennt externe
+Aenderungen oder Loeschungen beim Speichern. Ein Konfliktdialog bietet Kopie,
+Neuladen, bewusstes Ueberschreiben und Abbrechen. Vor Neuladen ist eine separate
+Entscheidung ueber lokale Aenderungen erforderlich. Unmittelbar vor dem atomaren
+Ersetzen wird der erwartete Dateistand erneut geprueft.
 
 Wichtige Speicherpfade:
 
@@ -498,8 +520,19 @@ Wichtige Speicherpfade:
 
 ### 10.2 Autosave
 
-Autosave nutzt Projektrevisionen, speichert kompakte Projektdateien und prueft
-beim Start, ob ein neuerer Autosave vorhanden ist.
+Autosave nutzt Projektrevisionen und dieselbe atomare Speicherfunktion mit
+kompaktem JSON. `meta.projectId` identifiziert das Projekt dauerhaft; jede
+Bearbeitungssitzung erhaelt eine neue Sitzungskennung. Die Dateien liegen unter
+`autosaves/<projectId>/<sessionId>/`, Versionen im Unterordner `versions/`.
+Speichern, Schliessen und Projektwechsel bereinigen nur die eigene Sitzung.
+
+Beim Start und ueber `File > Recover Autosave` zeigt die Wiederherstellung
+Projektname, Zeitpunkt, Sitzung und Lesbarkeitsstatus aller gefundenen Staende.
+Der neueste lesbare Stand ist vorausgewaehlt; ein beschaedigter Stand blockiert
+aeltere Versionen nicht. Alte flache Autosave-Verzeichnisse werden weiterhin
+beruecksichtigt. Wiederherstellen validiert die Datei erneut und oeffnet eine
+neue, ungespeicherte Sitzung ohne alten Undo-Verlauf. Quelldateien bleiben
+erhalten, bis sie ausdruecklich einzeln verworfen werden. Abbrechen loescht nichts.
 
 Wichtige Funktionen:
 
@@ -508,9 +541,15 @@ Wichtige Funktionen:
 - `autosave_candidates(...)`
 - `prune_autosave_versions(...)`
 - `autosave_recovery_metadata(...)`
+- `ensure_project_id(...)`
+- `discover_autosaves(...)`, `inspect_autosave_candidate(...)`
+- `preferred_autosave(...)`
+- `OSRMapMaker.start_autosave_session()`
 - `OSRMapMaker.schedule_autosave()`
 - `OSRMapMaker.run_autosave()`
 - `OSRMapMaker.check_autosave_recovery()`
+- `OSRMapMaker.recover_autosave_file(...)`
+- `OSRMapMaker.discard_autosave_snapshot(...)`
 
 ## 11. Performance
 
@@ -539,27 +578,38 @@ Wichtige Funktionen:
 | --- | --- |
 | `tests/test_core.py` | Validierung, Einstellungen, Projektdateien, Modelle, Exporthelfer |
 | `tests/test_performance.py` | Caches, Spatial Index, Render-Smoke-Tests, Redraw/Minimap-Scheduling |
+| `tests/test_visual_regression.py` | Pillow-, echte Tk-Canvas- und optionale CairoSVG-Raster-Referenzen sowie Bilddifferenz-Artefakte bei Fehlern |
+| `tests/test_backlog_completion.py` | Worker-Abbruch, veraltete Autosaves, Spielersicht, Ressourcenlimits, Kacheln und VTT-Referenzen |
 
 ### 12.2 Qualitaetsskript
 
 `scripts/quality.ps1` fuehrt aus:
 
 ```powershell
-python -m py_compile osr_map_maker.py models.py constants.py renderers.py project_services.py
-python -m pytest -q
-ruff check .
-mypy --ignore-missing-imports osr_map_maker.py models.py constants.py renderers.py project_services.py
+python -m py_compile osr_map_maker.py models.py constants.py renderers.py project_services.py storage.py validation.py geometry.py rendering.py
+python -m pytest -q --junitxml=artifacts/quality/pytest.xml
+python -m ruff check .
+python -m mypy --ignore-missing-imports osr_map_maker.py models.py constants.py renderers.py project_services.py storage.py validation.py geometry.py rendering.py
 ```
 
-`ruff` und `mypy` laufen nur, wenn die Tools installiert sind.
+Ruff und Mypy sind Pflichtwerkzeuge: fehlen sie, schlägt die Prüfung fehl. Mit
+`scripts/setup-dev.ps1` wird die in `pyproject.toml` definierte Entwicklungsumgebung
+installiert. Der JUnit-Bericht bleibt als nachvollziehbares Testartefakt erhalten.
 
 ### 12.3 Mindestpruefung fuer Aenderungen
 
 - Dokumentation: `git diff --check -- DOKUMENTATION.md Tasks.md`.
 - Modell-/Serviceaenderung: relevante Unit-Tests plus `python -m pytest -q`.
-- UI-Aenderung: manuelle App-Pruefung mit Beispielprojekten.
+- UI-Aenderung: den dokumentierten [GUI-Smoke-Ablauf](docs/gui-smoke.md) mit
+  Beispielprojekt durchführen.
 - Render-/Exportaenderung: mindestens PNG/PDF/SVG oder betroffener VTT-JSON-Pfad
   mit Beispielprojekt pruefen.
+- Visuelle Referenzen nur nach Sichtprüfung mit
+  `python scripts/regenerate_visual_references.py` aktualisieren. Abweichungen
+  schreiben Referenz-, Ergebnis- und Differenzbilder nach `artifacts/visual/`.
+  Tk-Raster nutzt Ghostscript; SVG-Raster nutzt das optionale Paket `.[svg]`.
+  Eine Toleranz von 16 Farbwertstufen pro Kanal ist ausschließlich für
+  plattformabhängiges Schrift-Anti-Aliasing erlaubt.
 
 ### 12.4 UI- und Layout-Regressionen
 
@@ -630,7 +680,7 @@ Wichtige Fehlerquellen:
 | Ungueltige Eingabe | Feldstatus oder kurze Statusmeldung; kein Commit | Feldvalidatoren und `change_selection_field` |
 | Fehlende optionale Library | Exportdialog nennt Pillow/CairoSVG-Abhaengigkeit | Export- und Asset-Ladepfade |
 | Inkonsistenter Link | Validation-Warnung; Ziel kann im Dialog korrigiert werden | `project_validation_warnings` |
-| Neuerer Autosave | Recovery-Dialog mit Projektvergleich | `check_autosave_recovery`, `ask_autosave_recovery` |
+| Verfuegbare Autosaves | Auswahl mit Projekt, Zeitpunkt, Sitzung und Lesbarkeit | `check_autosave_recovery`, `ask_autosave_recovery` |
 | Schema-Migration | Normalisierung und optionales Backup | `validate_project`, `backup_project_before_migration` |
 
 Lange oder entscheidungspflichtige Fehler sind modal. Kurze Erfolge und

@@ -1,5 +1,52 @@
 # OSR Map Maker: Verbesserungs- und Erweiterungsplan
 
+## Aktueller Umsetzungsstand – 2026-09-09
+
+Dieser Abschnitt dokumentiert den Stand der neuen Aufgaben aus `Tasks.md`.
+`[x]` bedeutet umgesetzt und geprüft; `[ ]` bedeutet weiterhin offen.
+Die ursprüngliche Funktionsübersicht in den Abschnitten 1–7 bleibt erhalten.
+
+- [x] **TASK-01 – Atomisches Speichern** (2026-09-06): JSON, komprimierte
+  Projekte und Autosaves werden über eine temporäre Datei, Flush, `fsync` und
+  atomisches Ersetzen gespeichert. Fehler erhalten die bisherige Datei,
+  ungespeicherte Änderungen und Wiederherstellungsstände.
+- [x] **TASK-02 – Projektbezogene Wiederherstellung** (2026-09-06): Stabile
+  Projektkennung, getrennte Sitzungsverzeichnisse, Auswahl älterer lesbarer
+  Autosaves und gezieltes Verwerfen einzelner Stände. Andere Projekte und
+  Sitzungen bleiben bei der Bereinigung erhalten.
+- [x] **TASK-03 – Externe Dateiänderungen erkennen** (2026-09-09): Fingerabdruck
+  des tatsächlich geladenen beziehungsweise gespeicherten Dateiinhalts.
+  Konfliktdialog mit Kopie, Neuladen, bewusstem Überschreiben und Abbrechen;
+  Neuladen erfordert eine Entscheidung über lokale Änderungen. Erneute Prüfung
+  unmittelbar vor dem Ersetzen schützt auch vor Änderungen während des Schreibens.
+- [x] **TASK-04 – Batch-Export mit Ergebnisplan** (2026-09-09): Sichtbare
+  Zielpfade mit Umbenennen, Überspringen oder Überschreiben vorhandener Dateien;
+  interne Namenskollisionen bekommen eindeutige Suffixe. Atomare Einzeldateien,
+  Schutz vor Änderungen nach der Vorschau und eine dauerhafte Ergebnisliste
+  mit Erfolgen, übersprungenen Dateien und Fehlern. Aktives Projekt und aktive
+  Karte bleiben nach dem Export erhalten.
+- [x] **TASK-05 – Lange Aufgaben unterbrechbar ausführen** (2026-09-12):
+  Snapshot-Worker für Autosave/Batch, Queue- und `after()`-Rückmeldung,
+  Cancel zwischen atomaren Dateien sowie sicherer Close-Pfad. Veraltete
+  Autosave-Ergebnisse können keine neue Revision als gespeichert markieren.
+- [x] **TASK-06 – Spielersicht über alle Exportwege konsistent prüfen**
+  (2026-09-12): Raster-/SVG-/Handout- und VTT-Export verwenden denselben
+  Player-Filter; versteckte Inhalte und GM-Laufzeitdaten fehlen aus Playerdaten.
+- [ ] **TASK-07 – Visuelle Regressionen zwischen Renderern erkennen.**
+- [ ] **TASK-08 – VTT-Exporte anhand echter Importabläufe abnehmen.**
+- [x] **TASK-09 – Ressourcenbedarf vor Laden und Rendern prüfen** (2026-09-12):
+  konfigurierte Datei-/Archivgrenzen und Raster-Schätzung mit Skalierungs- oder
+  Kachelentscheidung vor der Speicherallokation.
+- [ ] **TASK-10 – Reproduzierbare Installation und Windows-Paket anbieten.**
+- [ ] **TASK-11 – Implementierungen in eigenständige Module aufteilen.**
+- [ ] **TASK-12 – Automatisierte Qualitätsprüfung und Abnahme ausbauen.**
+
+Prüfnachweise: `tests/test_storage_recovery.py` für TASK-01/02 und
+`tests/test_save_conflicts_batch.py` für TASK-03/04. Die Tests umfassen
+Schreibfehler, externe Änderungen, getrennte Sitzungen, beschädigte Autosaves,
+Namenskollisionen, Teilerfolge sowie Aktionen in echten Tk-Dialogen.
+Gesamtprüfung über `scripts/quality.ps1`; die vorhandenen Tests bleiben erhalten.
+
 ## 1. Ausgangspunkt
 
 Der aktuelle OSR Map Maker ist eine Python-Desktop-App mit Tkinter-Oberflaeche und Pillow-Export. Vorhanden sind:
@@ -175,10 +222,8 @@ Aktuell liegt viel Logik in `osr_map_maker.py`. Sinnvolle Aufteilung:
 
 ## 8. Konkrete naechste Aufgabe
 
-Als naechster kleiner, wertvoller Schritt empfiehlt sich:
-
-- Endpunkt-Handles fuer diagonale Korridore implementieren.
-- Resize-Handles fuer Raeume und Korridore implementieren.
-- Danach Undo/Redo fuer diese Bearbeitungen sauber absichern.
-
-Das verbessert die direkte Zeichenarbeit deutlich, ohne die gesamte Architektur sofort umzubauen.
+Als nächster Schritt folgt **TASK-05** aus `Tasks.md`: Autosave und längere
+Exporte auf konsistenten Snapshots ausführen, geeignete Arbeit aus dem
+Tk-Hauptthread auslagern und einen reagierenden Fortschritts-/Abbruchablauf
+ergänzen. Die atomaren Schreibpfade und der überprüfbare Batch-Plan stehen
+dafür bereit. TASK-05 ist noch nicht umgesetzt.

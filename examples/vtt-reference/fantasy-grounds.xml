@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<root>
+  <grid>on</grid>
+  <gridsize>18,18</gridsize>
+  <occluders>
+    <occluder>
+      <id>1</id>
+      <points>-144,-108,-36,-108,-36,-18,-144,-18,-144,-108</points>
+    </occluder>
+    <occluder>
+      <id>2</id>
+      <points>-96.75,-108,-83.25,-108</points>
+    </occluder>
+  </occluders>
+</root>

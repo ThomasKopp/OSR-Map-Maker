@@ -5,6 +5,7 @@ import json
 import os
 import tempfile
 import unittest
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import osr_map_maker as app
@@ -1574,19 +1575,19 @@ class ProjectModelTests(unittest.TestCase):
         )
         self.assertIn("1 goblins", table)
 
-    def test_vtt_fantasy_grounds_and_inferred_lights(self) -> None:
+    def test_vtt_fantasy_grounds_xml_and_inferred_lights(self) -> None:
         project = app.create_project()
         room = app.validate_object(app.rect("room", 1, 1, 4, 4), 2)
-        room["roomName"] = "Torch Hall"
         room["description"] = "A torch burns here."
         project["objects"].append(room)
 
         foundry = app.foundry_scene_data(project)
-        fg = app.fantasy_grounds_data(project)
+        fg = ET.fromstring(app.fantasy_grounds_xml(project))
 
         self.assertTrue(any(light.get("inferred") for light in foundry["lights"]))
-        self.assertEqual(fg["format"], "OSR Map Maker Fantasy Grounds Reference")
-        self.assertEqual(fg["rooms"][0]["name"], "Torch Hall")
+        self.assertEqual(fg.tag, "root")
+        self.assertEqual(fg.findtext("grid"), "on")
+        self.assertTrue(fg.findall("occluders/occluder"))
 
     def test_auto_door_symbols_can_cycle_door_types(self) -> None:
         objects = [app.rect("room", 1, 1, 6, 6)]

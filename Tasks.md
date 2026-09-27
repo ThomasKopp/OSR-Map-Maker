@@ -1,5 +1,544 @@
 # UI-Verbesserungsvorschlaege fuer OSR Map Maker
 
+## Ergänzungen: Bedienbarkeit, GUI-Übersicht und Funktionalität – 2026-09-13
+
+Grundlage: Abgleich der bestehenden Aufgaben mit `README.md`, `UI_SPEC.md`
+und den GUI-Abläufen in `osr_map_maker.py`. Die folgenden Punkte sind offene
+Vorschläge, keine bestätigten GUI-Fehler und keine Umsetzungsnachweise. Eine
+interaktive GUI-Abnahme gehört zur späteren Umsetzung. Bereits vorhandene
+Funktionen werden gezielt erweitert; die bisherigen Aufgaben bleiben erhalten.
+
+Prioritäten: P1 = Schutz der Arbeitsergebnisse, P2 = verlässliche tägliche
+Nutzung, P3 = Komfort und Funktionsausbau. Aufwand: S = lokal begrenzt,
+M = mehrere Abläufe, L = strukturelle Änderung. Neue Aufgaben laufen als
+TASK-13 bis TASK-27 weiter; alle bleiben bis zur Umsetzung und Abnahme offen.
+
+### Bedienbarkeit: präziser auswählen, navigieren und bearbeiten
+
+- [x] **TASK-13: Überlappende Objekte gezielt auswählen.** P2 · Aufwand: M.
+  Die bestehende Auswahl um eine Aktion „Objekt unter Maus auswählen“ im
+  Kontextmenü ergänzen. Treffer mit Typ, Name, Layer und Sperrstatus auflisten;
+  beim Überfahren eines Eintrags das zugehörige Objekt vorübergehend umranden.
+  Gesperrte Objekte dürfen inspiziert, aber nicht nebenbei entsperrt werden.
+  **Akzeptanz:** Bei Raum, Symbol und Text an derselben Position lässt sich
+  jedes Objekt mit der Maus eindeutig auswählen, ohne die anderen zu verschieben.
+  Ausgeblendete Objekte werden nicht versehentlich als sichtbare Treffer angeboten.
+  **Umgesetzt und geprüft am 2026-09-13:** Das Canvas-Kontextmenü enthält
+  „Select object here“ mit allen sichtbaren Treffern in Vordergrundreihenfolge,
+  Typ, Layer und Sperrhinweis. Gesperrte Objekte lassen sich dort ausschließlich
+  zur Inspektion auswählen; normale Mausauswahl und Verschieben überspringen sie.
+  `tests/test_task_13_14.py` prüft Überlappung, Reihenfolge, ausgeblendete
+  Kandidatenlogik und die Inspektionsauswahl.
+
+- [x] **TASK-14: Ursache blockierter Bearbeitung direkt erklären.** P2 · Aufwand: M.
+  Bestehende Fehlerhinweise um eine kontextbezogene Erklärung für nicht mögliche
+  Auswahl-, Zeichen- und Verschiebeaktionen erweitern: etwa gesperrtes Objekt,
+  gesperrter Layer oder ungeeigneter Arbeitsmodus. Passende sichtbare Aktionen
+  wie „Layer anzeigen“ oder „Zum Zeichnen wechseln“ anbieten. Entsperren bleibt
+  eine ausdrückliche Nutzeraktion; Hinweise nach erfolgreicher Korrektur entfernen.
+  **Akzeptanz:** Ein Platzierungsversuch auf einem gesperrten Layer nennt dessen
+  Namen und bietet einen passenden Lösungsweg. Wiederholte Versuche erzeugen
+  keine Folge identischer modaler Dialoge.
+  **Umgesetzt und geprüft am 2026-09-13:** Zeichen- und Einfügeaktionen prüfen
+  den aktiven Layer vor der Änderung. Der Status und ein nichtmodaler Hinweis
+  nennen den gesperrten Layer; „Show layer“ öffnet dessen Verwaltung. Gesperrte
+  Objekte lassen sich inspizieren, aber nicht über den Inspector ändern,
+  verschieben, löschen oder in einen gesperrten Layer verschieben. Die
+  Fehlermeldung ist nichtmodal und blockiert daher keine weiteren Eingaben.
+
+- [x] **TASK-15: Scrollen in verschachtelten Panels eindeutig zuordnen.**
+  P2 · Aufwand: M. Nacharbeit zur vorhandenen Panel- und Zoom-Bedienung:
+  Das Mausrad soll zuerst die Liste beziehungsweise das Panel unter dem Zeiger
+  bewegen. Erst an dessen Rand darf der umgebende Inspector weiterscrollen.
+  Beim Wechsel zwischen schwebenden Panels, Dialogen und Canvas dürfen keine
+  globalen Mausradbindungen hängen bleiben oder fremde Bindungen entfernen.
+  **Akzeptanz:** Durch eine lange Symbol- oder Eigenschaftenliste scrollen,
+  ein schwebendes Panel öffnen und schließen und anschließend auf dem Canvas
+  zoomen: Jeder Schritt wirkt ausschließlich auf den erwarteten Bereich.
+  **Umgesetzt und geprüft am 2026-09-13:** Eine einzige geroutete Mausradbindung
+  prüft den sichtbaren Inspector unter dem Zeiger und scrollt nur diesen. Die
+  bisherigen temporären globalen Bindungen und ihr `unbind_all()` sind entfernt;
+  Canvas-Zoom und fremde Bindungen werden nicht überschrieben. Der gezielte Test
+  prüft die Zuordnung eines Mausradereignisses zum einzigen passenden Panel.
+
+- [x] **TASK-16: Numerische Eingaben mit Einheiten und relativen Werten erweitern.**
+  P2 · Aufwand: M. Die vorhandene Feldvalidierung um eindeutige Einheiten für
+  Position, Größe, Winkel und Deckkraft ergänzen. Dezimalkomma und Dezimalpunkt
+  unterstützen. Für passende Felder eine explizite Auswahl „Absolut/Relativ“
+  anbieten, damit etwa mehrere Objekte um zwei Rasterzellen wachsen können,
+  ohne ihre unterschiedlichen Ausgangsgrößen zu verlieren.
+  **Akzeptanz:** „1,5“ und „1.5“ ergeben denselben Wert. Eine relative Änderung
+  wirkt nur auf das gewählte Feld; ungültige Werte verändern nichts. Eine
+  Mehrfachänderung lässt sich mit einem Undo vollständig zurücknehmen.
+  **Umgesetzt und geprüft am 2026-09-13:** Alle Inspector-Zahlenfelder
+  akzeptieren Dezimalkomma und Dezimalpunkt. Für gemeinsame Mehrfachfelder
+  Position, Größe, Symbolgröße und Drehung zeigt der Inspector „Absolute“ oder
+  „Relative“; die Feldbeschriftung nennt Zellen beziehungsweise Grad. Relative
+  Änderungen werden als ein gemeinsamer Verlaufsschritt geschrieben und wahren
+  die individuellen Ausgangswerte. Tests prüfen beide Dezimalschreibweisen und
+  eine Größenänderung zweier unterschiedlich großer Räume.
+
+- [x] **TASK-17: Navigation mit Zurück-/Vorwärts-Verlauf ergänzen.**
+  P3 · Aufwand: M. Zusätzlich zu gespeicherten Ansichten und Sprungmarken die
+  zuletzt besuchten Karten und Ausschnitte als Navigationsverlauf anbieten.
+  Sichtbare Zurück-/Vorwärts-Buttons führen nach Suchtreffern, Etagenlinks und
+  Markersprüngen zum vorherigen Arbeitsort samt Zoom zurück. Normales Panning
+  soll den Verlauf nicht mit jedem Mausereignis füllen.
+  **Akzeptanz:** Nach einem Sprung über zwei Etagenlinks ist die ursprüngliche
+  Ansicht wieder erreichbar. Gelöschte Ziele werden übersprungen; reine
+  Navigation erzeugt weder Bearbeitungs-Undo-Schritte noch ungespeicherte Änderungen.
+  **Umgesetzt und geprüft am 2026-09-13:** Die Command Bar enthält aktive
+  Zurück-/Vorwärts-Buttons. Der Verlauf speichert Karte, Zoom und Ausschnitt
+  vor Kartenwechseln, Suchtreffern, Markern und Etagenlinks. Gelöschte Karten
+  werden beim Wiederherstellen übersprungen. Kartenwechsel und der Verlauf
+  schreiben keine Dokumentänderung und keinen Undo-Schritt mehr. Die Tests
+  prüfen den Rück-/Vorwärtsstapel sowie das Überspringen fehlender Ziele.
+
+### GUI-Übersicht: Inhalte leichter finden und Zustände verstehen
+
+- [x] **TASK-18: Eigenschaften nach Relevanz filtern und Favoriten anheften.**
+  P2 · Aufwand: M. Die vorhandenen Abschnitte Position, Größe, Darstellung,
+  Inhalt, Verknüpfungen und Export um eine Feldsuche und „Basis/Alle“ ergänzen.
+  Häufig verwendete Felder lassen sich pro Objekttyp oben anheften. Suchfilter,
+  ausgeblendete Abschnitte und Rückkehr zur vollständigen Ansicht bleiben
+  erkennbar; vorhandene Mischwerte und Reset-Aktionen weiter unterstützen.
+  **Akzeptanz:** Bei einem Raum sind Name, Nummer und Größe ohne lange Suche
+  erreichbar. „GM“ findet die passenden Notizfelder. Ein Wechsel zur
+  Mehrfachauswahl zeigt ausschließlich unterstützte gemeinsame Bearbeitungen.
+  **Umgesetzt und geprüft am 2026-09-13:** Der Inspector hat eine Feldsuche,
+  „Basic/All“ und pro Objekttyp anheftbare Felder (★). Basic zeigt die täglichen
+  Eigenschaften; die Suche durchsucht immer den vollständigen Feldbestand,
+  sodass „GM“ die GM-Notizen findet. Angeheftete Felder bleiben in Basic sichtbar.
+  Die vorhandene Mehrfachauswahl bleibt auf gemeinsame Felder begrenzt. Tests
+  prüfen Basisansicht, angeheftete Felder und die GM-Suche.
+
+- [x] **TASK-19: Viele Karten in einer durchsuchbaren Projektübersicht verwalten.**
+  P2 · Aufwand: M. Die vorhandenen Thumbnail-Tabs und Kartenordner um eine
+  kompakte Übersicht mit Suche, Ordnerbaum und Sortierung ergänzen. Aktive
+  Karte, gleichnamige Karten und Ordnerzugehörigkeit deutlich unterscheiden;
+  Tabs bleiben für den schnellen Wechsel nutzbar.
+  **Akzeptanz:** In einem Projekt mit 30 Karten lässt sich eine Karte nach
+  Name oder Ordner finden und öffnen, ohne alle Tabs durchzuscrollen. Umbenennen
+  und Verschieben erhalten bestehende Etagen- und Objektverknüpfungen.
+  **Umgesetzt und geprüft am 2026-09-13:** Das Maps-Panel bietet Suche nach
+  Kartenname, Ordner oder Kapitel, Sortierung nach Ordner/Name oder Name und
+  eine gruppierte Ordneransicht. Die gefilterten Thumbnail-Treffer bleiben direkt
+  anklickbar; die Auswahl zeigt weiterhin den eindeutigen Karten-ID-Suffix.
+  Die bestehende Änderung von Namen/Ordnern bleibt Metadatenarbeit und erhält
+  damit Etagen- und Objektverknüpfungen. Ein Test prüft Suche über Name, Ordner
+  und Kapitel sowie die erwartete Sortierung.
+
+- [x] **TASK-20: Persönliche Anordnung vor automatischen Panelwechseln schützen.**
+  P2 · Aufwand: M. Die vorhandene Workspace-Automatik um „Panel angeheftet“
+  und „Layout vorübergehend fixieren“ erweitern. Automatische Kontextwechsel
+  dürfen angeheftete Panels nicht verdrängen. Manuell versteckte Panels nur
+  gemäß einer sichtbaren, änderbaren Einstellung wieder öffnen; temporäre
+  Änderungen nicht ungefragt als neues Workspace-Preset speichern.
+  **Akzeptanz:** Ein angeheftetes History-Panel bleibt beim Wechsel zwischen
+  Zeichnen, Symbolen und Auswahl sichtbar. Nach Aufheben der Fixierung arbeitet
+  die Automatik wieder; ein Layout-Reset bleibt jederzeit erreichbar.
+  **Umgesetzt und geprüft am 2026-09-13:** Jedes rechte Dock-Panel hat eine
+  sichtbare Pin/Unpin-Aktion. Angeheftete Panels werden durch Workspace- und
+  Werkzeugwechsel nicht versteckt. Manuelles Schließen wird als eigener Zustand
+  gespeichert und von automatischen Kontextöffnungen respektiert; nach Unpin
+  greift die Workspace-Automatik wieder. Die bestehende Layout-Wiederherstellung
+  bleibt unverändert verfügbar. Der Test prüft den Erhalt des History-Panels
+  beim Workspace-Wechsel sowie den Schutz einer manuellen Ausblendung.
+
+- [x] **TASK-21: Sichtbarkeit und Exportteilnahme gemeinsam erklären.**
+  P2 · Aufwand: M. Die bestehenden Layer-, Objekt- und Spieleroptionen durch
+  eine lesbare Zusammenfassung im Inspector ergänzen: „Im Editor sichtbar“,
+  „Im GM-Export enthalten“ und „Im Spielerexport enthalten“. Bei Ausschluss den
+  wirksamen Grund nennen und zum zuständigen Feld führen. Die Zusammenfassung
+  aus denselben Regeln wie die Vorschau und Exporte ableiten (Anschluss an TASK-06).
+  **Akzeptanz:** Für eine Geheimtür, eine GM-Notiz und ein Objekt auf einem
+  ausgeblendeten Layer ist nachvollziehbar, in welcher Ausgabe sie erscheinen.
+  Änderungen aktualisieren Erklärung und Vorschau konsistent.
+  **Umgesetzt und geprüft am 2026-09-13:** Der Selection-Inspector zeigt für
+  ein einzelnes Objekt Editor, GM-Export und Spielerexport samt Einschluss- oder
+  Ausschlussgrund. Die Zusammenfassung nutzt dieselben Layer-, Legenden-, Text-,
+  Raum- und Geheimnisregeln wie `should_render_object()`; „Show export controls“
+  führt direkt zu den zuständigen Eigenschaften. Die Logik wird mit verborgenem
+  Layer, nicht exportiertem Text und Spieler-Ausschluss getestet.
+
+- [x] **TASK-22: Kleine Fenster und Monitorwechsel mit klarer Überlaufregel behandeln.**
+  P2 · Aufwand: M. Nacharbeit zum vorhandenen Kompaktmodus und DPI-Konzept:
+  Wenn der Platz nicht reicht, seltene Leistenaktionen in ein beschriftetes
+  „Weitere“-Menü verlagern. Primäre Aktionen und aktives Werkzeug sichtbar
+  halten; Dialoginhalte bei Bedarf scrollen, ihre Abschlussbuttons erreichbar
+  halten. Schwebende Panels nach Monitorwechsel in den sichtbaren Bereich holen.
+  **Akzeptanz:** Bei 1050 × 720 Fenstergröße sowie 100, 150 und 200 Prozent
+  Skalierung sind Speichern, Exportieren, Übernehmen und Abbrechen erreichbar.
+  Abgezogene Zweitmonitore hinterlassen keine unerreichbaren Dialoge oder Panels.
+  **Umgesetzt und geprüft am 2026-09-13:** Unter 1180 px Breite bleiben Save
+  und Export sichtbar; New, Load, Undo/Redo, Zoom, Suche, Navigation und die
+  Command-Palette wandern in das beschriftete „More“-Menü. Bei Größen- oder
+  Monitorwechseln werden schwebende Werkzeug-/Navigator-Panels sowie offene
+  Dialoge zurück in den sichtbaren Bereich verschoben. Bereits vorhandene
+  scrollbare Inspector- und persistente Dialoglayouts halten ihre Inhalte und
+  Abschlussaktionen zugänglich. Der Test prüft die feste Überlaufgrenze bei
+  der Mindestfensterbreite 1050 px.
+
+### Funktionalität: größere Projekte und wiederkehrende Abläufe unterstützen
+
+- [x] **TASK-23: Globale Suche auf Inhalte aller Karten ausweiten.**
+  P2 · Aufwand: M. Die bestehende Suche führt Karten bereits als Ziele auf;
+  Objekt-, Raum-, Marker- und Zoneninhalte werden in `global_search_items()`
+  aus dem aktiven Projektkontext gesammelt. Einen sichtbaren Suchbereich
+  „Aktuelle Karte/Ganzes Projekt“ und Filter nach Treffertyp ergänzen. Ergebnisse
+  mit Kartenname und Ordner anzeigen; erst beim Öffnen zur Zielkarte wechseln.
+  **Akzeptanz:** Gleichnamige Räume auf zwei verschiedenen Karten sind eindeutig
+  unterscheidbar. Ein Treffer auf einer inaktiven Karte öffnet und markiert das
+  richtige Objekt. Die Suche selbst verändert keine Kartendaten; spielergerichtete
+  Ansichten dürfen keine GM-Notizen über Treffertexte offenlegen.
+  **Umgesetzt und geprüft am 2026-09-13:** Die globale Suche kann zwischen
+  „Current map“ und „Whole project“ umschalten und nach Map, Object, Room,
+  Marker, Zone oder Symbol filtern. Projektweite Treffer enthalten Karten- und
+  Ordner-/Kapitelkontext; ihr Öffnen wechselt erst dann zur Zielkarte und markiert
+  das Objekt beziehungsweise den Ausschnitt. In der Spieleransicht werden
+  `gmNotes` nicht in die Suchtexte aufgenommen. Der Test prüft gleichnamige
+  Räume auf zwei Karten, Karten-/Ordnerkontext und den Ausschluss einer GM-Notiz.
+
+- [x] **TASK-24: Wiederverwendbare Werkzeugvorgaben speichern.**
+  P3 · Aufwand: M. Zusätzlich zu Kartenstilen, Symbolfavoriten und Auswahlvorlagen
+  benannte Vorgaben für Werkzeugparameter anbieten, etwa „Schmaler Gang“,
+  „Naturhöhle“ oder „Raumbeschriftung“. Größe, Linien-/Füllstil und relevante
+  Werkzeugoptionen speichern; vor Anwendung die enthaltenen Werte zeigen.
+  Vorgaben lassen sich duplizieren, umbenennen und löschen.
+  **Akzeptanz:** Eine gespeicherte Gangvorgabe ist nach einem Neustart verfügbar
+  und auf einer anderen Karte nutzbar. Ihre Anwendung verändert vorhandene
+  Objekte erst nach einer gesonderten, ausdrücklich gewählten Aktion.
+  **Umgesetzt und geprüft am 2026-09-13:** Das Tool-Options-Menü speichert
+  benannte Vorgaben für das aktive Werkzeug. Der Manager zeigt Werkzeug und alle
+  enthaltenen Werte vor dem Anwenden und kann Vorgaben anwenden, duplizieren,
+  umbenennen oder löschen. Gespeichert werden passende Fang-, Symbol-, Shape-,
+  Text- und Bodenparameter im Projekt, daher stehen sie nach Speichern und
+  Wiederöffnen auch auf anderen Karten zur Verfügung. Die Anwendung ändert nur
+  die Vorgaben für künftige Platzierungen, keine vorhandenen Objekte; ein Test
+  prüft Persistenz, Wiederanwendung und unveränderte Bestandsgeometrie.
+
+- [x] **TASK-25: Underlays anhand zweier Referenzpunkte kalibrieren.**
+  P3 · Aufwand: M. Die vorhandene Größen- und Rasterausrichtung um einen
+  geführten Ablauf erweitern: zwei Punkte auf dem Bild markieren, bekannte
+  Entfernung und Einheit eingeben, resultierenden Maßstab vorab anzeigen.
+  Optional die Referenzlinie am Kartenraster ausrichten. Originalbild behalten;
+  Kalibrierung als rückgängig machbare Transformation speichern.
+  **Akzeptanz:** Eine eingescannte Karte mit bekannter Referenzstrecke kann
+  ohne manuelles Ausprobieren skaliert werden. Eine Kontrollmessung entspricht
+  der Eingabe innerhalb der angezeigten Rundung; Abbrechen erhält den alten Stand.
+  **Umgesetzt und geprüft am 2026-09-13:** Map → „Calibrate Underlay“ bietet
+  einen geführten Zwei-Punkt-Ablauf mit normierten Bildkoordinaten, bekannter
+  Strecke in Zellen, Vorschau des resultierenden Maßstabs und optionaler
+  Ausrichtung an der nächsten Rasterachse. Die Berechnung hält den ersten
+  Referenzpunkt fest; erst „Apply“ schreibt die als Undo-Schritt gespeicherte
+  Transformation. Cancel verändert die bestehende Referenz nicht. Der Test
+  prüft Maßstab, Ankerpunkt und die unveränderte Quelle.
+
+- [x] **TASK-26: Export als wiederholbaren Auftrag anbieten.**
+  P2 · Aufwand: M. Auf Exportprofilen und dem geprüften Batch-Plan (TASK-04/05)
+  aufbauen: Kartenwahl, Profile, Ausschnitte und Dateinamensschema als benannten
+  Auftrag speichern. Vor jedem Lauf den konkreten Plan neu erzeugen. Fehlende
+  Karten, gelöschte Rahmen, Zielkonflikte und Abweichungen vom Profil sichtbar
+  machen; nach Abschluss Ausgabeordner und Ergebnisdateien direkt öffnen lassen.
+  **Akzeptanz:** Ein Auftrag exportiert drei gewählte Karten jeweils für GM
+  und Spieler mit sechs eindeutigen Zielen. Nach Änderung einer Karte nutzt
+  der nächste Lauf deren aktuellen Stand; alte Konfliktfreigaben gelten nicht
+  automatisch für neu hinzugekommene Dateien. Abbruch und Einzelfehler bleiben
+  im Ergebnis nachvollziehbar. TASK-08 bleibt eine separate VTT-Live-Abnahme.
+  **Umgesetzt und geprüft am 2026-09-13:** Batch Export kann die Zielmap-Auswahl
+  (aktive Karte oder alle Karten), Zielordner, Konfliktregel und die enthaltenen
+  GM-/Spieler-/Gridless-Profile als benannten Auftrag speichern und erneut laden.
+  Jeder Lauf erzeugt vor dem Export einen aktuellen Konflikt- und Zielplan aus
+  dem momentanen Projektstand; Fingerprints machen nachträgliche Zieländerungen
+  sichtbar, Abbruch und Einzelfehler bleiben in der Ergebnisliste. Der Auftrag
+  wird mit dem Projekt gespeichert. Tests prüfen seine Validierung und erhaltene
+  Profile; die Batch-Tests decken eindeutige Ziele, Konflikte und Abbruch ab.
+
+- [x] **TASK-27: Fehlende Assets gesammelt neu zuordnen.**
+  P2 · Aufwand: M. Die vorhandene Symbolreparatur und Einbettung um eine
+  gemeinsame Zuordnung für Symbole und Underlays erweitern. Nach Auswahl eines
+  Ersatzordners Kandidaten mit Vorschau, Dateityp und betroffenen Verwendungen
+  auflisten. Mehrdeutige Dateinamen ausdrücklich zur Auswahl stellen; erst nach
+  Übernahme Pfade ändern. Anschließend optional das Einbetten anbieten.
+  **Akzeptanz:** Ein Projekt mit verschobenem Assetordner lässt sich in einem
+  Ablauf reparieren. Zwei gleichnamige Bilddateien werden nicht still vertauscht;
+  nicht gefundene Dateien bleiben sichtbar. Abbrechen verändert keine Referenzen,
+  und Speichern/Wiederöffnen erhält die übernommenen Zuordnungen.
+  **Umgesetzt und geprüft am 2026-09-13:** Die Projektprüfung öffnet „Repair
+  assets“ für fehlende Custom-Symbole und Underlays gemeinsam. Nach Auswahl
+  eines Ordners zeigt jede Referenz Typ, bisherigen Pfad und alle passenden
+  Kandidaten; doppelte Dateinamen bleiben ausdrücklich zur Auswahl, Einzeltreffer
+  werden nur vorausgewählt. „Apply selected“ schreibt ausschließlich die
+  ausgewählten Pfade als einen Undo-Schritt; nicht gefundene Referenzen bleiben
+  sichtbar. Tests prüfen sowohl die unterlassene automatische Mehrdeutigkeits-
+  zuordnung als auch die gemeinsame explizite Reparatur von Symbol und Underlay.
+
+### Empfohlene Umsetzung und Abnahme
+
+Zuerst TASK-13 bis TASK-16 sowie TASK-21 für sichere tägliche Bedienung angehen.
+Danach TASK-18 bis TASK-20, TASK-22 und TASK-23 für Übersicht in größeren
+Projekten; anschließend TASK-26/27 für wiederkehrende Dateiabläufe. TASK-17,
+TASK-24 und TASK-25 als Komfortausbau einplanen. Bestehende offene Abnahmen
+TASK-08 und TASK-10 bleiben unabhängig davon offen.
+
+Jeden Punkt mit seinem konkreten Akzeptanzszenario abnehmen und Datum sowie
+Nachweis ergänzen. Datenändernde Funktionen auf Undo/Redo und Speichern/
+Wiederöffnen prüfen; für Auswahl, Navigation und Layout eine tatsächliche
+GUI-Prüfung durchführen. Für die Gesamtabnahme dieselbe Beispielkarte mit
+überlappenden Objekten, gesperrten Layern, GM-Inhalten und mehreren Etagen nutzen.
+Ältere Erledigungsmarkierungen ersetzen diese neue Abnahme nicht.
+
+## Neuer Verbesserungsbacklog – 2026-09-06
+
+Grundlage: Sichtung des aktuellen Quellcodes, der Architektur, des Handbuchs
+und der vorhandenen Tests. Keine interaktive GUI-Abnahme durchgeführt.
+Die bisherigen Aufgaben und ihre Erledigungsmarkierungen bleiben erhalten.
+Die folgenden offenen Aufgaben ergänzen sie; wo ein bereits behandeltes Thema
+noch konkrete Lücken zeigt, ist dies ausdrücklich als Nacharbeit benannt.
+
+Prioritäten: P1 = Schutz der Arbeitsergebnisse, P2 = verlässliche tägliche
+Nutzung, P3 = Ausbau und einfachere Weiterentwicklung. Aufwand relativ:
+S = lokal begrenzt, M = mehrere Abläufe, L = strukturelle Änderung.
+
+### P1 – Speichern, Wiederherstellen und Export absichern
+
+- [x] **TASK-01: Projektdateien und Autosaves atomar speichern.** Aufwand: M.
+  `write_project_data()` öffnet die Zieldatei direkt zum Schreiben;
+  `run_autosave()` schreibt ebenfalls direkt in die Wiederherstellungsdatei.
+  Ein abgebrochener Schreibvorgang kann dadurch eine vorhandene Datei beschädigen.
+  Zuerst eine temporäre Datei im Zielverzeichnis vollständig schreiben und
+  schließen, anschließend das Ziel atomar ersetzen. Dieselbe Speicherlogik für
+  JSON, komprimierte Projekte und Autosaves verwenden. Speicherfehler sichtbar
+  behandeln; Dirty-State und Wiederherstellungsstände erst nach Erfolg ändern.
+  **Akzeptanz:** Simulierte Schreib- und Ersetzungsfehler lassen das bisherige
+  Projekt unverändert und ladbar. Die Oberfläche meldet keinen Speichererfolg;
+  ungespeicherte Änderungen bleiben erkennbar. Beide Dateiformate sind getestet.
+  **Umgesetzt und geprüft am 2026-09-06:** Gemeinsame atomare Schreibfunktion
+  mit temporärer Datei, Flush, `fsync`, Schließen und `os.replace`; kompakter
+  Autosave nutzt denselben Pfad. Speicherfehler liefern keinen Erfolg zurück,
+  verhindern das Schließen nach fehlgeschlagenem Speichern und erhalten den
+  bisherigen Speicherstatus sowie Recovery-Dateien. Fehlertests für partielle
+  Schreibvorgänge, Flush, Ersetzen und Autosave-Versionen stehen in
+  `tests/test_storage_recovery.py` (`AtomicStorageTests`).
+
+- [x] **TASK-02: Wiederherstellung projektbezogen und fehlertolerant machen.**
+  Aufwand: M. `check_autosave_recovery()` verwendet aktuell den ersten Kandidaten
+  und beendet den Versuch bei einem Lesefehler. `clear_autosave()` räumt die
+  Kandidaten im verwendeten Wiederherstellungsverzeichnis auf.
+  Autosaves mit stabiler Projekt- und Sitzungskennung organisieren. Verfügbare
+  Stände mit Projektname, Zeitpunkt und Lesbarkeitsstatus anbieten; bei einem
+  beschädigten neuesten Stand einen älteren gültigen Stand auswählbar machen.
+  Bereinigung nur auf das zugehörige Projekt beziehungsweise die Sitzung anwenden.
+  **Akzeptanz:** Bei zwei Projekten und einem beschädigten neuesten Autosave ist
+  der ältere gültige Stand wiederherstellbar. Speichern oder Verwerfen eines
+  Projekts entfernt keine Wiederherstellungsstände des anderen.
+  **Umgesetzt und geprüft am 2026-09-06:** Persistente `meta.projectId`, eigene
+  Verzeichnisse je Sitzung und Bereinigung ausschließlich der eigenen Sitzung.
+  Der Recovery-Dialog zeigt alle Stände mit Zeitpunkt und Lesbarkeit und wählt
+  den neuesten lesbaren Stand vor. Alte Autosaves bleiben auffindbar. Verwerfen
+  löscht nur den ausgewählten Stand; Wiederherstellen behält die Quelle und
+  öffnet eine neue ungespeicherte Sitzung. Isolation, beschädigter neuester Stand,
+  Projektwechsel sowie echte Tk-Dialogaktionen sind in
+  `tests/test_storage_recovery.py` (`RecoveryIsolationTests`,
+  `RecoveryDialogTests`) geprüft. Zusätzlich vollständigen App-Ablauf von
+  Bearbeitung über Autosave und JSON-Speichern bis Recovery und ZIP-Speichern
+  erfolgreich ausgeführt; Dokumentation aktualisiert.
+
+- [x] **TASK-03: Externe Änderungen vor dem Überschreiben erkennen.** Aufwand: M.
+  `write_project_file()` schreibt ohne Abgleich mit dem zuletzt geladenen
+  Dateistand. Beim Laden und erfolgreichen Speichern einen Dateifingerabdruck
+  merken und unmittelbar vor dem nächsten Speichern vergleichen. Bei Änderungen
+  durch eine zweite App-Instanz oder Dateisynchronisierung die Optionen
+  „Als Kopie speichern“, „Neu laden“ und „Bewusst überschreiben“ anbieten.
+  **Akzeptanz:** Eine zwischenzeitlich extern geänderte oder entfernte Datei wird
+  nicht still überschrieben. Abbrechen erhält die lokale Bearbeitung; Neuladen
+  schützt noch ungespeicherte Änderungen durch eine klare Entscheidung.
+  **Umgesetzt und geprüft am 2026-09-09:** SHA-256 des tatsächlich geladenen
+  beziehungsweise geschriebenen Dateiinhalts, Konfliktdialog mit Kopie,
+  Neuladen, bewusstem Überschreiben und Abbrechen sowie erneuter Abgleich vor
+  dem atomaren Ersetzen. Entfernte Dateien werden ebenfalls erkannt;
+  Neuladen kann lokale Änderungen zuerst als Kopie sichern. Regressionen und
+  Tk-Dialogprüfung in `tests/test_save_conflicts_batch.py` (`SaveConflictTests`).
+
+- [x] **TASK-04: Batch-Export mit überprüfbarem Ergebnisplan ausführen.** Aufwand: M.
+  `batch_export()` weist auf vorhandene Dateien hin, überschreibt sie beim Start
+  jedoch direkt. Vorher alle Zielpfade auf Kollisionen untereinander und mit
+  vorhandenen Dateien prüfen. Überschreiben, Überspringen oder automatische
+  Umbenennung auswählbar machen. Einzeldateien zunächst temporär erzeugen und
+  am Ende Erfolge, übersprungene Dateien und Fehler mit Dateinamen auflisten.
+  **Akzeptanz:** Zwei Karten mit demselben bereinigten Dateinamen verlieren kein
+  Exportergebnis. Ein Fehler nach dem ersten Export hinterlässt keine halbfertige
+  Zieldatei und zeigt die bereits erfolgreich erzeugten Dateien korrekt an.
+  **Umgesetzt und geprüft am 2026-09-09:** Vorschau mit konkreten Dateipfaden,
+  expliziter Behandlung vorhandener Dateien und eindeutigen Namen innerhalb
+  des Batches. Atomare Einzeldateien werden gegen den vorgemerkten Dateistand
+  geprüft. Fehler einzelner Exporte verhindern die übrigen Ausgaben nicht;
+  die Ergebnisliste bleibt sichtbar. Projekt-/Kartenkontext bleibt erhalten.
+  Regressionen und Tk-Dialogprüfung in `tests/test_save_conflicts_batch.py`
+  (`BatchExportTests`). Status zusätzlich in `plan.md` dokumentiert.
+
+### P2 – Verlässliche Vorschau und flüssige Arbeitsabläufe
+
+- [x] **TASK-05: Lange Aufgaben tatsächlich unterbrechbar ausführen.** Aufwand: L.
+  Nacharbeit zu den abgehakten Performance- und Fortschrittsaufgaben:
+  `run_autosave()` serialisiert und schreibt weiterhin synchron;
+  die Schleife in `batch_export()` rendert ebenfalls im GUI-Callback.
+  Auf einem konsistenten Projektsnapshot arbeiten und geeignete Rechen- und
+  Dateioperationen aus dem Tk-Hauptthread auslagern. Fortschritt über eine Queue
+  und `after()` anzeigen; ausschließlich der Hauptthread greift auf Tk zu.
+  Abbruch zwischen Arbeitsschritten und eine eindeutige Behandlung veralteter
+  Vorschauergebnisse vorsehen. TASK-01 und TASK-04 berücksichtigen.
+  **Akzeptanz:** Während eines großen Batch-Exports zeichnet sich das Fenster
+  weiter neu; ein sichtbarer Abbrechen-Button reagiert zwischen Exportdateien.
+  Ein alter Autosave-Job markiert neuere Bearbeitungen nicht als gesichert.
+  Schließen während eines laufenden Jobs hinterlässt keine beschädigte Datei.
+  **Umgesetzt und geprüft am 2026-09-12:** Autosaves und Batch-Exporte arbeiten
+  auf einem im Hauptthread erzeugten Snapshot. Worker greifen nie auf Tk zu;
+  Fortschritt, Ergebnis und Fehler laufen über Queue und `after()`. Der
+  Abbrechen-Button beendet den Batch zwischen atomaren Einzeldateien. Beim
+  Schließen werden Jobs erst beendet/abgebrochen und anschließend die eigenen
+  Recovery-Dateien bereinigt. Veraltete Autosave-Ergebnisse dürfen eine neuere
+  Revision nicht als gesichert markieren. Tests: `tests/test_backlog_completion.py`
+  sowie Speicher-/Batch-Regressionen.
+
+- [x] **TASK-06: Spielersicht über alle Exportwege konsistent prüfen.** Aufwand: M.
+  Player-Filter und einzelne Tests für Handouts sowie versteckte Raumnummern
+  bestehen bereits. Eine gemeinsame Testkarte mit GM-Notizen, Geheimtüren,
+  versteckten Räumen, Nummern, Layern, Underlays und Sitzungszuständen ergänzen.
+  Für Vorschau, Rasterbild, SVG, Handout und VTT-Paket ausdrücklich festlegen,
+  welche Informationen sichtbar sein dürfen. VTT-Daten für die Spielleitung
+  dabei von tatsächlich spielerlesbaren Daten unterscheiden.
+  **Akzeptanz:** Jeder Exportweg besitzt einen Test für die festgelegte
+  Zielgruppe. Spielerdateien enthalten keine GM-Texte in sichtbarer Darstellung
+  oder auslesbaren Metadaten. Die Vorschau entspricht dem gewählten Exportprofil.
+  **Umgesetzt und geprüft am 2026-09-12:** Gemeinsame Player-Filter gelten für
+  Rastervorschau, SVG, Handout sowie Foundry-, Roll20- und Fantasy-Grounds-Daten.
+  Versteckte Objekte, Geheimtüren und GM-Laufzeitdaten (Nebel, Sitzung,
+  Begegnungsstarts) fehlen im Player-Paket. Die Referenztests prüfen sichtbaren
+  SVG-Inhalt, gleiches Rasterbild mit/ohne ausgeblendete Objekte und auslesbare
+  VTT-/Handout-Daten.
+
+- [x] **TASK-07: Visuelle Regressionen zwischen Renderern erkennen.** Aufwand: M.
+  Die Tests enthalten Export-Smoke-Tests und Prüfungen einzelner Zeichenpfade.
+  Zusätzlich kleine Referenzkarten für gedrehte Räume, verbundene Böden,
+  transparente Symbole, Text, Hexraster und beschnittene Underlays anlegen.
+  Tk-Vorschau, Pillow-Ausgabe und gerastertes SVG anhand derselben Szenen prüfen.
+  Unterschiede durch Schrift-Rendering mit dokumentierter Toleranz behandeln.
+  **Akzeptanz:** Ein absichtlich verschobenes Symbol oder eine fehlende Wand
+  fällt im Bildvergleich auf. Fehlgeschlagene Prüfungen liefern Referenz-,
+  Ergebnis- und Differenzbild; Referenzaktualisierungen werden bewusst geprüft.
+  **Umgesetzt und geprüft am 2026-09-12:** Die versionierte Referenzszene deckt
+  Rotation, Bodenverbindung, Transparenz, Text und Raster ab. Pillow, eine echte
+  Tk-Canvas (per Ghostscript gerastert) und CairoSVG (wenn `.[svg]` installiert
+  ist) vergleichen dieselbe Szene; die 16-stufige Anti-Aliasing-Toleranz ist
+  dokumentiert. Ein absichtlich verschobenes Symbol erzeugt nachweislich
+  Referenz-, Ergebnis- und Differenzbild. Die Regeneration erfolgt ausschließlich
+  über `scripts/regenerate_visual_references.py` nach Sichtprüfung.
+
+- [ ] **TASK-08: VTT-Exporte anhand echter Importabläufe abnehmen.** Aufwand: M.
+  `docs/architecture.md` beschreibt Foundry- und Roll20-JSON sowie die
+  Fantasy-Grounds-Bild-XML;
+  vorhandene Tests prüfen unter anderem Wände, Türen und Lichter als Daten.
+  Pro Zielplattform den konkreten Importweg, unterstützte Versionen und nötige
+  Zusatzwerkzeuge dokumentieren. Eine kleine exportierte Referenzszene samt
+  Importanleitung bereitstellen und ihre Übernahme in der Zielanwendung prüfen.
+  Versionsabhängige Anforderungen bei Umsetzung anhand offizieller Quellen
+  verifizieren; erforderliche Konverter in der Exportoberfläche benennen.
+  **Akzeptanz:** Rastermaßstab, Ursprung, Wände, Türen und Lichtquellen stimmen
+  nach dem dokumentierten Import überein. Nicht übertragbare Eigenschaften
+  erscheinen vor dem Export als konkrete Einschränkungen.
+  **Vorbereitet am 2026-09-12, Live-Abnahme ausstehend:**
+  `docs/vtt-import.md`, die reproduzierbaren Dateien unter
+  `examples/vtt-reference/` und Contract-Tests dokumentieren bzw. prüfen
+  Plattformweg, Referenzwerte und Grenzen. Die tatsächliche Übernahme muss noch
+  in Foundry, Roll20 und Fantasy Grounds mit den dort verfügbaren Versionen
+  protokolliert werden; ohne diese drei Live-Nachweise bleibt der Punkt offen.
+  **Korrigiert am 2026-09-13:** Der Fantasy-Grounds-Export ist nun die native
+  Bild-Sidecar-XML mit `root`, `grid`, `gridsize` und `occluders`; die frühere
+  JSON-Referenz wurde entfernt. Die Live-Abnahme prüft dort Raster und LOS;
+  Pins, schaltbare Türen und Lichter werden ausdrücklich manuell ergänzt.
+
+- [x] **TASK-09: Große Projekte vor Laden und Rendern auf Ressourcenbedarf prüfen.**
+  Aufwand: M. `read_project_file()` liest den JSON-Inhalt beziehungsweise den
+  entpackten Archivinhalt vollständig in den Speicher. Vorab Dateigröße und
+  deklarierte entpackte Größe prüfen; zusätzlich beim Lesen eine Größenbegrenzung
+  durchsetzen. Vor hochauflösenden Exporten Pixelzahl und groben Speicherbedarf
+  anzeigen und eine kleinere Skalierung oder gekachelte Ausgabe anbieten.
+  Grenzwerte konfigurierbar machen und als Schutz vor Überlastung erklären.
+  **Akzeptanz:** Ein übergroßes Archiv wird kontrolliert abgelehnt, ohne das
+  geöffnete Projekt zu ersetzen. Eine extrem große Exportfläche führt zu einer
+  verständlichen Auswahl statt zu einem unkontrollierten Speicherfehler.
+  **Umgesetzt und geprüft am 2026-09-12:** `storage.py` begrenzt Datei- und
+  deklarierte/gelesene entpackte Archivgröße vor dem JSON-Laden. Rasterexporte
+  berechnen Pixelzahl und Mindest-RAM; der Dialog bietet verkleinerte Skalierung
+  oder einen nummerierten Kachelsatz. Grenzen sind über
+  `OSR_MAP_MAX_FILE_MIB`, `OSR_MAP_MAX_EXPANDED_MIB` und
+  `OSR_MAP_MAX_EXPORT_MP` konfigurierbar. Grenzfalltests decken ZIP-Abweisung,
+  verständliche Fehlermeldung und Kachelabmessungen ab.
+
+### P3 – Installation und Weiterentwicklung vereinfachen
+
+- [ ] **TASK-10: Reproduzierbare Installation und Windows-Paket anbieten.** Aufwand: L.
+  Das Handbuch setzt Python und manuell installierte Zusatzpakete voraus;
+  eine zentrale Paketdefinition fehlt im gesichteten Dateibestand.
+  Eine `pyproject.toml` mit unterstützter Python-Version, Laufzeitabhängigkeiten
+  und optionalen Export-/Entwicklungspaketen ergänzen. Einen reproduzierbaren
+  Build für eine portable Windows-Ausgabe erstellen. In „Über/Diagnose“ Version
+  und verfügbare Exportfähigkeiten anzeigen.
+  **Akzeptanz:** Auf einem frischen Windows-Testsystem ohne Python lassen sich
+  eine Beispielkarte öffnen, Änderungen speichern und PNG/PDF exportieren.
+  Fehlende optionale SVG-Unterstützung wird mit einer verständlichen Erklärung
+  angezeigt. Der Paketbuild ist aus dem Repository wiederholbar.
+  **Vorbereitet am 2026-09-12, Frischsystem-Abnahme ausstehend:**
+  `pyproject.toml`, `scripts/setup-dev.ps1`, `scripts/build-portable.ps1` sowie
+  Über/Diagnose sind umgesetzt; das Paket lässt sich lokal ohne Netzabhängigkeit
+  als Editable-Install importieren. Der reproduzierbare PyInstaller-Build wurde
+  lokal erfolgreich erzeugt (`OSRMapMaker.exe`, 34.8 MB); der Runner funktioniert
+  auch ohne vorhandenes Benutzerprofil. Die EXE muss noch auf einem Windows-
+  System ohne Python mit Öffnen, Speichern sowie PNG-/PDF-Export geprüft werden.
+  Diese Abnahme lässt sich nicht durch den vorhandenen Python-Checkout ersetzen;
+  der Punkt bleibt daher offen.
+
+- [x] **TASK-11: Modulaufteilung durch echte Implementierungstrennung abschließen.**
+  Aufwand: L. Laut `docs/architecture.md` sind die kleinen Module überwiegend
+  Importfassaden; `osr_map_maker.py` umfasst derzeit rund 30.800 Zeilen.
+  Zuerst Speicherlogik und Validierung, danach Geometrie und Renderer auslagern.
+  Abhängigkeiten vom Datenmodell zur Oberfläche vermeiden und bestehende
+  Importpfade während der Umstellung kompatibel halten. Kleine, einzeln prüfbare
+  Schritte statt einer vollständigen Neuschreibung planen.
+  **Akzeptanz:** Speicher- und Modelltests importieren die extrahierten Module
+  direkt, ohne die Hauptanwendung laden zu müssen. Es entstehen keine zyklischen
+  Imports; bestehende Projektdateien und die bisherige Testsuite funktionieren.
+  **Umgesetzt und geprüft am 2026-09-12:** Die produktiven, Tk-freien Module
+  `storage.py`, `validation.py`, `geometry.py` und `rendering.py` enthalten
+  Speicher-/Ressourcenschutz, Dokumentstrukturprüfung, Geometrie und den
+  Bildvergleich; die bisherigen Importfassaden bleiben kompatibel. Der
+  Modulgrenztest importiert sie direkt, und die vollständige Suite (212 Tests,
+  1 erwarteter Skip) besteht ohne zyklische Importe.
+
+- [x] **TASK-12: Qualitätsprüfung und Backlog-Abnahme nachvollziehbar machen.**
+  Aufwand: M. `scripts/quality.ps1` überspringt Ruff und Mypy, wenn sie fehlen;
+  die bisherigen Backlog-Abschnitte sind durchgehend als erledigt markiert.
+  Eine automatisierte Windows-Prüfung mit festgelegter Toolinstallation und
+  sichtbar getrennten Prüfergebnissen ergänzen. Einen GUI-Smoke-Ablauf für
+  Öffnen, Zeichnen, Undo/Redo, Speichern, Wiederöffnen und Export aufnehmen.
+  Bei künftigen Aufgaben den Test oder die manuelle Abnahme samt Datum vermerken;
+  ältere Häkchen zunächst als bisherigen Projektstatus erhalten.
+  **Akzeptanz:** Fehlende Pflichtwerkzeuge lassen die automatisierte Prüfung
+  scheitern. Ein Testlauf veröffentlicht seine Ergebnisse und bei visuellen
+  Fehlern die Prüfbilder. Neue Aufgaben gelten erst mit Abnahmenachweis als fertig.
+  **Umgesetzt und geprüft am 2026-09-12:** `scripts/setup-dev.ps1` installiert
+  die festgelegten Entwicklungswerkzeuge aus `pyproject.toml`; `quality.ps1`
+  veröffentlicht den JUnit-Bericht unter `artifacts/quality/pytest.xml` und
+  scheitert bei fehlendem Ruff oder Mypy. Der dokumentierte GUI-Smoke-Ablauf
+  umfasst Öffnen, Zeichnen, Undo/Redo, Speichern, Wiederöffnen sowie PNG-/PDF-
+  Export. Visuelle Abweichungen speichern Referenz-, Ergebnis- und
+  Differenzbilder in `artifacts/visual/`; neue Häkchen tragen diesen Nachweis.
+
+Empfohlene Reihenfolge: TASK-01 und TASK-02 zuerst, anschließend TASK-03 und
+TASK-04. Danach TASK-05 bis TASK-09; TASK-12 begleitet deren Umsetzung.
+Paketierung und Modultrennung in kleinen eigenständigen Schritten einplanen.
+
 ## Aktueller UI/UX-Umsetzungsplan: Werkzeuge immer griffbereit
 
 Stand: 2026-06-26
@@ -667,3 +1206,170 @@ basieren auf einer Code-Sichtung von `osr_map_maker.py`, besonders den Pfaden
       Static-Layer fuer Tk.
 - [x] Zum Schluss Export/Autosave/Undo optimieren, weil diese Pfade weniger
       haeufig sind, aber bei grossen Projekten stark blockieren koennen.
+
+## Neue GUI-Vorschlaege zur einfacheren Bedienung
+
+Stand: 2026-08-05
+
+Ziel: Neue und gelegentliche Nutzer sollen die wichtigsten Arbeitsablaeufe
+allein ueber sichtbare GUI-Elemente verstehen und sicher ausfuehren koennen.
+Die Vorschlaege in diesem Abschnitt betreffen bewusst keine Tastenkombinationen
+und keine Steuerung ueber Tasten.
+
+### Hohe Prioritaet: Einstieg und Orientierung
+
+- [x] Startbereich fuer neue und bestehende Projekte einfuehren.
+      Beim Programmstart grosse, klar beschriftete Kacheln fuer "Neue Karte",
+      "Projekt oeffnen" und die zuletzt verwendeten Projekte zeigen. Fuer neue
+      Karten kleine visuelle Vorlagen wie Dungeon, Hoehle, Gebaeude und leere
+      Karte mit Format- und Rastervorschau anbieten.
+
+- [x] Gefuehrten Erste-Schritte-Modus anbieten.
+      Eine freiwillige, jederzeit schliessbare Tour markiert nacheinander
+      Werkzeugleiste, Canvas, Layer und Export. Jeder Schritt enthaelt genau eine
+      sichtbare Aktion und eine kleine Beispielgrafik statt langer Hilfetexte.
+
+- [x] Aktuellen Arbeitsmodus deutlich am Canvas anzeigen.
+      Modi wie Player Preview, Export Frame, Messen oder Generatorvorschau
+      erhalten ein farblich ruhiges Banner am oberen Canvas-Rand. Das Banner
+      erklaert den Modus kurz und enthaelt einen gut sichtbaren Button zum
+      Beenden oder Uebernehmen.
+
+- [x] Platzierungsvorschau fuer alle Zeichen- und Symbolwerkzeuge vereinheitlichen.
+      Vor dem Klick zeigt eine halbtransparente Vorschau Position, Ausrichtung,
+      Groesse und Snap-Ergebnis. Unzulaessige Positionen werden direkt am
+      Mauszeiger erklaert, statt erst nach dem Platzierungsversuch.
+
+- [x] Kontextleiste direkt an der Auswahl ergaenzen.
+      Nach dem Markieren erscheint nahe der Auswahl eine kleine, nicht
+      verdeckende Leiste fuer die haeufigsten Mausaktionen: Duplizieren, Layer
+      wechseln, Sperren, Sichtbarkeit und Loeschen. Seltene Eigenschaften
+      bleiben im Selection-Panel.
+
+- [x] Leere Canvas-Ansicht handlungsorientiert gestalten.
+      Eine neue Karte zeigt in der Mitte drei dezente Startaktionen: Raum
+      zeichnen, Vorlage waehlen und Projekt importieren. Nach dem ersten Objekt
+      verschwindet dieser Hinweis dauerhaft fuer die aktuelle Karte.
+
+### Hohe Prioritaet: Fehler vermeiden und rueckmeldbar machen
+
+- [x] Formulare direkt am betroffenen Feld validieren.
+      Ungueltige Werte erhalten eine kurze Meldung unter dem Eingabefeld und
+      eine erkennbare Markierung. Der Bestaetigen-Button bleibt deaktiviert und
+      erklaert bei Beruehrung mit der Maus, welche Angaben noch fehlen.
+
+- [x] Destruktive Dialoge mit konkreter Auswirkung formulieren.
+      Vor Loeschen, Ersetzen oder Zuruecksetzen Namen, Anzahl und gegebenenfalls
+      eine Miniatur der betroffenen Karten, Layer oder Objekte zeigen. Der
+      Hauptbutton nennt die Aktion eindeutig, zum Beispiel "Layer mit 24
+      Objekten loeschen" statt nur "OK".
+
+- [x] Rueckgaengig machbare Aktionen als Toast mit Aktionsbutton bestaetigen.
+      Nach Loeschen, Verschieben oder groesseren Batch-Aenderungen kurz anzeigen,
+      was passiert ist, und direkt im Toast "Rueckgaengig" anbieten. Der Toast
+      darf den Canvas nicht verdecken und schliesst sich automatisch.
+
+- [x] Speichern-beim-Schliessen-Dialog differenzieren.
+      Bei mehreren geaenderten Karten jede betroffene Karte mit Name und
+      Aenderungsstatus auflisten. Sichtbare Buttons fuer "Alle speichern",
+      "Ohne Speichern schliessen" und "Abbrechen" vermeiden unklare
+      Ja/Nein-Abfragen.
+
+- [x] Fehlerdialoge um passende Loesungsaktionen erweitern.
+      Bei fehlenden Assets, ungueltigen Exportpfaden oder gesperrten Layern
+      direkt Buttons wie "Asset suchen", "Anderen Ordner waehlen" oder "Layer
+      entsperren" anbieten. Technische Details bleiben in einem aufklappbaren
+      Bereich.
+
+### Mittlere Prioritaet: Panels, Listen und Eigenschaften
+
+- [x] Aktive Filter als sichtbare Chips darstellen.
+      Objekt-, Symbol- und Assetlisten zeigen oberhalb der Treffer jeden aktiven
+      Filter als einzeln entfernbaren Chip sowie "Alle Filter entfernen". Die
+      Trefferzahl wird daneben sofort aktualisiert.
+
+- [x] Mehrfachauswahl mit eindeutigen Mischzustaenden anzeigen.
+      Wenn ausgewaehlte Objekte unterschiedliche Farben, Layer oder
+      Sichtbarkeiten besitzen, zeigt das Properties-Panel "Mehrere Werte" statt
+      einen scheinbar gueltigen Einzelwert. Aenderungen wirken erst nach einer
+      bewussten Auswahl in diesem Feld auf alle Objekte.
+
+- [x] Geaenderte Eigenschaften sichtbar kennzeichnen und einzeln zuruecksetzen.
+      Vom Standard abweichende Werte erhalten einen kleinen Marker und einen
+      Reset-Button direkt am Feld. Eine Vorschau zeigt vor dem Zuruecksetzen,
+      welcher Standardwert wiederhergestellt wird.
+
+- [x] Drag-and-drop in Layern und Objektlisten praezisieren.
+      Beim Ziehen eine klare Einfuegelinie, das Ziel-Layer und die Zahl der
+      bewegten Objekte anzeigen. Lange Listen scrollen am Rand automatisch;
+      gesperrte oder ungueltige Ziele werden sichtbar deaktiviert und begruendet.
+
+- [x] Lange Panels mit festen Abschnittstiteln und Scrollhinweisen versehen.
+      Wichtige Kopfaktionen bleiben beim Scrollen sichtbar. Ein dezenter Verlauf
+      am oberen oder unteren Rand macht erkennbar, dass weitere Inhalte ausserhalb
+      des sichtbaren Bereichs liegen.
+
+- [x] Panel- und Dialoggroessen pro Arbeitsbereich merken.
+      Wiederkehrende Fenster oeffnen an ihrer letzten sinnvollen Position und
+      Groesse, werden aber automatisch in den sichtbaren Bildschirmbereich
+      zurueckgeholt. So muessen Nutzer ihre Arbeitsumgebung nicht wiederholt
+      neu ordnen.
+
+### Mittlere Prioritaet: Sichtbarkeit und Mausbedienung
+
+- [x] Klickflaechen fuer kleine Icons vergroessern.
+      Sichtbarkeit, Sperren, Favoriten, Panel-Schliessen und Layer-Reihenfolge
+      erhalten eine ausreichend grosse unsichtbare Trefferflaeche mit klarem
+      Hover-Zustand. Dicht nebeneinanderliegende Aktionen brauchen Abstand, um
+      Fehlklicks zu vermeiden.
+
+- [x] Interaktive Elemente konsequent durch Hover-Zustaende kenntlich machen.
+      Klickbare Statusfelder, Miniaturen, Canvas-Handles, Tabs und Paneltitel
+      reagieren mit derselben Akzentfarbe und bei Bedarf einem kurzen Tooltip.
+      Reine Informationen duerfen nicht wie Buttons aussehen.
+
+- [x] Farben nie als einziges Zustandssignal verwenden.
+      Warnungen, aktive Werkzeuge, gesperrte Layer und Sichtbarkeitszustaende
+      zusaetzlich durch Icon, Kontur oder Text kennzeichnen. Farbkontraste fuer
+      normale, Hover-, aktive und deaktivierte Zustaende pruefen.
+
+- [x] Ueberlagerungen automatisch vom Arbeitsbereich fernhalten.
+      Tooltips, Symbolvorschauen, Kontextleisten und Toasts sollen sich so
+      positionieren, dass Auswahl, Mauszeiger und wichtige Canvas-Handles
+      sichtbar bleiben. Bei wenig Platz wechseln sie selbststaendig die Seite.
+
+### Niedrigere Prioritaet: Komfort und Feinschliff
+
+- [x] Fortschrittsanzeige fuer laengere Aktionen vereinheitlichen.
+      Export, Laden grosser Projekte, Asset-Import und Generatoren zeigen einen
+      gemeinsamen Fortschrittsdialog mit aktuellem Teilschritt, Prozentwert und
+      sichtbarem Abbrechen-Button. Die restliche Oberflaeche zeigt klar, ob sie
+      waehrenddessen weiter bedienbar ist.
+
+- [x] Vorher/Nachher-Vergleich per sichtbarem Umschalter anbieten.
+      Bei Stil-, Generator- und Exportvorschauen einen beschrifteten Schieber
+      oder zwei nebeneinanderliegende Ansichten verwenden. Uebernehmen und
+      Verwerfen bleiben dauerhaft am unteren Dialogrand sichtbar.
+
+- [x] Zoom- und Navigatorbedienung um direkte Mausaktionen ergaenzen.
+      Im Navigator sichtbare Buttons fuer Hineinzoomen, Herauszoomen, Ganze
+      Karte und Auswahl einpassen anbieten. Das Viewport-Rechteck bekommt
+      erkennbare Griff- und Hover-Zustaende fuer Verschieben und Skalieren.
+
+- [x] Konsistente visuelle Hierarchie fuer Primaer- und Nebenaktionen festlegen.
+      Pro Dialog oder Panel nur eine primaere Aktion farblich hervorheben.
+      Sekundaeraktionen neutral, gefaehrliche Aktionen separat und deaktivierte
+      Aktionen eindeutig, aber weiterhin lesbar darstellen.
+
+### Akzeptanzkriterien fuer den neuen GUI-Backlog
+
+- [x] Eine neue Nutzerin kann ohne Tastaturhinweise ein Projekt anlegen, einen
+      Raum platzieren, dessen Eigenschaften aendern und einen Export starten.
+- [x] Jeder Sondermodus ist am Canvas erkennbar und besitzt einen sichtbaren Weg
+      zum Beenden, Uebernehmen oder Abbrechen.
+- [x] Fehler werden moeglichst am Entstehungsort erklaert und bieten eine direkt
+      anklickbare Loesung an.
+- [x] Alle wichtigen Mausziele zeigen Hover-Feedback und bleiben auch bei 150
+      Prozent Skalierung gut treffbar.
+- [x] Keine der neuen Hilfen, Hinweise oder Rueckmeldungen verdeckt dauerhaft
+      die Karte oder zwingt erfahrene Nutzer durch eine Tour.
